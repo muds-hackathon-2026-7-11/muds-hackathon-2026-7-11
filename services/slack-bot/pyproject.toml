@@ -1,0 +1,40 @@
+[project]
+name = "slack-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "tacho-bana", email = "s2322087@stu.musashino-u.ac.jp" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=1.2.2",
+    "slack-bolt>=1.29.0",
+]
+
+[project.scripts]
+slack-bot = "slack_bot:main"
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+warn_return_any = true
+check_untyped_defs = true
