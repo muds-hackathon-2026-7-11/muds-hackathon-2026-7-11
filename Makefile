@@ -6,6 +6,7 @@ help: ## show this help
 install: ## install JS and Python dependencies
 	pnpm install
 	cd apps/api && uv sync
+	cd services/slack-bot && uv sync
 
 dev: ## start db/api/web via docker compose (build if needed)
 	docker compose up --build
@@ -22,25 +23,29 @@ logs: ## tail logs from all services
 ps: ## show running containers
 	docker compose ps
 
-lint: ## lint web (biome/eslint) and api (ruff)
+lint: ## lint web (biome/eslint), api and slack-bot (ruff)
 	pnpm turbo run lint
 	cd apps/api && uv run ruff check .
+	cd services/slack-bot && uv run ruff check .
 
-typecheck: ## typecheck web (tsc) and api (mypy)
+typecheck: ## typecheck web (tsc), api and slack-bot (mypy)
 	pnpm turbo run typecheck
 	cd apps/api && uv run mypy .
+	cd services/slack-bot && uv run mypy .
 
-test: ## run web and api test suites
+test: ## run web, api and slack-bot test suites
 	pnpm turbo run test
 	cd apps/api && uv run pytest
+	cd services/slack-bot && uv run pytest
 
-format: ## format web (biome) and api (ruff)
+format: ## format web (biome), api and slack-bot (ruff)
 	pnpm exec biome format --write .
 	cd apps/api && uv run ruff format .
+	cd services/slack-bot && uv run ruff format .
 
 db-shell: ## open a psql shell against the dev db
 	docker compose exec db psql -U postgres -d seminar_platform
 
 clean: ## remove containers, volumes, and local build artifacts
 	docker compose down -v
-	rm -rf apps/web/.next apps/web/node_modules apps/api/.venv node_modules
+	rm -rf apps/web/.next apps/web/node_modules apps/api/.venv services/slack-bot/.venv node_modules

@@ -16,6 +16,7 @@ jobs:
     outputs:
       web: ${{ steps.filter.outputs.web }}
       api: ${{ steps.filter.outputs.api }}
+      slack-bot: ${{ steps.filter.outputs.slack-bot }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -31,6 +32,8 @@ jobs:
               - 'biome.json'
             api:
               - 'apps/api/**'
+            slack-bot:
+              - 'services/slack-bot/**'
 
   web:
     needs: changes
@@ -54,6 +57,24 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - run: uv run pytest
+
+  slack-bot:
+    needs: changes
+    if: needs.changes.outputs.slack-bot == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/slack-bot
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

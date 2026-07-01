@@ -35,6 +35,18 @@ services:
       db:
         condition: service_healthy
 
+  slack-bot:
+    build:
+      context: .
+      dockerfile: services/slack-bot/Dockerfile
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./services/slack-bot:/app/services/slack-bot
+      - /app/services/slack-bot/.venv
+
   web:
     build:
       context: .

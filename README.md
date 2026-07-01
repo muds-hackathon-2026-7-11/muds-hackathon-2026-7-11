@@ -12,7 +12,7 @@
 - **認証**: Google OAuth
 - **AI対話(相談アシスタント・志望理由作成支援)**: Claude API
 - **マッチング診断**: sentence-transformers + pgvector
-- **Slack連携**: slack-bolt
+- **Slack連携**: slack-bolt(Socket Mode)
 - **モノレポ管理**: pnpm workspace + Turborepo(JS側) / uv(Python側)
 - **Lint/Format**: Biome(web) / ruff・mypy(api)
 
@@ -21,9 +21,11 @@
 ```
 /
 ├── apps/
-│   ├── web/   # Frontend (Next.js / TypeScript)
-│   └── api/   # Backend (FastAPI / Python)
-├── docs/      # 要件定義・設計ドキュメント
+│   ├── web/         # Frontend (Next.js / TypeScript)
+│   └── api/         # Backend (FastAPI / Python)
+├── services/
+│   └── slack-bot/   # Slack Bot (slack-bolt / Python, Socket Mode)
+├── docs/            # 要件定義・設計ドキュメント
 ├── docker-compose.yml
 └── Makefile
 ```
@@ -43,7 +45,7 @@
 ```bash
 cp .env.example .env
 make install   # pnpm install + uv sync
-make dev       # docker compose up --build (db / api / web)
+make dev       # docker compose up --build (db / api / web / slack-bot)
 ```
 
 起動後のURL:
@@ -53,14 +55,15 @@ make dev       # docker compose up --build (db / api / web)
 | Web | http://localhost:3100 |
 | API | http://localhost:8100 (ヘルスチェック: `/health`) |
 | DB (Postgres) | localhost:5442 |
+| Slack Bot | (Socket Modeのためポート公開なし。`SLACK_BOT_TOKEN`/`SLACK_APP_TOKEN`を`.env`に設定して接続) |
 
 ## よく使うコマンド
 
 ```bash
-make lint       # web(Biome/ESLint) + api(ruff)
-make typecheck  # web(tsc) + api(mypy)
-make test       # web + api のテスト
-make format     # web(Biome) + api(ruff format)
+make lint       # web(Biome/ESLint) + api・slack-bot(ruff)
+make typecheck  # web(tsc) + api・slack-bot(mypy)
+make test       # web + api + slack-bot のテスト
+make format     # web(Biome) + api・slack-bot(ruff format)
 make db-shell   # devのDBにpsqlで接続
 make down       # コンテナ停止
 make clean      # コンテナ・volume・ビルド成果物を削除
