@@ -32,6 +32,10 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
+# claude code local settings (settings.json is shared/committed, these are not)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

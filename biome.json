@@ -10,7 +10,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "preset": "recommended"
     }
   },
   "formatter": {
@@ -18,7 +18,17 @@
     "indentStyle": "space",
     "indentWidth": 2
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "files": {
-    "includes": ["apps/web/**", "!apps/web/.next/**", "!**/node_modules/**"]
+    "includes": [
+      "apps/web/**",
+      "!apps/web/.next",
+      "!apps/web/public",
+      "!**/node_modules"
+    ]
   }
 }
