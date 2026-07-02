@@ -1,0 +1,63 @@
+import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from api.db import Base
+from api.models.mixins import IDMixin, TimestampMixin
+
+
+class ApplicationStatus(str, enum.Enum):
+    draft = "draft"
+    submitted = "submitted"
+
+
+class ApplicationForm(IDMixin, TimestampMixin, Base):
+    """提出全体を管理。学生1人につき1レコード。"""
+
+    __tablename__ = "application_forms"
+
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True
+    )
+    status: Mapped[ApplicationStatus] = mapped_column(
+        SAEnum(ApplicationStatus, native_enum=False, length=20, create_constraint=True),
+        default=ApplicationStatus.draft,
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class ApplicationChoice(IDMixin, Base):
+    """志望内容。1提出につき最大3レコード（priority 1〜3）。
+
+    件数の上限(最大3件)はアプリケーション層でバリデーションする。
+    DB側では同一フォーム内でのpriorityの重複のみ防ぐ。
+    """
+
+    __tablename__ = "application_choices"
+    __table_args__ = (
+        UniqueConstraint("application_form_id", "priority", name="uq_choice_priority"),
+    )
+
+    application_form_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("application_forms.id", ondelete="CASCADE")
+    )
+    seminar_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("seminars.id", ondelete="CASCADE")
+    )
+    priority: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(Text)
