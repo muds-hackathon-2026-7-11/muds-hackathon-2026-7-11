@@ -251,10 +251,13 @@ async def _get_or_create_recruitment_term(
     if term is not None:
         return term, False
 
+    # 開発中ずっと「募集中」として扱われるよう、期間は年度いっぱいまで広めに取る
+    # (本来の募集期間は4〜5月の1ヶ月程度を想定しているが、シードデータは
+    # 開発・デモ用途で使い続けられることを優先する)。
     term = RecruitmentTerm(
         academic_year=academic_year,
         starts_at=date(academic_year, 4, 1),
-        ends_at=date(academic_year, 5, 1),
+        ends_at=date(academic_year, 12, 31),
         status=RecruitmentTermStatus.open,
     )
     session.add(term)

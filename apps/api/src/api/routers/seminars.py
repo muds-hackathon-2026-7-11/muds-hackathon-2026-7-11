@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -27,10 +28,20 @@ router = APIRouter(prefix="/seminars", tags=["seminars"])
 
 
 async def _get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
-    """今アクティブな募集ラウンドを1件返す(なければNone)。"""
+    """今アクティブな募集ラウンドを1件返す(なければNone)。
+
+    status=open なだけでなく、starts_at <= today <= ends_at も満たす必要がある。
+    運営が翌年度分を準備目的で早めに open にしても、開始日前は「募集中」として
+    扱わないようにするため。
+    """
+    today = date.today()
     result = await db.execute(
         select(RecruitmentTerm)
-        .where(RecruitmentTerm.status == RecruitmentTermStatus.open)
+        .where(
+            RecruitmentTerm.status == RecruitmentTermStatus.open,
+            RecruitmentTerm.starts_at <= today,
+            RecruitmentTerm.ends_at >= today,
+        )
         .order_by(RecruitmentTerm.academic_year.desc())
         .limit(1)
     )

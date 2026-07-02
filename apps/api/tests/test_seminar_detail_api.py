@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -31,10 +31,11 @@ async def _make_seminar(db_session) -> Seminar:
 
 
 async def _make_open_term(db_session, academic_year: int) -> RecruitmentTerm:
+    today = date.today()
     term = RecruitmentTerm(
         academic_year=academic_year,
-        starts_at=date(academic_year, 4, 1),
-        ends_at=date(academic_year, 5, 1),
+        starts_at=today - timedelta(days=1),
+        ends_at=today + timedelta(days=30),
         status=RecruitmentTermStatus.open,
     )
     db_session.add(term)
@@ -104,7 +105,7 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
     body = resp.json()
     assert body["id"] == str(seminar.id)
     assert body["capacity"] == 10
-    assert body["recruitment_start"] == f"{academic_year}-04-01"
+    assert body["recruitment_start"] == str(term.starts_at)
     assert {t["name"] for t in body["teachers"]} == {teacher1.name, teacher2.name}
     assert len(body["materials"]) == 1
     assert body["materials"][0]["url"] == "https://example.com/a.pdf"
@@ -133,3 +134,33 @@ async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(
     assert body["teachers"] == []
     assert body["materials"] == []
     assert body["current_members"] == []
+
+
+async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(
+    client, db_session
+) -> None:
+    # status=open でも starts_at より前、あるいは ends_at より後なら
+    # 「募集中」として扱わない(運営が翌年度分を早めにopenにしても
+    # 開始日前は反映されない、というのが今回直した挙動)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    future_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() + timedelta(days=30),
+        ends_at=date.today() + timedelta(days=60),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(future_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    db_session.add(
+        SeminarRecruitment(term_id=future_term.id, seminar_id=seminar.id, capacity=10)
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["capacity"] is None
+    assert body["recruitment_start"] is None
