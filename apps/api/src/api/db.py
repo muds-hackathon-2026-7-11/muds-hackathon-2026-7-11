@@ -14,5 +14,11 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
+    """リクエストごとにセッションを払い出し、正常終了時はcommit、例外時はrollbackする。"""
     async with async_session() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
