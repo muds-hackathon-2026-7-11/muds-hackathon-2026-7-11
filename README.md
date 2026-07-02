@@ -66,6 +66,8 @@ make test       # web + api + slack-bot のテスト
 make format     # web(Biome) + api・slack-bot(ruff format)
 make migrate    # devのDBにAlembicマイグレーションを適用
 make migration m="message"  # 新しいAlembicマイグレーションを生成
+make seed       # 開発用のゼミデータを投入(べき等)
+make link-slack-user id=U0XXXXXXX  # 自分のSlackユーザーIDをテスト用ユーザーに紐付け(Slack連携の動作確認用)
 make db-shell   # devのDBにpsqlで接続
 make down       # コンテナ停止
 make clean      # コンテナ・volume・ビルド成果物を削除

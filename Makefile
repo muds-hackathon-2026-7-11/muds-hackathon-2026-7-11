@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration db-shell clean
+.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -50,6 +50,12 @@ migrate: ## apply pending Alembic migrations to the dev db
 
 migration: ## generate a new Alembic migration (usage: make migration m="message")
 	cd apps/api && uv run alembic revision --autogenerate -m "$(m)"
+
+seed: ## insert dev seed data (seminars)
+	cd apps/api && uv run python -m api.seed
+
+link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
+	cd apps/api && uv run python -m api.link_slack_user $(id)
 
 db-shell: ## open a psql shell against the dev db
 	docker compose exec db psql -U postgres -d seminar_platform
