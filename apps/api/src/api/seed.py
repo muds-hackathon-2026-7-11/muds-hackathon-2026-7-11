@@ -11,6 +11,7 @@ from api.models import (
     AnswerSource,
     MaterialType,
     Question,
+    QuestionStatus,
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
@@ -418,6 +419,7 @@ async def seed_all() -> None:
                             source=AnswerSource.web,
                         )
                     )
+                    question.status = QuestionStatus.answered
 
         await session.commit()
 

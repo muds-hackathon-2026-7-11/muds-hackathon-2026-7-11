@@ -2,7 +2,15 @@ import uuid
 
 import pytest
 
-from api.models import Seminar, User, UserRole
+from api.models import (
+    Answer,
+    AnswerSource,
+    Question,
+    QuestionStatus,
+    Seminar,
+    User,
+    UserRole,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -16,6 +24,18 @@ async def _make_seminar(db_session) -> Seminar:
     db_session.add(seminar)
     await db_session.flush()
     return seminar
+
+
+async def _make_user(db_session, role: UserRole = UserRole.student) -> User:
+    user = User(
+        google_id=_unique("google"),
+        email=f"{_unique('user')}@example.com",
+        name=_unique("name"),
+        role=role,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
 
 
 async def test_list_seminars(client, db_session) -> None:
@@ -120,5 +140,73 @@ async def test_create_question_empty_content_is_rejected(client, db_session) -> 
             "content": "",
         },
     )
+
+    assert resp.status_code == 422
+
+
+async def test_list_questions_returns_answered_and_unanswered(
+    client, db_session
+) -> None:
+    seminar = await _make_seminar(db_session)
+    asker = await _make_user(db_session, UserRole.student)
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    answered_question = Question(
+        seminar_id=seminar.id, user_id=asker.id, content="質問A"
+    )
+    unanswered_question = Question(
+        seminar_id=seminar.id, user_id=asker.id, content="質問B"
+    )
+    db_session.add_all([answered_question, unanswered_question])
+    await db_session.flush()
+
+    db_session.add(
+        Answer(
+            question_id=answered_question.id,
+            user_id=teacher.id,
+            content="回答です",
+            source=AnswerSource.web,
+        )
+    )
+    answered_question.status = QuestionStatus.answered
+    await db_session.flush()
+
+    resp = await client.get(f"/questions?seminar_id={seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+
+    answered_body = next(q for q in body if q["content"] == "質問A")
+    assert answered_body["status"] == "answered"
+    assert len(answered_body["answers"]) == 1
+    assert answered_body["answers"][0]["content"] == "回答です"
+    assert answered_body["answers"][0]["answerer_name"] == teacher.name
+
+    unanswered_body = next(q for q in body if q["content"] == "質問B")
+    assert unanswered_body["status"] == "waiting"
+    assert unanswered_body["answers"] == []
+
+
+async def test_list_questions_does_not_leak_asker_identity(client, db_session) -> None:
+    seminar = await _make_seminar(db_session)
+    asker = await _make_user(db_session, UserRole.student)
+    db_session.add(Question(seminar_id=seminar.id, user_id=asker.id, content="質問"))
+    await db_session.flush()
+
+    resp = await client.get(f"/questions?seminar_id={seminar.id}")
+
+    assert resp.status_code == 200
+    assert "user_id" not in resp.json()[0]
+
+
+async def test_list_questions_unknown_seminar_returns_404(client) -> None:
+    resp = await client.get(f"/questions?seminar_id={uuid.uuid4()}")
+
+    assert resp.status_code == 404
+
+
+async def test_list_questions_missing_seminar_id_returns_422(client) -> None:
+    resp = await client.get("/questions")
 
     assert resp.status_code == 422

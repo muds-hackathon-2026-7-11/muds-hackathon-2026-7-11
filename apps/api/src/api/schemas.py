@@ -1,9 +1,9 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.models import MaterialType
+from api.models import MaterialType, QuestionStatus
 
 
 class SeminarOut(BaseModel):
@@ -56,3 +56,16 @@ class QuestionOut(BaseModel):
     id: uuid.UUID
     seminar_id: uuid.UUID
     content: str
+    status: QuestionStatus
+    created_at: datetime
+
+
+class AnswerOut(BaseModel):
+    id: uuid.UUID
+    content: str
+    answerer_name: str
+    created_at: datetime
+
+
+class QuestionWithAnswersOut(QuestionOut):
+    answers: list[AnswerOut]
