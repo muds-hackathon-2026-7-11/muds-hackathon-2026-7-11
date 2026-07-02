@@ -33,7 +33,9 @@ typecheck: ## typecheck web (tsc), api and slack-bot (mypy)
 	cd apps/api && uv run mypy .
 	cd services/slack-bot && uv run mypy .
 
-test: ## run web, api and slack-bot test suites
+test: ## run web, api and slack-bot test suites (starts+migrates db if needed)
+	docker compose up -d --wait db
+	cd apps/api && uv run alembic upgrade head
 	pnpm turbo run test
 	cd apps/api && uv run pytest
 	cd services/slack-bot && uv run pytest
