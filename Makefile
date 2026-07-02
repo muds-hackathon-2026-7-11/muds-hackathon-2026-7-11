@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user db-shell clean
+.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user backup backup-list restore db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -56,6 +56,18 @@ seed: ## insert dev seed data (seminars)
 
 link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
 	cd apps/api && uv run python -m api.link_slack_user $(id)
+
+backup: ## take an on-demand DB backup into ./backups (pg_dump, custom format)
+	mkdir -p backups
+	@ts=$$(date +%Y%m%d_%H%M%S); \
+	docker compose exec -T db pg_dump -U postgres -d seminar_platform --format=custom > backups/manual_$$ts.dump; \
+	echo "saved to backups/manual_$$ts.dump"
+
+backup-list: ## list available backup files
+	ls -lh backups/
+
+restore: ## restore the DB from a dump file (usage: make restore file=backups/xxx.dump)
+	docker compose exec -T db pg_restore -U postgres -d seminar_platform --clean --if-exists < $(file)
 
 db-shell: ## open a psql shell against the dev db
 	docker compose exec db psql -U postgres -d seminar_platform
