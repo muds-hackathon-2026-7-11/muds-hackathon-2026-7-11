@@ -85,91 +85,96 @@ def _question_modal_view(seminars: list[dict]) -> dict:
     }
 
 
+def _handle_home_opened(client, event) -> None:
+    client.views_publish(user_id=event["user"], view=_home_view())
+
+
+def _handle_question_action(ack, body, client) -> None:
+    """「💬 質問する」ボタン押下時のハンドラ。
+
+    Boltのデコレータの外に切り出してあるのは、`client`/`ack`をMockに差し替えて
+    ユニットテストしやすくするため(create_app内に閉じ込めるとテストできない)。
+    """
+    ack()
+    user_id = body["user"]["id"]
+    try:
+        seminars = fetch_seminars()
+    except httpx.HTTPError:
+        logger.exception("failed to fetch seminars from API")
+        client.chat_postEphemeral(
+            channel=user_id,
+            user=user_id,
+            text="ゼミ情報の取得に失敗しました。時間をおいて再度お試しください。",
+        )
+        return
+
+    if not seminars:
+        client.chat_postEphemeral(
+            channel=user_id,
+            user=user_id,
+            text="現在登録されているゼミがありません。",
+        )
+        return
+
+    client.views_open(
+        trigger_id=body["trigger_id"], view=_question_modal_view(seminars)
+    )
+
+
+def _handle_question_view_submission(ack, body, view, client) -> None:
+    ack()
+    user_id = body["user"]["id"]
+    values = view["state"]["values"]
+    seminar_id = values["seminar_block"]["seminar_select"]["selected_option"]["value"]
+    content = values["content_block"]["content_input"]["value"]
+
+    try:
+        response = submit_question(
+            seminar_id=seminar_id, slack_user_id=user_id, content=content
+        )
+    except httpx.HTTPError:
+        logger.exception("failed to submit question to API")
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信に失敗しました。時間をおいて再度お試しください。",
+        )
+        return
+
+    if response.status_code == 201:
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信しました！\n回答が届いたら通知します。",
+        )
+    elif response.status_code == 404:
+        client.chat_postMessage(
+            channel=user_id,
+            text=response.json().get("detail", "送信に失敗しました。"),
+        )
+    else:
+        logger.error(
+            "unexpected API response: status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信に失敗しました。時間をおいて再度お試しください。",
+        )
+
+
 def create_app(token_verification_enabled: bool = True) -> App:
     """Build the Bolt App and register all handlers.
 
-    Handler registration happens inside this factory (rather than at module
-    import time) so importing this module never requires SLACK_BOT_TOKEN to
-    be set, keeping it testable without live credentials. Tests should pass
-    token_verification_enabled=False to skip Bolt's eager auth.test call.
+    App構築はこの中で行う(モジュールimport時点ではSLACK_BOT_TOKENを要求しないため)。
+    token_verification_enabled=Falseにすると、Boltの起動時auth.test呼び出しをスキップできる(テスト用)。
     """
     app = App(
         token=os.environ["SLACK_BOT_TOKEN"],
         token_verification_enabled=token_verification_enabled,
     )
 
-    @app.event("app_home_opened")
-    def update_home(client, event) -> None:
-        client.views_publish(user_id=event["user"], view=_home_view())
-
-    @app.action("question")
-    def open_question_modal(ack, body, client) -> None:
-        ack()
-        user_id = body["user"]["id"]
-        try:
-            seminars = fetch_seminars()
-        except httpx.HTTPError:
-            logger.exception("failed to fetch seminars from API")
-            client.chat_postEphemeral(
-                channel=user_id,
-                user=user_id,
-                text="ゼミ情報の取得に失敗しました。時間をおいて再度お試しください。",
-            )
-            return
-
-        if not seminars:
-            client.chat_postEphemeral(
-                channel=user_id,
-                user=user_id,
-                text="現在登録されているゼミがありません。",
-            )
-            return
-
-        client.views_open(
-            trigger_id=body["trigger_id"], view=_question_modal_view(seminars)
-        )
-
-    @app.view("question_submit")
-    def handle_question_submit(ack, body, view, client) -> None:
-        ack()
-        user_id = body["user"]["id"]
-        values = view["state"]["values"]
-        seminar_id = values["seminar_block"]["seminar_select"]["selected_option"][
-            "value"
-        ]
-        content = values["content_block"]["content_input"]["value"]
-
-        try:
-            response = submit_question(
-                seminar_id=seminar_id, slack_user_id=user_id, content=content
-            )
-        except httpx.HTTPError:
-            logger.exception("failed to submit question to API")
-            client.chat_postMessage(
-                channel=user_id,
-                text="送信に失敗しました。時間をおいて再度お試しください。",
-            )
-            return
-
-        if response.status_code == 201:
-            client.chat_postMessage(
-                channel=user_id,
-                text="送信しました！\n回答が届いたら通知します。",
-            )
-        elif response.status_code == 404:
-            client.chat_postMessage(
-                channel=user_id,
-                text=response.json().get("detail", "送信に失敗しました。"),
-            )
-        else:
-            logger.error(
-                "unexpected API response: status=%s body=%s",
-                response.status_code,
-                response.text,
-            )
-            client.chat_postMessage(
-                channel=user_id,
-                text="送信に失敗しました。時間をおいて再度お試しください。",
-            )
+    app.event("app_home_opened")(_handle_home_opened)
+    app.action("question")(_handle_question_action)
+    app.view("question_submit")(_handle_question_view_submission)
 
     return app
