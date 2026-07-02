@@ -7,11 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import async_session
 from api.models import (
-    Answer,
     AnswerSource,
     MaterialType,
     Question,
-    QuestionStatus,
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
@@ -22,6 +20,7 @@ from api.models import (
     User,
     UserRole,
 )
+from api.services import record_answer
 
 CURRENT_ACADEMIC_YEAR = 2026
 
@@ -411,15 +410,13 @@ async def seed_all() -> None:
                         role=UserRole.teacher,
                         research_theme=None,
                     )
-                    session.add(
-                        Answer(
-                            question_id=question.id,
-                            user_id=teacher.id,
-                            content=answer_content,
-                            source=AnswerSource.web,
-                        )
+                    await record_answer(
+                        session,
+                        question=question,
+                        user_id=teacher.id,
+                        content=answer_content,
+                        source=AnswerSource.web,
                     )
-                    question.status = QuestionStatus.answered
 
         await session.commit()
 

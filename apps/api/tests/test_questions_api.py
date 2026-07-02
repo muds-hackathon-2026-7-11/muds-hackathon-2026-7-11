@@ -2,15 +2,8 @@ import uuid
 
 import pytest
 
-from api.models import (
-    Answer,
-    AnswerSource,
-    Question,
-    QuestionStatus,
-    Seminar,
-    User,
-    UserRole,
-)
+from api.models import AnswerSource, Question, Seminar, User, UserRole
+from api.services import record_answer
 
 pytestmark = pytest.mark.asyncio
 
@@ -160,15 +153,13 @@ async def test_list_questions_returns_answered_and_unanswered(
     db_session.add_all([answered_question, unanswered_question])
     await db_session.flush()
 
-    db_session.add(
-        Answer(
-            question_id=answered_question.id,
-            user_id=teacher.id,
-            content="回答です",
-            source=AnswerSource.web,
-        )
+    await record_answer(
+        db_session,
+        question=answered_question,
+        user_id=teacher.id,
+        content="回答です",
+        source=AnswerSource.web,
     )
-    answered_question.status = QuestionStatus.answered
     await db_session.flush()
 
     resp = await client.get(f"/questions?seminar_id={seminar.id}")
@@ -186,6 +177,45 @@ async def test_list_questions_returns_answered_and_unanswered(
     unanswered_body = next(q for q in body if q["content"] == "質問B")
     assert unanswered_body["status"] == "waiting"
     assert unanswered_body["answers"] == []
+
+
+async def test_list_questions_groups_multiple_answers_under_one_question(
+    client, db_session
+) -> None:
+    seminar = await _make_seminar(db_session)
+    asker = await _make_user(db_session, UserRole.student)
+    teacher1 = await _make_user(db_session, UserRole.teacher)
+    teacher2 = await _make_user(db_session, UserRole.student)
+
+    question = Question(seminar_id=seminar.id, user_id=asker.id, content="質問")
+    db_session.add(question)
+    await db_session.flush()
+
+    await record_answer(
+        db_session,
+        question=question,
+        user_id=teacher1.id,
+        content="回答1",
+        source=AnswerSource.web,
+    )
+    await record_answer(
+        db_session,
+        question=question,
+        user_id=teacher2.id,
+        content="回答2",
+        source=AnswerSource.web,
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/questions?seminar_id={seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    answers = body[0]["answers"]
+    assert len(answers) == 2
+    assert {a["content"] for a in answers} == {"回答1", "回答2"}
+    assert {a["answerer_name"] for a in answers} == {teacher1.name, teacher2.name}
 
 
 async def test_list_questions_does_not_leak_asker_identity(client, db_session) -> None:
