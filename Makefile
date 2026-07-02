@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user backup backup-list restore db-shell clean
+.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -68,6 +68,9 @@ backup-list: ## list available backup files
 
 restore: ## restore the DB from a dump file (usage: make restore file=backups/xxx.dump)
 	docker compose exec -T db pg_restore -U postgres -d seminar_platform --clean --if-exists < $(file)
+
+backup-restore-test: ## verify backup->restore actually recovers data (used by CI)
+	./scripts/test-backup-restore.sh
 
 db-shell: ## open a psql shell against the dev db
 	docker compose exec db psql -U postgres -d seminar_platform

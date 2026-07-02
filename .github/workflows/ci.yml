@@ -17,6 +17,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       api: ${{ steps.filter.outputs.api }}
       slack-bot: ${{ steps.filter.outputs.slack-bot }}
+      backup: ${{ steps.filter.outputs.backup }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -34,6 +35,10 @@ jobs:
               - 'apps/api/**'
             slack-bot:
               - 'services/slack-bot/**'
+            backup:
+              - 'docker-compose.yml'
+              - 'scripts/test-backup-restore.sh'
+              - 'apps/api/alembic/**'
 
   web:
     needs: changes
@@ -102,3 +107,14 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy .
       - run: uv run pytest
+
+  backup:
+    needs: changes
+    if: needs.changes.outputs.backup == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: make backup-restore-test
