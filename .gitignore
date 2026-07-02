@@ -45,3 +45,6 @@ next-env.d.ts
 
 # personal scratch notes (see docs/requirements.md for the committed version)
 /todo.txt
+
+# DB backups contain real personal data (student IDs, application reasons) - never commit
+/backups/
