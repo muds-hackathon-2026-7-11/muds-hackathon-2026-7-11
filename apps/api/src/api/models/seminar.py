@@ -1,9 +1,8 @@
 import enum
 import uuid
-from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,20 +11,26 @@ from api.models.mixins import IDMixin, TimestampMixin
 
 
 class Seminar(IDMixin, TimestampMixin, Base):
-    """ゼミ情報"""
+    """ゼミ情報。
+
+    定員・募集期間は年度ごとに変わるため seminar_recruitments / recruitment_terms
+    へ切り出してある(ここには持たせない)。
+    """
 
     __tablename__ = "seminars"
 
     name: Mapped[str] = mapped_column(String)
-    capacity: Mapped[int] = mapped_column(Integer)
-    recruitment_start: Mapped[date] = mapped_column(Date)
-    recruitment_end: Mapped[date] = mapped_column(Date)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SeminarTeacher(IDMixin, Base):
     """担当教員（複数対応）"""
 
     __tablename__ = "seminar_teachers"
+    __table_args__ = (
+        UniqueConstraint("seminar_id", "teacher_id", name="uq_seminar_teacher"),
+    )
 
     seminar_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("seminars.id", ondelete="CASCADE")
@@ -56,13 +61,19 @@ class SeminarMaterial(IDMixin, Base):
 
 
 class SeminarMember(IDMixin, Base):
-    """現在・過去の所属ゼミ生。
+    """所属ゼミ生（配属結果を兼ねる）。
 
     ER図上の assignment_results（配属結果）はこのテーブルで代替する。
-    is_current=True が現在の所属、False が過去の所属（配属履歴）を表す。
+    現在の所属かどうかは academic_year が現在の年度と一致するかで判定し、
+    is_current のようなフラグは持たない。
     """
 
     __tablename__ = "seminar_members"
+    __table_args__ = (
+        UniqueConstraint(
+            "seminar_id", "student_id", "academic_year", name="uq_seminar_member_year"
+        ),
+    )
 
     seminar_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("seminars.id", ondelete="CASCADE")
@@ -71,4 +82,3 @@ class SeminarMember(IDMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
     academic_year: Mapped[int] = mapped_column(Integer)
-    is_current: Mapped[bool] = mapped_column(Boolean, default=False)

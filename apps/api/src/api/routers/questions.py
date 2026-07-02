@@ -1,10 +1,13 @@
+import uuid
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Question, Seminar, User
-from api.schemas import QuestionCreate, QuestionOut
+from api.models import Answer, Question, Seminar, User
+from api.schemas import AnswerOut, QuestionCreate, QuestionOut, QuestionWithAnswersOut
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -38,3 +41,50 @@ async def create_question(
     db.add(question)
     await db.flush()
     return question
+
+
+@router.get("", response_model=list[QuestionWithAnswersOut])
+async def list_questions(
+    seminar_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> list[QuestionWithAnswersOut]:
+    seminar = await db.get(Seminar, seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+
+    questions_result = await db.execute(
+        select(Question)
+        .where(Question.seminar_id == seminar_id)
+        .order_by(Question.created_at.desc())
+    )
+    questions = list(questions_result.scalars().all())
+
+    answers_by_question: dict[uuid.UUID, list[AnswerOut]] = defaultdict(list)
+    question_ids = [q.id for q in questions]
+    if question_ids:
+        answers_result = await db.execute(
+            select(Answer, User.name)
+            .join(User, Answer.user_id == User.id)
+            .where(Answer.question_id.in_(question_ids))
+            .order_by(Answer.created_at)
+        )
+        for answer, answerer_name in answers_result.all():
+            answers_by_question[answer.question_id].append(
+                AnswerOut(
+                    id=answer.id,
+                    content=answer.content,
+                    answerer_name=answerer_name,
+                    created_at=answer.created_at,
+                )
+            )
+
+    return [
+        QuestionWithAnswersOut(
+            id=q.id,
+            seminar_id=q.seminar_id,
+            content=q.content,
+            status=q.status,
+            created_at=q.created_at,
+            answers=answers_by_question.get(q.id, []),
+        )
+        for q in questions
+    ]

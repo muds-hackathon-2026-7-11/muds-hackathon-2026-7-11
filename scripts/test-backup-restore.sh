@@ -14,7 +14,7 @@ echo "==> applying migrations"
 MARKER="backup-test-$(date +%s)"
 echo "==> inserting marker seminar: $MARKER"
 docker compose exec -T db psql -U postgres -d seminar_platform -c \
-  "INSERT INTO seminars (id, name, capacity, recruitment_start, recruitment_end) VALUES (gen_random_uuid(), '$MARKER', 1, '2026-01-01', '2026-01-01');"
+  "INSERT INTO seminars (id, name) VALUES (gen_random_uuid(), '$MARKER');"
 
 echo "==> taking backup"
 mkdir -p backups

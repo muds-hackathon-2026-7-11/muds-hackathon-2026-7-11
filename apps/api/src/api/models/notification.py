@@ -1,8 +1,9 @@
 import enum
 import uuid
+from datetime import datetime
 
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,3 +30,10 @@ class Notification(IDMixin, CreatedAtMixin, Base):
         SAEnum(NotificationType, native_enum=False, length=20, create_constraint=True)
     )
     message: Mapped[str] = mapped_column(Text)
+    related_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    related_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
