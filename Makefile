@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build down logs ps lint typecheck test format db-shell clean
+.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -33,7 +33,9 @@ typecheck: ## typecheck web (tsc), api and slack-bot (mypy)
 	cd apps/api && uv run mypy .
 	cd services/slack-bot && uv run mypy .
 
-test: ## run web, api and slack-bot test suites
+test: ## run web, api and slack-bot test suites (starts+migrates db if needed)
+	docker compose up -d --wait db
+	cd apps/api && uv run alembic upgrade head
 	pnpm turbo run test
 	cd apps/api && uv run pytest
 	cd services/slack-bot && uv run pytest
@@ -42,6 +44,12 @@ format: ## format web (biome), api and slack-bot (ruff)
 	pnpm exec biome format --write .
 	cd apps/api && uv run ruff format .
 	cd services/slack-bot && uv run ruff format .
+
+migrate: ## apply pending Alembic migrations to the dev db
+	cd apps/api && uv run alembic upgrade head
+
+migration: ## generate a new Alembic migration (usage: make migration m="message")
+	cd apps/api && uv run alembic revision --autogenerate -m "$(m)"
 
 db-shell: ## open a psql shell against the dev db
 	docker compose exec db psql -U postgres -d seminar_platform

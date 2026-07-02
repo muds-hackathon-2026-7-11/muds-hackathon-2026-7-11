@@ -40,7 +40,9 @@ services:
       context: .
       dockerfile: services/slack-bot/Dockerfile
       target: dev
-    restart: unless-stopped
+    # SLACK_BOT_TOKEN/SLACK_APP_TOKEN未設定だと起動できない(意図的にexit 1する)。
+    # unless-stoppedだと無限リトライしてログが埋まるので、数回で諦めるようにする。
+    restart: on-failure:3
     env_file:
       - .env
     volumes:
