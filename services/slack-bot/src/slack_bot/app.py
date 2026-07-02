@@ -79,6 +79,8 @@ def _question_modal_view(seminars: list[dict]) -> dict:
                     "type": "plain_text_input",
                     "action_id": "content_input",
                     "multiline": True,
+                    "min_length": 1,
+                    "max_length": 2000,
                 },
             },
         ],

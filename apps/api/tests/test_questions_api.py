@@ -96,3 +96,52 @@ async def test_create_question_unknown_slack_user_returns_404(
     )
 
     assert resp.status_code == 404
+
+
+async def test_create_question_unknown_seminar_returns_404(client, db_session) -> None:
+    slack_user_id = _unique("U")
+    user = User(
+        google_id=_unique("google"),
+        email=f"{_unique('user')}@example.com",
+        name="Test User",
+        role=UserRole.student,
+        slack_user_id=slack_user_id,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/questions",
+        json={
+            "seminar_id": str(uuid.uuid4()),
+            "slack_user_id": slack_user_id,
+            "content": "質問です",
+        },
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_create_question_empty_content_is_rejected(client, db_session) -> None:
+    slack_user_id = _unique("U")
+    user = User(
+        google_id=_unique("google"),
+        email=f"{_unique('user')}@example.com",
+        name="Test User",
+        role=UserRole.student,
+        slack_user_id=slack_user_id,
+    )
+    db_session.add(user)
+    seminar = await _make_seminar(db_session)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/questions",
+        json={
+            "seminar_id": str(seminar.id),
+            "slack_user_id": slack_user_id,
+            "content": "",
+        },
+    )
+
+    assert resp.status_code == 422

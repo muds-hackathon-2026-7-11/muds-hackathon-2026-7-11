@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Question, User
+from api.models import Question, Seminar, User
 from api.schemas import QuestionCreate, QuestionOut
 
 router = APIRouter(prefix="/questions", tags=["questions"])
@@ -25,6 +25,10 @@ async def create_question(
                 "先にWebでGoogleログインしてください。"
             ),
         )
+
+    seminar = await db.get(Seminar, payload.seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
 
     question = Question(
         seminar_id=payload.seminar_id,

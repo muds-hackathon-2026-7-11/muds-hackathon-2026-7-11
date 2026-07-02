@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SeminarOut(BaseModel):
@@ -13,7 +13,7 @@ class SeminarOut(BaseModel):
 class QuestionCreate(BaseModel):
     seminar_id: uuid.UUID
     slack_user_id: str
-    content: str
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class QuestionOut(BaseModel):
