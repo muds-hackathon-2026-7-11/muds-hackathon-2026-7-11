@@ -117,4 +117,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+      # docker composeはenv_file: .envを参照するサービスがあると、.envが
+      # 存在しないだけでコマンド全体が失敗する(dbのみをターゲットにしていても)。
+      - run: cp .env.example .env
       - run: make backup-restore-test
