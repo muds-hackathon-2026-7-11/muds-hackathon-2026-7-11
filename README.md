@@ -64,6 +64,8 @@ make lint       # web(Biome/ESLint) + api・slack-bot(ruff)
 make typecheck  # web(tsc) + api・slack-bot(mypy)
 make test       # web + api + slack-bot のテスト
 make format     # web(Biome) + api・slack-bot(ruff format)
+make migrate    # devのDBにAlembicマイグレーションを適用
+make migration m="message"  # 新しいAlembicマイグレーションを生成
 make db-shell   # devのDBにpsqlで接続
 make down       # コンテナ停止
 make clean      # コンテナ・volume・ビルド成果物を削除
