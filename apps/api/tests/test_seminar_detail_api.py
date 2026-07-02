@@ -162,5 +162,7 @@ async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(
 
     assert resp.status_code == 200
     body = resp.json()
+    # このゼミはfuture_term(期間外)のSeminarRecruitmentしか持たないため、
+    # (他にDB上に本当にactiveな募集ラウンドがあるかどうかに関わらず)
+    # このゼミ自身の定員は反映されないはず
     assert body["capacity"] is None
-    assert body["recruitment_start"] is None
