@@ -27,4 +27,5 @@ async def record_answer(
     )
     session.add(answer)
     question.status = QuestionStatus.answered
+    await session.flush()
     return answer
