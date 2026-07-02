@@ -232,187 +232,293 @@ CSVから一括登録。
 
 ## DB設計
 
-### users（ユーザー）
+改訂版(2026-07-03)。募集期間・定員を「ゼミ」から切り離し、年度単位の募集ラウンドとして管理する構成に変更。
 
-学生・教員・運営を管理
+### 設計方針
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| google_id | varchar UNIQUE | Google OAuth ID |
-| slack_user_id | varchar UNIQUE NULL | SlackユーザーID |
-| email | varchar UNIQUE | 大学メールアドレス |
-| student_id | varchar NULL | 学籍番号（教員はNULL） |
-| name | varchar | 氏名 |
-| role | enum | student / teacher / admin |
-| research_theme | varchar NULL | 研究テーマ・研究概要 |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+- 募集期間・年度は `recruitment_terms` で全ゼミ共通に一元管理
+- 定員は年度×ゼミ(`seminar_recruitments`)で管理し、教員・管理者がUIから設定可能
+- 配属結果テーブルは持たず、`seminar_members` に一本化(CSVインポートの投入先もここ)
+- 質問はSlack Bot経由で投稿、回答候補者へBotがDM通知し、DM内(ボタン→モーダル)で回答
+- 匿名質問は `user_id` をDBに保持しつつAPIで返さない表示制御で実現(不適切発言時は管理者がDBを直接確認)
+- マッチ度はLLM呼び出しを入力ハッシュでキャッシュし、提出時のスコアを志望レコードにスナップショット保存
 
-### seminars（ゼミ）
+### テーブル定義
 
-ゼミ情報
+#### recruitment_terms(募集期間・年度)
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| name | varchar | ゼミ名 |
-| capacity | int | 募集定員 |
-| recruitment_start | date | 募集開始日 |
-| recruitment_end | date | 募集終了日 |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+全ゼミ共通の募集期間を年度単位で管理する。
 
-### seminar_teachers
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| academic_year | int | UNIQUE, NOT NULL | 対象年度(例: 2026) |
+| starts_at | date | NOT NULL | 募集開始日 |
+| ends_at | date | NOT NULL | 募集終了日(提出締切) |
+| status | enum | NOT NULL | preparing / open / closed |
+| created_at | timestamp | NOT NULL | |
+| updated_at | timestamp | NOT NULL | |
 
-担当教員（複数対応）
+- 提出可否の判定は `status = open` かつ `ends_at` 以前で行う
+- 運営の「募集期間設定」画面はこのテーブルを編集する
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| seminar_id | FK(seminars) | 担当ゼミ |
-| teacher_id | FK(users) | 担当教員 |
+#### seminars(ゼミ)
 
-### seminar_materials
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| name | varchar | NOT NULL | ゼミ名 |
+| description | text | NULL | 研究内容・ゼミ紹介文 |
+| photo_url | varchar | NULL | 研究室写真 |
+| created_at | timestamp | NOT NULL | |
+| updated_at | timestamp | NOT NULL | |
 
-ゼミ紹介資料
+- 定員・募集期間は持たない(年度で変わるため `seminar_recruitments` へ)
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| seminar_id | FK(seminars) | 対象ゼミ |
-| url | varchar | 資料URL |
-| type | enum | slide / pdf / video |
+#### seminar_recruitments(年度ごとの募集設定)
 
-### seminar_members
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| term_id | UUID | FK(recruitment_terms), NOT NULL | 対象年度 |
+| seminar_id | UUID | FK(seminars), NOT NULL | 対象ゼミ |
+| capacity | int | NOT NULL | 募集定員 |
+| is_recruiting | boolean | NOT NULL DEFAULT true | その年度に募集するか |
+| | | UNIQUE(term_id, seminar_id) | |
 
-現在・過去の所属ゼミ生
+- 定員は教員または管理者がUIから設定
+- 年度作成時に前年度からコピーする機能を用意すると運用が楽
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| seminar_id | FK(seminars) | 所属ゼミ |
-| student_id | FK(users) | 学生 |
-| academic_year | int | 所属年度 |
-| is_current | boolean | 現所属かどうか |
+#### users(ユーザー)
 
-※「現在のゼミ生一覧」「過去の所属ゼミ」を表示するために利用
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| google_id | varchar | UNIQUE, NOT NULL | Google OAuth ID |
+| slack_user_id | varchar | UNIQUE, NULL | SlackユーザーID(未連携はNULL) |
+| email | varchar | UNIQUE, NOT NULL | 大学メールアドレス |
+| student_id | varchar | NULL | 学籍番号(教員・運営はNULL) |
+| name | varchar | NOT NULL | 氏名 |
+| role | enum | NOT NULL | student / teacher / admin |
+| grade | varchar | NULL | 学年(例: "B3", "MIDS/B1") |
+| research_theme | varchar | NULL | 研究テーマ・研究概要 |
+| is_active | boolean | NOT NULL DEFAULT true | ソフトデリート用(教員削除等) |
+| created_at | timestamp | NOT NULL | |
+| updated_at | timestamp | NOT NULL | |
 
-### application_forms
+- `grade` はSlack表示名(`[B3] 氏名` 形式)からパースして同期。Slack連携時とログイン時に再取得すれば進級時の一括更新は不要
+- パース失敗時は NULL のままにし、マイページから本人が手動設定できる逃げ道を用意する
+- ユーザー削除は物理削除せず `is_active = false`(answers 等がFK参照しているため)
 
-提出全体を管理
+#### seminar_teachers(担当教員)
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| student_id | FK(users) | 提出者 |
-| status | enum | draft / submitted |
-| created_at | timestamp | |
-| updated_at | timestamp | |
-| submitted_at | timestamp NULL | |
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| seminar_id | UUID | FK(seminars), NOT NULL | 担当ゼミ |
+| teacher_id | UUID | FK(users), NOT NULL | 担当教員 |
+| | | UNIQUE(seminar_id, teacher_id) | |
 
-※学生1人につき1レコード
+- 教員の複数ゼミ担当・ゼミの複数教員に対応
 
-### application_choices
+#### seminar_materials(ゼミ紹介資料)
 
-志望内容
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| seminar_id | UUID | FK(seminars), NOT NULL | 対象ゼミ |
+| url | varchar | NOT NULL | 資料URL |
+| type | enum | NOT NULL | slide / pdf / video |
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| application_form_id | FK(application_forms) | 提出データ |
-| seminar_id | FK(seminars) | 志望ゼミ |
-| priority | int | 第1〜第3志望 |
-| reason | text | 志望理由 |
+#### seminar_members(所属ゼミ生 = 配属結果)
 
-※1提出につき最大3レコード
+配属結果と所属履歴を兼ねる。運営のCSVインポートはこのテーブルに直接登録する。
 
-### questions
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| seminar_id | UUID | FK(seminars), NOT NULL | 所属ゼミ |
+| student_id | UUID | FK(users), NOT NULL | 学生 |
+| academic_year | int | NOT NULL | 所属年度 |
+| | | UNIQUE(seminar_id, student_id, academic_year) | |
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| seminar_id | FK(seminars) | 対象ゼミ |
-| user_id | FK(users) | 質問者 |
-| content | text | 質問内容 |
-| status | enum | waiting / answered / closed |
-| created_at | timestamp | |
+- 現所属は「academic_year = 現在の年度」で導出(`is_current` フラグは持たない)
+- マイページの「現在所属ゼミ」、ゼミ詳細の「現在のゼミ生」、配属履歴(過去年度)はすべてこのテーブルから取得
 
-### answers
+#### application_forms(志望提出)
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| question_id | FK(questions) | 対象質問 |
-| user_id | FK(users) | 回答者 |
-| content | text | 回答内容 |
-| created_at | timestamp | |
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| term_id | UUID | FK(recruitment_terms), NOT NULL | 対象年度 |
+| student_id | UUID | FK(users), NOT NULL | 提出者 |
+| status | enum | NOT NULL | draft / submitted |
+| submitted_at | timestamp | NULL | 最終提出日時 |
+| created_at | timestamp | NOT NULL | |
+| updated_at | timestamp | NOT NULL | |
+| | | UNIQUE(term_id, student_id) | |
 
-### notifications
+- 学生1人×1年度につき1レコード(複数年度の再提出に対応)
+- 取り下げはなし。status は draft → submitted の一方向
+- 提出後も締切前なら上書き可能: choices を差し替えて `submitted_at` を更新する
 
-通知履歴
+#### application_choices(志望内容)
 
-| カラム | 型 | 説明 |
-|---|---|---|
-| id | UUID | PK |
-| user_id | FK(users) | 通知対象 |
-| type | enum | deadline / answer / application / question |
-| message | text | 通知内容 |
-| created_at | timestamp | |
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| application_form_id | UUID | FK(application_forms), NOT NULL | 提出データ |
+| seminar_id | UUID | FK(seminars), NOT NULL | 志望ゼミ |
+| priority | int | NOT NULL, CHECK (priority BETWEEN 1 AND 3) | 志望順位 |
+| reason | text | NOT NULL | 志望理由 |
+| match_score | int | NULL | 提出時点のマッチ度スナップショット(0-100) |
+| match_feedback | jsonb | NULL | 不足要素などLLMの指摘内容 |
+| | | UNIQUE(application_form_id, priority) | 同順位の重複防止 |
+| | | UNIQUE(application_form_id, seminar_id) | 同一ゼミの重複志望防止 |
+
+- 上書き時は同一 form の choices を delete & insert(または upsert)で差し替え
+- 提出時に `match_evaluations` の最新値を `match_score` / `match_feedback` にコピーして確定(履歴として保持)
+
+#### match_evaluations(マッチ度キャッシュ)
+
+LLM呼び出し回数を減らすためのキャッシュ。消えても再計算できる設計。
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| user_id | UUID | FK(users), NOT NULL | 学生 |
+| seminar_id | UUID | FK(seminars), NOT NULL | 対象ゼミ |
+| input_hash | varchar | NOT NULL | 入力(志望理由+研究概要+ゼミ情報バージョン)のハッシュ |
+| score | int | NOT NULL | マッチ度(0-100) |
+| feedback | jsonb | NULL | 不足要素などの指摘 |
+| created_at | timestamp | NOT NULL | |
+
+INDEX: `(user_id, seminar_id, input_hash)`
+
+- 同一ハッシュがあればキャッシュを返し、LLMを呼ばない(文面が変わったときだけ計算)
+- フロント側でも「前回チェックから本文が変わっていなければボタン無効化」+ デバウンスを入れ、実質1文面1回にする
+
+#### questions(質問)
+
+Slack Bot経由で投稿される。公開チャンネルには投稿しない。
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| seminar_id | UUID | FK(seminars), NOT NULL | 対象ゼミ |
+| user_id | UUID | FK(users), NOT NULL | 質問者(常に保持) |
+| content | text | NOT NULL | 質問内容 |
+| status | enum | NOT NULL | waiting / answered / closed |
+| created_at | timestamp | NOT NULL | |
+
+- 匿名化はAPIレスポンスで `user_id` を返さない表示制御で実現(一般ユーザー・教員には見せない)
+- 不適切発言があった場合、管理者はDBを直接クエリして投稿者を特定できる(専用UIは不要)
+
+#### answer_requests(回答依頼)
+
+質問投稿時に、対象ゼミの現役ゼミ生(現年度の seminar_members)+ 担当教員のうちSlack連携済みユーザーへBotがDM通知し、その対応付けを管理する。
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| question_id | UUID | FK(questions), NOT NULL | 対象質問 |
+| user_id | UUID | FK(users), NOT NULL | 通知を受けた回答候補者 |
+| slack_dm_channel_id | varchar | NOT NULL | BotとのDMチャンネルID |
+| slack_message_ts | varchar | NOT NULL | 通知メッセージのts |
+| status | enum | NOT NULL | pending / answered / skipped |
+| responded_at | timestamp | NULL | 回答・スキップ日時 |
+| created_at | timestamp | NOT NULL | |
+| | | UNIQUE(question_id, user_id) | |
+
+- 通知メッセージには「回答する」ボタンを付け、モーダルの `private_metadata` に question_id を埋め込んで対応付ける
+- `slack_message_ts` により、回答が付いた後に他の候補者の通知メッセージを `chat.update` で「回答済み」表示に更新できる
+- 未回答リマインド(例: 24時間後に再通知)もこのテーブルの `status = pending` を見て実装
+
+#### answers(回答)
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| question_id | UUID | FK(questions), NOT NULL | 対象質問 |
+| user_id | UUID | FK(users), NOT NULL | 回答者 |
+| content | text | NOT NULL | 回答内容 |
+| source | enum | NOT NULL | web / slack |
+| created_at | timestamp | NOT NULL | |
+
+- Slackモーダル経由の回答は通常のAPI書き込みと同じ経路になるため、重複取り込み防止用のカラムは不要
+- 回答者は必ずSlack連携済みユーザーなので `users.slack_user_id` で解決できる
+- 最初の回答が付いた時点で `questions.status = answered` に更新(追加回答も可能)
+- 質問と回答はFAQとしてサイトに蓄積・表示される
+
+#### notifications(通知履歴)
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| id | UUID | PK | |
+| user_id | UUID | FK(users), NOT NULL | 通知対象 |
+| type | enum | NOT NULL | deadline / answer / application / question |
+| message | text | NOT NULL | 通知内容 |
+| related_type | varchar | NULL | 遷移先の種別(例: 'question') |
+| related_id | UUID | NULL | 遷移先のID |
+| read_at | timestamp | NULL | 既読日時(NULL = 未読) |
+| created_at | timestamp | NOT NULL | |
+
+- 「回答がありました」通知から質問詳細へ遷移するために `related_type` / `related_id` を使用
 
 ### ER図
 
 ```
+recruitment_terms
+├── seminar_recruitments ──── seminars
+└── application_forms
+         └── application_choices ── seminars
+
 users
-│
 ├── seminar_teachers ───────── seminars
-│
-├── seminar_members ────────── seminars
-│
+├── seminar_members ────────── seminars   ← 配属結果を兼ねる
 ├── application_forms
-│          │
-│          └── application_choices ─── seminars
-│
 ├── questions ──────────────── seminars
-│          │
-│          └── answers
-│
-├── notifications
-│
-└── assignment_results ─────── seminars
+│        ├── answer_requests ─ users(回答候補者)
+│        └── answers
+├── match_evaluations ──────── seminars
+└── notifications
 
 seminars
 ├── seminar_materials
 └── seminar_teachers
 ```
 
+### 主要フロー別のテーブル利用
+
+#### 志望提出(上書き対応)
+
+1. 学生が志望理由を編集 → `application_forms`(draft)+ `application_choices` に自動保存
+2. マッチ度チェック → `match_evaluations` をハッシュで検索、なければLLM実行して保存
+3. 提出 → status を submitted に、`submitted_at` を更新、最新マッチ度を choices にコピー
+4. 締切前の上書き → choices を差し替え、`submitted_at` を更新(status は submitted のまま)
+
+#### 質問〜回答(Slack DM完結)
+
+1. 学生がSlack Botで質問投稿 → `questions` 作成
+2. 対象ゼミの現役ゼミ生 + 担当教員(Slack連携済み)へDM通知 → `answer_requests` 作成
+3. 回答者がDMの「回答する」ボタン → モーダルで回答 → `answers` 作成
+4. `questions.status = answered`、該当 `answer_requests.status = answered`、他候補者の通知メッセージを更新
+5. 質問者へ回答通知(`notifications` + Slack DM)、サイトのFAQに反映
+
+#### 年度切り替え
+
+1. 運営が新年度の `recruitment_terms` を作成
+2. `seminar_recruitments` を前年度からコピーし、定員を調整
+3. 配属確定後、CSVインポートで `seminar_members` に新年度の所属を登録
+
 ### Phase2で追加予定
 
-**reviews（ゼミ口コミ）**
-- id, seminar_id, user_id, rating, comment, created_at
-
-**papers（論文・成果物）**
-- id, seminar_id, title, url, published_year
-
-**research_tags（研究分野マスタ）**
-- AI, 画像処理, 自然言語処理, HCI, 推薦システム, ...
-
-**seminar_tags（ゼミと研究分野の対応）**
-- seminar_id, tag_id
-
-**user_interest_tags（学生の興味分野）**
-- user_id, tag_id
-
-**chat_logs（AIチャットボット履歴）**
-- id, user_id, message, response, created_at
-
-### この設計のメリット
-
-- 役割ごとの責務が明確（ユーザー・ゼミ・応募・質問・通知を分離）
-- 教員の複数ゼミ担当、学生の所属履歴に対応
-- 志望提出を「提出全体」と「各志望」に分離し、下書き保存や一括提出を自然に実装可能
-- Slack連携（質問・通知・シームレスログイン）を前提にしつつ、Web単体でも利用可能
-- Phase2のAIマッチング・口コミ・タグ・論文管理もテーブル追加だけで拡張しやすい構成になっています。
+- **reviews**(ゼミ口コミ): id, seminar_id, user_id, rating, comment, created_at
+- **papers**(論文・成果物): id, seminar_id, title, url, published_year
+- **research_tags**(研究分野マスタ)
+- **seminar_tags**(ゼミ×研究分野)
+- **user_interest_tags**(学生の興味分野)
+- **chat_logs**(AIチャットボット履歴): id, user_id, message, response, created_at
 
 ## 画面設計
 

@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -12,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SAEnum,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,12 +27,20 @@ class ApplicationStatus(str, enum.Enum):
 
 
 class ApplicationForm(IDMixin, TimestampMixin, Base):
-    """提出全体を管理。学生1人につき1レコード。"""
+    """提出全体を管理。学生1人×1年度につき1レコード。"""
 
     __tablename__ = "application_forms"
+    __table_args__ = (
+        UniqueConstraint(
+            "term_id", "student_id", name="uq_application_form_term_student"
+        ),
+    )
 
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("recruitment_terms.id", ondelete="CASCADE")
+    )
     student_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
     status: Mapped[ApplicationStatus] = mapped_column(
         SAEnum(ApplicationStatus, native_enum=False, length=20, create_constraint=True),
@@ -45,12 +55,13 @@ class ApplicationChoice(IDMixin, Base):
     """志望内容。1提出につき最大3レコード（priority 1〜3）。
 
     件数の上限(最大3件)はアプリケーション層でバリデーションする。
-    DB側では同一フォーム内でのpriorityの重複のみ防ぐ。
     """
 
     __tablename__ = "application_choices"
     __table_args__ = (
+        CheckConstraint("priority BETWEEN 1 AND 3", name="ck_choice_priority_range"),
         UniqueConstraint("application_form_id", "priority", name="uq_choice_priority"),
+        UniqueConstraint("application_form_id", "seminar_id", name="uq_choice_seminar"),
     )
 
     application_form_id: Mapped[uuid.UUID] = mapped_column(
@@ -61,3 +72,5 @@ class ApplicationChoice(IDMixin, Base):
     )
     priority: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(Text)
+    match_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match_feedback: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

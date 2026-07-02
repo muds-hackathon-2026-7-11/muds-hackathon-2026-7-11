@@ -1,7 +1,7 @@
 import enum
 
+from sqlalchemy import Boolean, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.db import Base
@@ -29,4 +29,6 @@ class User(IDMixin, TimestampMixin, Base):
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, native_enum=False, length=20, create_constraint=True)
     )
+    grade: Mapped[str | None] = mapped_column(String, nullable=True)
     research_theme: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)

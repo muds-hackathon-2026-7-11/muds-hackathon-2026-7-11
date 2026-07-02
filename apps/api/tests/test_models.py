@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from api.models import (
     ApplicationChoice,
     ApplicationForm,
+    RecruitmentTerm,
+    RecruitmentTermStatus,
     Seminar,
     SeminarMember,
     User,
@@ -34,15 +36,22 @@ async def _make_user(db_session, role: UserRole = UserRole.student) -> User:
 
 
 async def _make_seminar(db_session) -> Seminar:
-    seminar = Seminar(
-        name=_unique("seminar"),
-        capacity=10,
-        recruitment_start=date(2026, 4, 1),
-        recruitment_end=date(2026, 5, 1),
-    )
+    seminar = Seminar(name=_unique("seminar"))
     db_session.add(seminar)
     await db_session.flush()
     return seminar
+
+
+async def _make_recruitment_term(db_session) -> RecruitmentTerm:
+    term = RecruitmentTerm(
+        academic_year=int(uuid.uuid4().int % 100000),
+        starts_at=date(2026, 4, 1),
+        ends_at=date(2026, 5, 1),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(term)
+    await db_session.flush()
+    return term
 
 
 async def test_create_user(db_session) -> None:
@@ -72,7 +81,6 @@ async def test_deleting_seminar_cascades_to_seminar_members(db_session) -> None:
             seminar_id=seminar.id,
             student_id=student.id,
             academic_year=2026,
-            is_current=True,
         )
     )
     await db_session.flush()
@@ -87,11 +95,29 @@ async def test_deleting_seminar_cascades_to_seminar_members(db_session) -> None:
     assert remaining.scalar_one() == 0
 
 
+async def test_seminar_member_academic_year_must_be_unique_per_student(
+    db_session,
+) -> None:
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session)
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, academic_year=2026)
+    )
+    await db_session.flush()
+
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, academic_year=2026)
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
 async def test_application_choice_priority_must_be_unique_per_form(db_session) -> None:
     student = await _make_user(db_session)
+    term = await _make_recruitment_term(db_session)
     seminar_a = await _make_seminar(db_session)
     seminar_b = await _make_seminar(db_session)
-    form = ApplicationForm(student_id=student.id)
+    form = ApplicationForm(term_id=term.id, student_id=student.id)
     db_session.add(form)
     await db_session.flush()
 
@@ -111,6 +137,36 @@ async def test_application_choice_priority_must_be_unique_per_form(db_session) -
             seminar_id=seminar_b.id,
             priority=1,
             reason="重複した第1志望",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_application_choice_seminar_must_be_unique_per_form(db_session) -> None:
+    student = await _make_user(db_session)
+    term = await _make_recruitment_term(db_session)
+    seminar = await _make_seminar(db_session)
+    form = ApplicationForm(term_id=term.id, student_id=student.id)
+    db_session.add(form)
+    await db_session.flush()
+
+    db_session.add(
+        ApplicationChoice(
+            application_form_id=form.id,
+            seminar_id=seminar.id,
+            priority=1,
+            reason="第1志望の理由",
+        )
+    )
+    await db_session.flush()
+
+    db_session.add(
+        ApplicationChoice(
+            application_form_id=form.id,
+            seminar_id=seminar.id,
+            priority=2,
+            reason="同じゼミを第2志望にもしてしまった",
         )
     )
     with pytest.raises(IntegrityError):
