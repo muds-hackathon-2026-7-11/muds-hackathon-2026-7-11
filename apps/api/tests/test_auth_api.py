@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Any
 
+import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -290,3 +291,91 @@ async def test_me_without_sub_is_401(client, monkeypatch) -> None:
     resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
     assert resp.status_code == 401
+
+
+# --- _get_jwks 本体(実HTTPフェッチ・TTLキャッシュ・エラー) ---
+# 上の14本は _get_jwks を monkeypatch でバイパスしているため、フェッチ経路自体
+# (URL構築・raise_for_status・json・キャッシュ・503分岐)は本セクションで検証する。
+# ネットワーク境界だけ httpx.MockTransport で差し替え、_get_jwks 本体は実際に通す。
+
+
+def _install_jwks_http(monkeypatch: pytest.MonkeyPatch, handler) -> None:
+    """auth._get_jwks が使う httpx.AsyncClient を MockTransport 版に差し替え、
+    JWKSキャッシュをリセットする。"""
+    real_client = httpx.AsyncClient
+
+    def _factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        return real_client(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "AsyncClient", _factory)
+    monkeypatch.setattr(auth, "_jwks_cache", None)
+    monkeypatch.setattr(auth, "_jwks_fetched_at", 0.0)
+
+
+async def test_get_jwks_fetches_and_caches(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        assert str(request.url) == "https://issuer.test/jwks.json"
+        return httpx.Response(200, json=_JWKS)
+
+    monkeypatch.setattr(auth.settings, "jwt_jwks_url", "https://issuer.test/jwks.json")
+    _install_jwks_http(monkeypatch, handler)
+
+    first = await auth._get_jwks()
+    second = await auth._get_jwks()
+
+    assert first == _JWKS
+    assert second == _JWKS
+    assert calls["n"] == 1  # TTL内の2回目はキャッシュヒット
+
+    forced = await auth._get_jwks(force=True)
+    assert forced == _JWKS
+    assert calls["n"] == 2  # force=True で再取得
+
+
+async def test_get_jwks_refetches_after_ttl(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(200, json=_JWKS)
+
+    monkeypatch.setattr(auth.settings, "jwt_jwks_url", "https://issuer.test/jwks.json")
+    _install_jwks_http(monkeypatch, handler)
+
+    await auth._get_jwks()
+    assert calls["n"] == 1
+
+    # TTLを過ぎた状態を再現すると再取得する。
+    auth._jwks_fetched_at = time.monotonic() - auth._JWKS_TTL_SECONDS - 1
+    await auth._get_jwks()
+    assert calls["n"] == 2
+
+
+async def test_get_jwks_raises_on_http_error(monkeypatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    monkeypatch.setattr(auth.settings, "jwt_jwks_url", "https://issuer.test/jwks.json")
+    _install_jwks_http(monkeypatch, handler)
+
+    with pytest.raises(httpx.HTTPError):
+        await auth._get_jwks()
+
+
+async def test_me_returns_503_when_jwks_unreachable(client, monkeypatch) -> None:
+    monkeypatch.setattr(auth.settings, "auth_dev_mode", False)
+    monkeypatch.setattr(auth.settings, "jwt_jwks_url", "https://issuer.test/jwks.json")
+    monkeypatch.setattr(auth.settings, "jwt_issuer", _ISSUER)
+    monkeypatch.setattr(auth.settings, "jwt_audience", _AUDIENCE)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom")
+
+    _install_jwks_http(monkeypatch, handler)
+
+    resp = await client.get("/me", headers={"Authorization": "Bearer whatever"})
+
+    assert resp.status_code == 503
