@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -87,11 +88,18 @@ def _question_modal_view(seminars: list[dict]) -> dict:
     }
 
 
-def _answer_modal_view(question_id: str) -> dict:
+def _answer_modal_view(question_id: str, channel_id: str, message_ts: str) -> dict:
+    private_metadata = json.dumps(
+        {
+            "question_id": question_id,
+            "channel_id": channel_id,
+            "message_ts": message_ts,
+        }
+    )
     return {
         "type": "modal",
         "callback_id": "answer_submit",
-        "private_metadata": question_id,
+        "private_metadata": private_metadata,
         "title": {"type": "plain_text", "text": "回答する"},
         "submit": {"type": "plain_text", "text": "送信"},
         "close": {"type": "plain_text", "text": "キャンセル"},
@@ -194,18 +202,28 @@ def _handle_question_view_submission(ack, body, view, client) -> None:
 
 
 def _handle_answer_action(ack, body, client) -> None:
-    """通知DM内の「回答する」ボタン押下時のハンドラ。"""
+    """通知DM内の「回答する」ボタン押下時のハンドラ。
+
+    元のメッセージのchannel_id/message_tsをモーダルに持ち回り、送信成功時に
+    自分自身の回答もそのメッセージへのスレッド返信として表示できるようにする。
+    """
     ack()
     question_id = body["actions"][0]["value"]
+    channel_id = body["channel"]["id"]
+    message_ts = body["message"]["ts"]
     client.views_open(
-        trigger_id=body["trigger_id"], view=_answer_modal_view(question_id)
+        trigger_id=body["trigger_id"],
+        view=_answer_modal_view(question_id, channel_id, message_ts),
     )
 
 
 def _handle_answer_view_submission(ack, body, view, client) -> None:
     ack()
     user_id = body["user"]["id"]
-    question_id = view["private_metadata"]
+    metadata = json.loads(view["private_metadata"])
+    question_id = metadata["question_id"]
+    channel_id = metadata["channel_id"]
+    message_ts = metadata["message_ts"]
     content = view["state"]["values"]["content_block"]["content_input"]["value"]
 
     try:
@@ -222,7 +240,8 @@ def _handle_answer_view_submission(ack, body, view, client) -> None:
 
     if response.status_code == 201:
         client.chat_postMessage(
-            channel=user_id,
+            channel=channel_id,
+            thread_ts=message_ts,
             text=f":white_check_mark: *回答を送信しました*\n>{content}",
         )
     elif response.status_code == 404:

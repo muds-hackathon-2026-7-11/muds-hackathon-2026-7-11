@@ -240,3 +240,39 @@ async def test_list_questions_missing_seminar_id_returns_422(client) -> None:
     resp = await client.get("/questions")
 
     assert resp.status_code == 422
+
+
+async def test_get_question_returns_answers_with_answerer_names(
+    client, db_session
+) -> None:
+    seminar = await _make_seminar(db_session)
+    asker = await _make_user(db_session, UserRole.student)
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    question = Question(seminar_id=seminar.id, user_id=asker.id, content="質問")
+    db_session.add(question)
+    await db_session.flush()
+
+    await record_answer(
+        db_session,
+        question=question,
+        user_id=teacher.id,
+        content="回答です",
+        source=AnswerSource.web,
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/questions/{question.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["content"] == "質問"
+    assert "user_id" not in body
+    assert len(body["answers"]) == 1
+    assert body["answers"][0]["answerer_name"] == teacher.name
+
+
+async def test_get_question_unknown_id_returns_404(client) -> None:
+    resp = await client.get(f"/questions/{uuid.uuid4()}")
+
+    assert resp.status_code == 404

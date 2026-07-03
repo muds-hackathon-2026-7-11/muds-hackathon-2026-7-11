@@ -25,6 +25,22 @@ logger = logging.getLogger(__name__)
 ANSWER_BUTTON_ACTION_ID = "answer_question"
 
 
+def _question_action_buttons(question: Question) -> list[dict]:
+    return [
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "回答する"},
+                    "action_id": ANSWER_BUTTON_ACTION_ID,
+                    "value": str(question.id),
+                },
+            ],
+        },
+    ]
+
+
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     """今アクティブな募集ラウンドを1件返す(なければNone)。
 
@@ -98,17 +114,7 @@ def _new_question_blocks(question: Question, seminar_name: str) -> list[dict]:
             "type": "section",
             "text": {"type": "mrkdwn", "text": f">{question.content}"},
         },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "回答する"},
-                    "action_id": ANSWER_BUTTON_ACTION_ID,
-                    "value": str(question.id),
-                }
-            ],
-        },
+        *_question_action_buttons(question),
     ]
 
 
@@ -186,24 +192,19 @@ async def record_answer(
     return answer
 
 
-def _answered_update_blocks(
-    question: Question, seminar_name: str, answerer_display_name: str
-) -> list[dict]:
+def _reply_blocks(answerer_display_name: str, answer_content: str) -> list[dict]:
+    """スレッド返信として送る、回答1件分のシンプルな表示。
+
+    親メッセージ(質問本文・ボタン)はそのまま残るので、ここでは
+    「誰が」「何を」回答したかだけを示す。
+    """
     return [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": (
-                    f":white_check_mark: *回答済みになりました*\n"
-                    f"*ゼミ:* {seminar_name}\n"
-                    f"*回答者:* {answerer_display_name}"
-                ),
+                "text": f"*{answerer_display_name}さんの回答:*\n>{answer_content}",
             },
-        },
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f">{question.content}"},
         },
     ]
 
@@ -236,6 +237,17 @@ def _asker_notification_blocks(
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*回答:*\n>{answer_content}"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": (
+                        "追加の回答が届いたら、このメッセージへの返信でお知らせします"
+                    ),
+                }
+            ],
         },
     ]
 
@@ -285,27 +297,25 @@ async def record_answer_and_notify(
             answer_request.responded_at = datetime.now(UTC)
             continue
 
-        if answer_request.status != AnswerRequestStatus.pending:
-            continue
+        # statusが既にanswered/skippedでも(=前回別の回答が来た時点で自分は
+        # pendingではなくなっていても)、今回の新しい回答は引き続き通知する。
+        # ここでのstatus遷移はpending -> skippedの初回だけ行う(一度でも
+        # 回答/skip済みの人を巻き戻さない)。
+        if answer_request.status == AnswerRequestStatus.pending:
+            answer_request.status = AnswerRequestStatus.skipped
+            answer_request.responded_at = datetime.now(UTC)
 
-        answer_request.status = AnswerRequestStatus.skipped
-        answer_request.responded_at = datetime.now(UTC)
         try:
-            update_text = (
-                f"[{seminar_name}] {answerer_display_name}さんが回答しました: "
-                f"{question.content}"
-            )
-            await slack_client.update_message(
+            reply_text = f"{answerer_display_name}さんの回答: {content}"
+            await slack_client.reply_in_thread(
                 channel_id=answer_request.slack_dm_channel_id,
-                message_ts=answer_request.slack_message_ts,
-                text=update_text,
-                blocks=_answered_update_blocks(
-                    question, seminar_name, answerer_display_name
-                ),
+                thread_ts=answer_request.slack_message_ts,
+                text=reply_text,
+                blocks=_reply_blocks(answerer_display_name, content),
             )
         except Exception:
             logger.warning(
-                "Slackメッセージの更新に失敗しました: question_id=%s, user_id=%s",
+                "Slackスレッド返信の送信に失敗しました: question_id=%s, user_id=%s",
                 question.id,
                 answer_request.user_id,
                 exc_info=True,
@@ -315,17 +325,28 @@ async def record_answer_and_notify(
     asker = asker_result.scalar_one_or_none()
     if asker is not None and asker.slack_user_id is not None:
         try:
-            asker_text = (
-                f"[{seminar_name}] {answerer_display_name}さんから質問に"
-                f"回答が届きました: {content}"
-            )
-            await slack_client.send_dm(
-                slack_user_id=asker.slack_user_id,
-                text=asker_text,
-                blocks=_asker_notification_blocks(
-                    question, seminar_name, content, answerer_display_name
-                ),
-            )
+            if question.asker_notification_channel_id is None:
+                asker_text = (
+                    f"[{seminar_name}] {answerer_display_name}さんから質問に"
+                    f"回答が届きました: {content}"
+                )
+                sent = await slack_client.send_dm(
+                    slack_user_id=asker.slack_user_id,
+                    text=asker_text,
+                    blocks=_asker_notification_blocks(
+                        question, seminar_name, content, answerer_display_name
+                    ),
+                )
+                question.asker_notification_channel_id = sent.channel_id
+                question.asker_notification_message_ts = sent.message_ts
+            elif question.asker_notification_message_ts is not None:
+                reply_text = f"{answerer_display_name}さんの回答: {content}"
+                await slack_client.reply_in_thread(
+                    channel_id=question.asker_notification_channel_id,
+                    thread_ts=question.asker_notification_message_ts,
+                    text=reply_text,
+                    blocks=_reply_blocks(answerer_display_name, content),
+                )
         except Exception:
             logger.warning(
                 "質問者への回答通知に失敗しました: question_id=%s",

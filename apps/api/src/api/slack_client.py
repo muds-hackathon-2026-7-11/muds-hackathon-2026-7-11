@@ -15,7 +15,7 @@ class SentDM:
 
 
 @dataclass
-class UpdatedMessage:
+class ThreadReply:
     channel_id: str
     message_ts: str
     text: str
@@ -30,14 +30,14 @@ class SlackClient(Protocol):
         blocks: list[dict[str, Any]] | None = None,
     ) -> SentDM: ...
 
-    async def update_message(
+    async def reply_in_thread(
         self,
         *,
         channel_id: str,
-        message_ts: str,
+        thread_ts: str,
         text: str,
         blocks: list[dict[str, Any]] | None = None,
-    ) -> UpdatedMessage: ...
+    ) -> ThreadReply: ...
 
     async def get_display_name(self, *, slack_user_id: str) -> str: ...
 
@@ -67,18 +67,20 @@ class RealSlackClient:
             message_ts=post_result["ts"],
         )
 
-    async def update_message(
+    async def reply_in_thread(
         self,
         *,
         channel_id: str,
-        message_ts: str,
+        thread_ts: str,
         text: str,
         blocks: list[dict[str, Any]] | None = None,
-    ) -> UpdatedMessage:
-        await self._client.chat_update(
-            channel=channel_id, ts=message_ts, text=text, blocks=blocks
+    ) -> ThreadReply:
+        post_result = await self._client.chat_postMessage(
+            channel=channel_id, thread_ts=thread_ts, text=text, blocks=blocks
         )
-        return UpdatedMessage(channel_id=channel_id, message_ts=message_ts, text=text)
+        return ThreadReply(
+            channel_id=channel_id, message_ts=post_result["ts"], text=text
+        )
 
     async def get_display_name(self, *, slack_user_id: str) -> str:
         result = await self._client.users_info(user=slack_user_id)
@@ -92,7 +94,7 @@ class FakeSlackClient:
     """テスト・SLACK_BOT_TOKEN未設定時用。実際にはSlackへ送信しない。"""
 
     sent: list[SentDM] = field(default_factory=list)
-    updated: list[UpdatedMessage] = field(default_factory=list)
+    replies: list[ThreadReply] = field(default_factory=list)
     # テストで特定のslack_user_idに紐づく表示名を検証したい場合はここに詰める。
     # 未設定のslack_user_idはslack_user_idをそのまま返す。
     display_names: dict[str, str] = field(default_factory=dict)
@@ -113,19 +115,21 @@ class FakeSlackClient:
         self.sent.append(sent_dm)
         return sent_dm
 
-    async def update_message(
+    async def reply_in_thread(
         self,
         *,
         channel_id: str,
-        message_ts: str,
+        thread_ts: str,
         text: str,
         blocks: list[dict[str, Any]] | None = None,
-    ) -> UpdatedMessage:
-        updated_message = UpdatedMessage(
-            channel_id=channel_id, message_ts=message_ts, text=text
+    ) -> ThreadReply:
+        reply = ThreadReply(
+            channel_id=channel_id,
+            message_ts=f"fake-reply-ts-{len(self.replies)}",
+            text=text,
         )
-        self.updated.append(updated_message)
-        return updated_message
+        self.replies.append(reply)
+        return reply
 
     async def get_display_name(self, *, slack_user_id: str) -> str:
         return self.display_names.get(slack_user_id, slack_user_id)

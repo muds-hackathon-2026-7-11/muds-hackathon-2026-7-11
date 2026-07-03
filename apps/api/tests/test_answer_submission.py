@@ -138,6 +138,59 @@ async def test_create_answer_notifies_asker(
     assert asker_slack_id in notified_ids
 
 
+async def test_second_answer_notifies_asker_via_thread_reply_not_new_dm(
+    client, db_session, fake_slack_client
+) -> None:
+    await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    teacher1_slack_id = _unique("U-teacher1")
+    teacher1 = await _make_user(db_session, UserRole.teacher, teacher1_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher1.id))
+
+    teacher2_slack_id = _unique("U-teacher2")
+    teacher2 = await _make_user(db_session, UserRole.teacher, teacher2_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher2.id))
+    await db_session.flush()
+
+    question_id = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+    fake_slack_client.sent.clear()
+
+    first_resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher1_slack_id,
+            "content": "最初の回答です",
+        },
+    )
+    assert first_resp.status_code == 201
+    assert len(fake_slack_client.sent) == 1
+    assert fake_slack_client.sent[0].slack_user_id == asker_slack_id
+    asker_channel_id = fake_slack_client.sent[0].channel_id
+
+    second_resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher2_slack_id,
+            "content": "2件目の回答です",
+        },
+    )
+    assert second_resp.status_code == 201
+    # 2件目は質問者へ新しいDMを送らず、最初のメッセージへのスレッド返信になる
+    assert len(fake_slack_client.sent) == 1
+    asker_reply = next(
+        r for r in fake_slack_client.replies if r.channel_id == asker_channel_id
+    )
+    assert "2件目の回答です" in asker_reply.text
+
+
 async def test_create_answer_uses_slack_display_name_in_notifications(
     client, db_session, fake_slack_client
 ) -> None:
@@ -214,8 +267,133 @@ async def test_create_answer_updates_other_pending_candidates(
     assert requests_by_user[teacher1.id].status == "answered"
     assert requests_by_user[teacher2.id].status == "skipped"
 
-    updated_channel_ids = {u.channel_id for u in fake_slack_client.updated}
-    assert requests_by_user[teacher2.id].slack_dm_channel_id in updated_channel_ids
+    replied_channel_ids = {r.channel_id for r in fake_slack_client.replies}
+    assert requests_by_user[teacher2.id].slack_dm_channel_id in replied_channel_ids
+
+
+async def test_create_answer_replies_in_thread_and_allows_additional_answers(
+    client, db_session, fake_slack_client
+) -> None:
+    await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    teacher1_slack_id = _unique("U-teacher1")
+    teacher1 = await _make_user(db_session, UserRole.teacher, teacher1_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher1.id))
+
+    teacher2_slack_id = _unique("U-teacher2")
+    teacher2 = await _make_user(db_session, UserRole.teacher, teacher2_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher2.id))
+    await db_session.flush()
+
+    question_id = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+
+    resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher1_slack_id,
+            "content": "最初の回答です",
+        },
+    )
+    assert resp.status_code == 201
+
+    requests_result = await db_session.execute(
+        select(AnswerRequest).where(AnswerRequest.question_id == question_id)
+    )
+    teacher2_request = next(
+        r for r in requests_result.scalars().all() if r.user_id == teacher2.id
+    )
+    reply = next(
+        r
+        for r in fake_slack_client.replies
+        if r.channel_id == teacher2_request.slack_dm_channel_id
+    )
+    assert "最初の回答です" in reply.text
+
+    # 元のメッセージは上書きされない(スレッド返信のみ)ので、
+    # 別の候補者(teacher2)は引き続き「回答する」ボタンを押せる = 追加回答できること
+    other_answer_resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher2_slack_id,
+            "content": "追加の回答です",
+        },
+    )
+    assert other_answer_resp.status_code == 201
+
+    question_get = await client.get(f"/questions?seminar_id={seminar.id}")
+    answers = question_get.json()[0]["answers"]
+    assert {a["content"] for a in answers} == {"最初の回答です", "追加の回答です"}
+
+
+async def test_earlier_answerer_still_gets_notified_of_later_answers(
+    client, db_session, fake_slack_client
+) -> None:
+    """一度回答した人(status=answered)も、他の人の後続の回答について
+    引き続き通知を受け取れること(既に回答済みだからと通知が止まらない)。
+    """
+    await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    teacher1_slack_id = _unique("U-teacher1")
+    teacher1 = await _make_user(db_session, UserRole.teacher, teacher1_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher1.id))
+
+    teacher2_slack_id = _unique("U-teacher2")
+    teacher2 = await _make_user(db_session, UserRole.teacher, teacher2_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher2.id))
+    await db_session.flush()
+
+    question_id = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+
+    first_resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher1_slack_id,
+            "content": "1件目の回答です",
+        },
+    )
+    assert first_resp.status_code == 201
+
+    requests_result = await db_session.execute(
+        select(AnswerRequest).where(AnswerRequest.question_id == question_id)
+    )
+    teacher1_request = next(
+        r for r in requests_result.scalars().all() if r.user_id == teacher1.id
+    )
+    assert teacher1_request.status == "answered"
+
+    second_resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": teacher2_slack_id,
+            "content": "2件目の回答です",
+        },
+    )
+    assert second_resp.status_code == 201
+
+    # teacher1はすでにanswered状態だが、teacher2の回答についても
+    # スレッド返信で通知が届くこと
+    reply_to_teacher1 = next(
+        r
+        for r in fake_slack_client.replies
+        if r.channel_id == teacher1_request.slack_dm_channel_id
+    )
+    assert "2件目の回答です" in reply_to_teacher1.text
 
 
 async def test_create_answer_unknown_slack_user_returns_404(client, db_session) -> None:

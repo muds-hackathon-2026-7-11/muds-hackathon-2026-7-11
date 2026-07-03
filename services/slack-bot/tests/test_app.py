@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -15,12 +16,18 @@ def _action_body(user_id: str = "U123", trigger_id: str = "T1") -> dict:
 
 
 def _button_action_body(
-    value: str, user_id: str = "U123", trigger_id: str = "T1"
+    value: str,
+    user_id: str = "U123",
+    trigger_id: str = "T1",
+    channel_id: str = "D1",
+    message_ts: str = "111.222",
 ) -> dict:
     return {
         "user": {"id": user_id},
         "trigger_id": trigger_id,
         "actions": [{"value": value}],
+        "channel": {"id": channel_id},
+        "message": {"ts": message_ts},
     }
 
 
@@ -37,9 +44,17 @@ def _view(seminar_id: str = "s1", content: str = "質問です") -> dict:
     }
 
 
-def _answer_view(question_id: str = "q1", content: str = "回答です") -> dict:
+def _answer_view(
+    question_id: str = "q1",
+    content: str = "回答です",
+    channel_id: str = "D1",
+    message_ts: str = "111.222",
+) -> dict:
+    private_metadata = json.dumps(
+        {"question_id": question_id, "channel_id": channel_id, "message_ts": message_ts}
+    )
     return {
-        "private_metadata": question_id,
+        "private_metadata": private_metadata,
         "state": {"values": {"content_block": {"content_input": {"value": content}}}},
     }
 
@@ -127,13 +142,20 @@ def test_view_submission_shows_generic_error_on_connection_failure() -> None:
 def test_answer_action_opens_modal_with_question_id() -> None:
     ack = MagicMock()
     client = MagicMock()
-    _handle_answer_action(ack, _button_action_body("q1"), client)
+    _handle_answer_action(
+        ack, _button_action_body("q1", channel_id="D1", message_ts="111.222"), client
+    )
 
     ack.assert_called_once()
     client.views_open.assert_called_once()
     assert client.views_open.call_args.kwargs["trigger_id"] == "T1"
     view = client.views_open.call_args.kwargs["view"]
-    assert view["private_metadata"] == "q1"
+    metadata = json.loads(view["private_metadata"])
+    assert metadata == {
+        "question_id": "q1",
+        "channel_id": "D1",
+        "message_ts": "111.222",
+    }
 
 
 def test_answer_view_submission_sends_success_message_on_201() -> None:
@@ -141,11 +163,18 @@ def test_answer_view_submission_sends_success_message_on_201() -> None:
     client = MagicMock()
     response = MagicMock(status_code=201)
     with patch("slack_bot.app.submit_answer", return_value=response):
-        _handle_answer_view_submission(ack, _action_body(), _answer_view(), client)
+        _handle_answer_view_submission(
+            ack,
+            _action_body(),
+            _answer_view(channel_id="D1", message_ts="111.222"),
+            client,
+        )
 
     ack.assert_called_once()
-    text = client.chat_postMessage.call_args.kwargs["text"]
-    assert "送信しました" in text
+    call_kwargs = client.chat_postMessage.call_args.kwargs
+    assert call_kwargs["channel"] == "D1"
+    assert call_kwargs["thread_ts"] == "111.222"
+    assert "送信しました" in call_kwargs["text"]
 
 
 def test_answer_view_submission_shows_api_detail_message_on_404() -> None:

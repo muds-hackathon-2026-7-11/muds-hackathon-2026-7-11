@@ -31,6 +31,15 @@ class Question(IDMixin, CreatedAtMixin, Base):
         SAEnum(QuestionStatus, native_enum=False, length=20, create_constraint=True),
         default=QuestionStatus.waiting,
     )
+    # 質問者への最初の回答通知DMの送信先。2件目以降の回答はこのメッセージへの
+    # スレッド返信として送るため、質問者自身のuser_idではなくここに保持する
+    # (質問者はanswer_requestsの対象外なので専用に持つ必要がある)。
+    asker_notification_channel_id: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+    asker_notification_message_ts: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
 
 
 class AnswerRequestStatus(str, enum.Enum):
