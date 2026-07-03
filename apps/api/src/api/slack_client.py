@@ -39,6 +39,8 @@ class SlackClient(Protocol):
         blocks: list[dict[str, Any]] | None = None,
     ) -> UpdatedMessage: ...
 
+    async def get_display_name(self, *, slack_user_id: str) -> str: ...
+
 
 class RealSlackClient:
     """本物のSlack Web APIを呼び出すクライアント。"""
@@ -78,6 +80,12 @@ class RealSlackClient:
         )
         return UpdatedMessage(channel_id=channel_id, message_ts=message_ts, text=text)
 
+    async def get_display_name(self, *, slack_user_id: str) -> str:
+        result = await self._client.users_info(user=slack_user_id)
+        profile = result["user"]["profile"]
+        display_name = profile.get("display_name") or profile.get("real_name")
+        return str(display_name) if display_name else slack_user_id
+
 
 @dataclass
 class FakeSlackClient:
@@ -85,6 +93,9 @@ class FakeSlackClient:
 
     sent: list[SentDM] = field(default_factory=list)
     updated: list[UpdatedMessage] = field(default_factory=list)
+    # テストで特定のslack_user_idに紐づく表示名を検証したい場合はここに詰める。
+    # 未設定のslack_user_idはslack_user_idをそのまま返す。
+    display_names: dict[str, str] = field(default_factory=dict)
 
     async def send_dm(
         self,
@@ -115,6 +126,9 @@ class FakeSlackClient:
         )
         self.updated.append(updated_message)
         return updated_message
+
+    async def get_display_name(self, *, slack_user_id: str) -> str:
+        return self.display_names.get(slack_user_id, slack_user_id)
 
 
 def get_slack_client() -> SlackClient:

@@ -138,6 +138,43 @@ async def test_create_answer_notifies_asker(
     assert asker_slack_id in notified_ids
 
 
+async def test_create_answer_uses_slack_display_name_in_notifications(
+    client, db_session, fake_slack_client
+) -> None:
+    await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    answerer_slack_id = _unique("U-answerer")
+    answerer = await _make_user(db_session, UserRole.teacher, answerer_slack_id)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=answerer.id))
+    await db_session.flush()
+    fake_slack_client.display_names[answerer_slack_id] = "[B3] 山田太郎"
+
+    question_id = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+    fake_slack_client.sent.clear()
+
+    resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": answerer_slack_id,
+            "content": "回答です",
+        },
+    )
+
+    assert resp.status_code == 201
+    asker_message = next(
+        sent for sent in fake_slack_client.sent if sent.slack_user_id == asker_slack_id
+    )
+    assert "[B3] 山田太郎" in asker_message.text
+    assert answerer.name not in asker_message.text
+
+
 async def test_create_answer_updates_other_pending_candidates(
     client, db_session, fake_slack_client
 ) -> None:

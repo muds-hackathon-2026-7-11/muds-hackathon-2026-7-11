@@ -187,7 +187,7 @@ async def record_answer(
 
 
 def _answered_update_blocks(
-    question: Question, seminar_name: str, answerer_name: str
+    question: Question, seminar_name: str, answerer_display_name: str
 ) -> list[dict]:
     return [
         {
@@ -195,7 +195,9 @@ def _answered_update_blocks(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f":white_check_mark: *回答済みになりました*\n*ゼミ:* {seminar_name}"
+                    f":white_check_mark: *回答済みになりました*\n"
+                    f"*ゼミ:* {seminar_name}\n"
+                    f"*回答者:* {answerer_display_name}"
                 ),
             },
         },
@@ -203,17 +205,14 @@ def _answered_update_blocks(
             "type": "section",
             "text": {"type": "mrkdwn", "text": f">{question.content}"},
         },
-        {
-            "type": "context",
-            "elements": [
-                {"type": "mrkdwn", "text": f"{answerer_name}さんが回答しました"}
-            ],
-        },
     ]
 
 
 def _asker_notification_blocks(
-    question: Question, seminar_name: str, answer_content: str
+    question: Question,
+    seminar_name: str,
+    answer_content: str,
+    answerer_display_name: str,
 ) -> list[dict]:
     return [
         {
@@ -221,7 +220,9 @@ def _asker_notification_blocks(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f":speech_balloon: *質問に回答が届きました*\n*ゼミ:* {seminar_name}"
+                    f":speech_balloon: *質問に回答が届きました*\n"
+                    f"*ゼミ:* {seminar_name}\n"
+                    f"*回答者:* {answerer_display_name}"
                 ),
             },
         },
@@ -259,6 +260,22 @@ async def record_answer_and_notify(
         db, question=question, user_id=answerer.id, content=content, source=source
     )
 
+    # 回答者のSlack表示名(「[B3] 氏名」形式)を取得する。DBのUser.nameは
+    # まだGoogleログイン連携前で汎用名のことがあるため、Slack側の表示名を
+    # 優先する。取得に失敗した場合はUser.nameにフォールバックする。
+    answerer_display_name = answerer.name
+    if answerer.slack_user_id is not None:
+        try:
+            answerer_display_name = await slack_client.get_display_name(
+                slack_user_id=answerer.slack_user_id
+            )
+        except Exception:
+            logger.warning(
+                "回答者の表示名取得に失敗しました: user_id=%s",
+                answerer.id,
+                exc_info=True,
+            )
+
     requests_result = await db.execute(
         select(AnswerRequest).where(AnswerRequest.question_id == question.id)
     )
@@ -275,14 +292,16 @@ async def record_answer_and_notify(
         answer_request.responded_at = datetime.now(UTC)
         try:
             update_text = (
-                f"[{seminar_name}] {answerer.name}さんが回答しました: "
+                f"[{seminar_name}] {answerer_display_name}さんが回答しました: "
                 f"{question.content}"
             )
             await slack_client.update_message(
                 channel_id=answer_request.slack_dm_channel_id,
                 message_ts=answer_request.slack_message_ts,
                 text=update_text,
-                blocks=_answered_update_blocks(question, seminar_name, answerer.name),
+                blocks=_answered_update_blocks(
+                    question, seminar_name, answerer_display_name
+                ),
             )
         except Exception:
             logger.warning(
@@ -296,10 +315,16 @@ async def record_answer_and_notify(
     asker = asker_result.scalar_one_or_none()
     if asker is not None and asker.slack_user_id is not None:
         try:
+            asker_text = (
+                f"[{seminar_name}] {answerer_display_name}さんから質問に"
+                f"回答が届きました: {content}"
+            )
             await slack_client.send_dm(
                 slack_user_id=asker.slack_user_id,
-                text=f"[{seminar_name}] 質問に回答が届きました: {content}",
-                blocks=_asker_notification_blocks(question, seminar_name, content),
+                text=asker_text,
+                blocks=_asker_notification_blocks(
+                    question, seminar_name, content, answerer_display_name
+                ),
             )
         except Exception:
             logger.warning(
