@@ -138,9 +138,10 @@ async def test_create_answer_notifies_asker(
     assert asker_slack_id in notified_ids
 
 
-async def test_second_answer_notifies_asker_via_thread_reply_not_new_dm(
+async def test_asker_gets_a_new_dm_for_each_answer_not_a_thread_reply(
     client, db_session, fake_slack_client
 ) -> None:
+    """質問者への通知はスレッド化せず、回答のたびに独立した新規DMにする。"""
     await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
@@ -172,7 +173,6 @@ async def test_second_answer_notifies_asker_via_thread_reply_not_new_dm(
     assert first_resp.status_code == 201
     assert len(fake_slack_client.sent) == 1
     assert fake_slack_client.sent[0].slack_user_id == asker_slack_id
-    asker_channel_id = fake_slack_client.sent[0].channel_id
 
     second_resp = await client.post(
         "/answers",
@@ -183,12 +183,12 @@ async def test_second_answer_notifies_asker_via_thread_reply_not_new_dm(
         },
     )
     assert second_resp.status_code == 201
-    # 2件目は質問者へ新しいDMを送らず、最初のメッセージへのスレッド返信になる
-    assert len(fake_slack_client.sent) == 1
-    asker_reply = next(
-        r for r in fake_slack_client.replies if r.channel_id == asker_channel_id
-    )
-    assert "2件目の回答です" in asker_reply.text
+    # 質問者へは毎回新規DMを送る(スレッド返信にはしない)
+    asker_messages = [
+        s for s in fake_slack_client.sent if s.slack_user_id == asker_slack_id
+    ]
+    assert len(asker_messages) == 2
+    assert "2件目の回答です" in asker_messages[1].text
 
 
 async def test_create_answer_uses_slack_display_name_in_notifications(

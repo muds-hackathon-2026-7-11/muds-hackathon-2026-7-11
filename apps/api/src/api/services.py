@@ -238,17 +238,6 @@ def _asker_notification_blocks(
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*回答:*\n>{answer_content}"},
         },
-        {
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": (
-                        "追加の回答が届いたら、このメッセージへの返信でお知らせします"
-                    ),
-                }
-            ],
-        },
     ]
 
 
@@ -325,28 +314,17 @@ async def record_answer_and_notify(
     asker = asker_result.scalar_one_or_none()
     if asker is not None and asker.slack_user_id is not None:
         try:
-            if question.asker_notification_channel_id is None:
-                asker_text = (
-                    f"[{seminar_name}] {answerer_display_name}さんから質問に"
-                    f"回答が届きました: {content}"
-                )
-                sent = await slack_client.send_dm(
-                    slack_user_id=asker.slack_user_id,
-                    text=asker_text,
-                    blocks=_asker_notification_blocks(
-                        question, seminar_name, content, answerer_display_name
-                    ),
-                )
-                question.asker_notification_channel_id = sent.channel_id
-                question.asker_notification_message_ts = sent.message_ts
-            elif question.asker_notification_message_ts is not None:
-                reply_text = f"{answerer_display_name}さんの回答: {content}"
-                await slack_client.reply_in_thread(
-                    channel_id=question.asker_notification_channel_id,
-                    thread_ts=question.asker_notification_message_ts,
-                    text=reply_text,
-                    blocks=_reply_blocks(answerer_display_name, content),
-                )
+            asker_text = (
+                f"[{seminar_name}] {answerer_display_name}さんから質問に"
+                f"回答が届きました: {content}"
+            )
+            await slack_client.send_dm(
+                slack_user_id=asker.slack_user_id,
+                text=asker_text,
+                blocks=_asker_notification_blocks(
+                    question, seminar_name, content, answerer_display_name
+                ),
+            )
         except Exception:
             logger.warning(
                 "質問者への回答通知に失敗しました: question_id=%s",
