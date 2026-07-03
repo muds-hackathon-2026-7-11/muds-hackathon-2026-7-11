@@ -8,13 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.db import get_db
 from api.models import Answer, Question, Seminar, User
 from api.schemas import AnswerOut, QuestionCreate, QuestionOut, QuestionWithAnswersOut
+from api.services import notify_answer_candidates
+from api.slack_client import SlackClient, get_slack_client
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
 
 @router.post("", response_model=QuestionOut, status_code=201)
 async def create_question(
-    payload: QuestionCreate, db: AsyncSession = Depends(get_db)
+    payload: QuestionCreate,
+    db: AsyncSession = Depends(get_db),
+    slack_client: SlackClient = Depends(get_slack_client),
 ) -> Question:
     result = await db.execute(
         select(User).where(User.slack_user_id == payload.slack_user_id)
@@ -40,6 +44,11 @@ async def create_question(
     )
     db.add(question)
     await db.flush()
+
+    await notify_answer_candidates(
+        db, slack_client, question=question, seminar_name=seminar.name
+    )
+
     return question
 
 
