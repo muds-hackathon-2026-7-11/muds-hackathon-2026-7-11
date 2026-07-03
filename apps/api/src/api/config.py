@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://postgres:postgres@localhost:5442/seminar_platform"
     )
+    slack_bot_token: str | None = None
 
 
 settings = Settings()

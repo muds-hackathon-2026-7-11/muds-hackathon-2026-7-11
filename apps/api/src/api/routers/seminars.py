@@ -1,5 +1,4 @@
 import uuid
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -7,8 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
 from api.models import (
-    RecruitmentTerm,
-    RecruitmentTermStatus,
     Seminar,
     SeminarMaterial,
     SeminarMember,
@@ -23,34 +20,14 @@ from api.schemas import (
     SeminarOut,
     TeacherOut,
 )
+from api.services import get_current_term
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
 
 
-async def _get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
-    """今アクティブな募集ラウンドを1件返す(なければNone)。
-
-    status=open なだけでなく、starts_at <= today <= ends_at も満たす必要がある。
-    運営が翌年度分を準備目的で早めに open にしても、開始日前は「募集中」として
-    扱わないようにするため。
-    """
-    today = date.today()
-    result = await db.execute(
-        select(RecruitmentTerm)
-        .where(
-            RecruitmentTerm.status == RecruitmentTermStatus.open,
-            RecruitmentTerm.starts_at <= today,
-            RecruitmentTerm.ends_at >= today,
-        )
-        .order_by(RecruitmentTerm.academic_year.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
 @router.get("", response_model=list[SeminarOut])
 async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
-    term = await _get_current_term(db)
+    term = await get_current_term(db)
 
     if term is None:
         result = await db.execute(select(Seminar).order_by(Seminar.name))
@@ -98,7 +75,7 @@ async def get_seminar(
     if seminar is None:
         raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
 
-    term = await _get_current_term(db)
+    term = await get_current_term(db)
     capacity: int | None = None
     if term is not None:
         recruitment_result = await db.execute(
