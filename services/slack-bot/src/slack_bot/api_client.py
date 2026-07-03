@@ -24,3 +24,17 @@ def submit_question(
         },
         timeout=5.0,
     )
+
+
+def submit_answer(
+    *, question_id: str, slack_user_id: str, content: str
+) -> httpx.Response:
+    return httpx.post(
+        f"{API_BASE_URL}/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": slack_user_id,
+            "content": content,
+        },
+        timeout=5.0,
+    )

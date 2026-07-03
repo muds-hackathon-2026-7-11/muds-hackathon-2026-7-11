@@ -98,7 +98,10 @@ async def test_notifies_current_members_and_teachers(
     notified_slack_ids = {sent.slack_user_id for sent in fake_slack_client.sent}
     assert notified_slack_ids == {member.slack_user_id, teacher.slack_user_id}
 
-    requests_result = await db_session.execute(select(AnswerRequest))
+    question_id = resp.json()["id"]
+    requests_result = await db_session.execute(
+        select(AnswerRequest).where(AnswerRequest.question_id == question_id)
+    )
     requests = requests_result.scalars().all()
     assert {r.user_id for r in requests} == {member.id, teacher.id}
     assert all(r.status == "pending" for r in requests)

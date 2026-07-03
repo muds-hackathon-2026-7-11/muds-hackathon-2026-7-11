@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.models import (
     Answer,
     AnswerRequest,
+    AnswerRequestStatus,
     AnswerSource,
     Question,
     QuestionStatus,
@@ -20,6 +21,8 @@ from api.models import (
 from api.slack_client import SlackClient
 
 logger = logging.getLogger(__name__)
+
+ANSWER_BUTTON_ACTION_ID = "answer_question"
 
 
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
@@ -82,6 +85,33 @@ async def find_answer_candidates(
     return list(candidates_by_id.values())
 
 
+def _new_question_blocks(question: Question, seminar_name: str) -> list[dict]:
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f":email: *新しい質問が届きました*\n*ゼミ:* {seminar_name}",
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f">{question.content}"},
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "回答する"},
+                    "action_id": ANSWER_BUTTON_ACTION_ID,
+                    "value": str(question.id),
+                }
+            ],
+        },
+    ]
+
+
 async def notify_answer_candidates(
     db: AsyncSession,
     slack_client: SlackClient,
@@ -97,14 +127,17 @@ async def notify_answer_candidates(
     candidates = await find_answer_candidates(
         db, seminar_id=question.seminar_id, exclude_user_id=question.user_id
     )
-    text = f"「{seminar_name}」に新しい質問が届きました:\n{question.content}"
+    # textはSlackの通知プレビュー・アクセシビリティ表示用のフォールバック
+    # (blocksが描画されない場面でもある程度中身が分かるようにする)
+    text = f"[{seminar_name}] 新しい質問が届きました: {question.content}"
+    blocks = _new_question_blocks(question, seminar_name)
 
     for candidate in candidates:
         if candidate.slack_user_id is None:
             continue
         try:
             sent = await slack_client.send_dm(
-                slack_user_id=candidate.slack_user_id, text=text
+                slack_user_id=candidate.slack_user_id, text=text, blocks=blocks
             )
         except Exception:
             logger.warning(
@@ -150,4 +183,130 @@ async def record_answer(
     session.add(answer)
     question.status = QuestionStatus.answered
     await session.flush()
+    return answer
+
+
+def _answered_update_blocks(
+    question: Question, seminar_name: str, answerer_name: str
+) -> list[dict]:
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":white_check_mark: *回答済みになりました*\n*ゼミ:* {seminar_name}"
+                ),
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f">{question.content}"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"{answerer_name}さんが回答しました"}
+            ],
+        },
+    ]
+
+
+def _asker_notification_blocks(
+    question: Question, seminar_name: str, answer_content: str
+) -> list[dict]:
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":speech_balloon: *質問に回答が届きました*\n*ゼミ:* {seminar_name}"
+                ),
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*あなたの質問:*\n>{question.content}",
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*回答:*\n>{answer_content}"},
+        },
+    ]
+
+
+async def record_answer_and_notify(
+    db: AsyncSession,
+    slack_client: SlackClient,
+    *,
+    question: Question,
+    answerer: User,
+    content: str,
+    source: AnswerSource,
+    seminar_name: str,
+) -> Answer:
+    """回答を保存し、他の未回答候補者への通知メッセージを更新し、
+    質問者へ回答通知を送る。
+
+    Slack API呼び出しの失敗は個別に握りつぶす(#21のnotify_answer_candidates
+    と同じ方針。回答の保存自体は失敗させない)。
+    """
+    answer = await record_answer(
+        db, question=question, user_id=answerer.id, content=content, source=source
+    )
+
+    requests_result = await db.execute(
+        select(AnswerRequest).where(AnswerRequest.question_id == question.id)
+    )
+    for answer_request in requests_result.scalars().all():
+        if answer_request.user_id == answerer.id:
+            answer_request.status = AnswerRequestStatus.answered
+            answer_request.responded_at = datetime.now(UTC)
+            continue
+
+        if answer_request.status != AnswerRequestStatus.pending:
+            continue
+
+        answer_request.status = AnswerRequestStatus.skipped
+        answer_request.responded_at = datetime.now(UTC)
+        try:
+            update_text = (
+                f"[{seminar_name}] {answerer.name}さんが回答しました: "
+                f"{question.content}"
+            )
+            await slack_client.update_message(
+                channel_id=answer_request.slack_dm_channel_id,
+                message_ts=answer_request.slack_message_ts,
+                text=update_text,
+                blocks=_answered_update_blocks(question, seminar_name, answerer.name),
+            )
+        except Exception:
+            logger.warning(
+                "Slackメッセージの更新に失敗しました: question_id=%s, user_id=%s",
+                question.id,
+                answer_request.user_id,
+                exc_info=True,
+            )
+
+    asker_result = await db.execute(select(User).where(User.id == question.user_id))
+    asker = asker_result.scalar_one_or_none()
+    if asker is not None and asker.slack_user_id is not None:
+        try:
+            await slack_client.send_dm(
+                slack_user_id=asker.slack_user_id,
+                text=f"[{seminar_name}] 質問に回答が届きました: {content}",
+                blocks=_asker_notification_blocks(question, seminar_name, content),
+            )
+        except Exception:
+            logger.warning(
+                "質問者への回答通知に失敗しました: question_id=%s",
+                question.id,
+                exc_info=True,
+            )
+
+    await db.flush()
     return answer

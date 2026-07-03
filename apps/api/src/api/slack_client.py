@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from slack_sdk.web.async_client import AsyncWebClient
 
@@ -14,8 +14,30 @@ class SentDM:
     message_ts: str
 
 
+@dataclass
+class UpdatedMessage:
+    channel_id: str
+    message_ts: str
+    text: str
+
+
 class SlackClient(Protocol):
-    async def send_dm(self, *, slack_user_id: str, text: str) -> SentDM: ...
+    async def send_dm(
+        self,
+        *,
+        slack_user_id: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> SentDM: ...
+
+    async def update_message(
+        self,
+        *,
+        channel_id: str,
+        message_ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> UpdatedMessage: ...
 
 
 class RealSlackClient:
@@ -24,10 +46,18 @@ class RealSlackClient:
     def __init__(self, token: str) -> None:
         self._client = AsyncWebClient(token=token)
 
-    async def send_dm(self, *, slack_user_id: str, text: str) -> SentDM:
+    async def send_dm(
+        self,
+        *,
+        slack_user_id: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> SentDM:
         open_result = await self._client.conversations_open(users=[slack_user_id])
         channel_id = open_result["channel"]["id"]
-        post_result = await self._client.chat_postMessage(channel=channel_id, text=text)
+        post_result = await self._client.chat_postMessage(
+            channel=channel_id, text=text, blocks=blocks
+        )
         return SentDM(
             slack_user_id=slack_user_id,
             text=text,
@@ -35,14 +65,34 @@ class RealSlackClient:
             message_ts=post_result["ts"],
         )
 
+    async def update_message(
+        self,
+        *,
+        channel_id: str,
+        message_ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> UpdatedMessage:
+        await self._client.chat_update(
+            channel=channel_id, ts=message_ts, text=text, blocks=blocks
+        )
+        return UpdatedMessage(channel_id=channel_id, message_ts=message_ts, text=text)
+
 
 @dataclass
 class FakeSlackClient:
     """テスト・SLACK_BOT_TOKEN未設定時用。実際にはSlackへ送信しない。"""
 
     sent: list[SentDM] = field(default_factory=list)
+    updated: list[UpdatedMessage] = field(default_factory=list)
 
-    async def send_dm(self, *, slack_user_id: str, text: str) -> SentDM:
+    async def send_dm(
+        self,
+        *,
+        slack_user_id: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> SentDM:
         sent_dm = SentDM(
             slack_user_id=slack_user_id,
             text=text,
@@ -51,6 +101,20 @@ class FakeSlackClient:
         )
         self.sent.append(sent_dm)
         return sent_dm
+
+    async def update_message(
+        self,
+        *,
+        channel_id: str,
+        message_ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> UpdatedMessage:
+        updated_message = UpdatedMessage(
+            channel_id=channel_id, message_ts=message_ts, text=text
+        )
+        self.updated.append(updated_message)
+        return updated_message
 
 
 def get_slack_client() -> SlackClient:

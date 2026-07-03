@@ -69,3 +69,9 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+class AnswerCreate(BaseModel):
+    question_id: uuid.UUID
+    slack_user_id: str
+    content: str = Field(min_length=1, max_length=2000)

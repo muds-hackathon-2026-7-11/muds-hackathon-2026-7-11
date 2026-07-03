@@ -4,7 +4,7 @@ import os
 import httpx
 from slack_bolt import App
 
-from slack_bot.api_client import fetch_seminars, submit_question
+from slack_bot.api_client import fetch_seminars, submit_answer, submit_question
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,31 @@ def _question_modal_view(seminars: list[dict]) -> dict:
     }
 
 
+def _answer_modal_view(question_id: str) -> dict:
+    return {
+        "type": "modal",
+        "callback_id": "answer_submit",
+        "private_metadata": question_id,
+        "title": {"type": "plain_text", "text": "回答する"},
+        "submit": {"type": "plain_text", "text": "送信"},
+        "close": {"type": "plain_text", "text": "キャンセル"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "content_block",
+                "label": {"type": "plain_text", "text": "回答内容"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "content_input",
+                    "multiline": True,
+                    "min_length": 1,
+                    "max_length": 2000,
+                },
+            },
+        ],
+    }
+
+
 def _handle_home_opened(client, event) -> None:
     client.views_publish(user_id=event["user"], view=_home_view())
 
@@ -145,7 +170,60 @@ def _handle_question_view_submission(ack, body, view, client) -> None:
     if response.status_code == 201:
         client.chat_postMessage(
             channel=user_id,
-            text="送信しました！\n回答が届いたら通知します。",
+            text=(
+                ":white_check_mark: *質問を送信しました*\n"
+                f">{content}\n\n"
+                "回答が届いたら通知します。"
+            ),
+        )
+    elif response.status_code == 404:
+        client.chat_postMessage(
+            channel=user_id,
+            text=response.json().get("detail", "送信に失敗しました。"),
+        )
+    else:
+        logger.error(
+            "unexpected API response: status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信に失敗しました。時間をおいて再度お試しください。",
+        )
+
+
+def _handle_answer_action(ack, body, client) -> None:
+    """通知DM内の「回答する」ボタン押下時のハンドラ。"""
+    ack()
+    question_id = body["actions"][0]["value"]
+    client.views_open(
+        trigger_id=body["trigger_id"], view=_answer_modal_view(question_id)
+    )
+
+
+def _handle_answer_view_submission(ack, body, view, client) -> None:
+    ack()
+    user_id = body["user"]["id"]
+    question_id = view["private_metadata"]
+    content = view["state"]["values"]["content_block"]["content_input"]["value"]
+
+    try:
+        response = submit_answer(
+            question_id=question_id, slack_user_id=user_id, content=content
+        )
+    except httpx.HTTPError:
+        logger.exception("failed to submit answer to API")
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信に失敗しました。時間をおいて再度お試しください。",
+        )
+        return
+
+    if response.status_code == 201:
+        client.chat_postMessage(
+            channel=user_id,
+            text=f":white_check_mark: *回答を送信しました*\n>{content}",
         )
     elif response.status_code == 404:
         client.chat_postMessage(
@@ -178,5 +256,7 @@ def create_app(token_verification_enabled: bool = True) -> App:
     app.event("app_home_opened")(_handle_home_opened)
     app.action("question")(_handle_question_action)
     app.view("question_submit")(_handle_question_view_submission)
+    app.action("answer_question")(_handle_answer_action)
+    app.view("answer_submit")(_handle_answer_view_submission)
 
     return app
