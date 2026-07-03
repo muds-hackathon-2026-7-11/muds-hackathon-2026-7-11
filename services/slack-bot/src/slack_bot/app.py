@@ -220,11 +220,20 @@ def _handle_answer_action(ack, body, client) -> None:
 def _handle_answer_view_submission(ack, body, view, client) -> None:
     ack()
     user_id = body["user"]["id"]
-    metadata = json.loads(view["private_metadata"])
-    question_id = metadata["question_id"]
-    channel_id = metadata["channel_id"]
-    message_ts = metadata["message_ts"]
-    content = view["state"]["values"]["content_block"]["content_input"]["value"]
+
+    try:
+        metadata = json.loads(view["private_metadata"])
+        question_id = metadata["question_id"]
+        channel_id = metadata["channel_id"]
+        message_ts = metadata["message_ts"]
+        content = view["state"]["values"]["content_block"]["content_input"]["value"]
+    except (json.JSONDecodeError, KeyError):
+        logger.exception("failed to parse answer modal metadata")
+        client.chat_postMessage(
+            channel=user_id,
+            text="送信に失敗しました。時間をおいて再度お試しください。",
+        )
+        return
 
     try:
         response = submit_answer(

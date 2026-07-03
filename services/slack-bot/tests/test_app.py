@@ -177,6 +177,20 @@ def test_answer_view_submission_sends_success_message_on_201() -> None:
     assert "送信しました" in call_kwargs["text"]
 
 
+def test_answer_view_submission_shows_error_on_malformed_metadata() -> None:
+    ack = MagicMock()
+    client = MagicMock()
+    broken_view = {
+        "private_metadata": "not-json",
+        "state": {"values": {"content_block": {"content_input": {"value": "回答"}}}},
+    }
+    _handle_answer_view_submission(ack, _action_body(), broken_view, client)
+
+    ack.assert_called_once()
+    text = client.chat_postMessage.call_args.kwargs["text"]
+    assert "失敗" in text
+
+
 def test_answer_view_submission_shows_api_detail_message_on_404() -> None:
     ack = MagicMock()
     client = MagicMock()
