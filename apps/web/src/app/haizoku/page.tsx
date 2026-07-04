@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AuthMenuBar } from "../../components/auth-menu-bar";
 
 const statusRows = [
@@ -150,12 +151,12 @@ export default function AssignmentStatusPage() {
                 >
                   マイページへ戻る
                 </a>
-                <a
+                <Link
                   className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                   href="/"
                 >
                   トップへ戻る
-                </a>
+                </Link>
               </div>
             </div>
           </aside>
