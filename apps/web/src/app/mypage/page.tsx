@@ -42,7 +42,9 @@ export default function StudentMyPage() {
             <div className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
               <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-sky-700">ログイン中の学生</p>
+                  <p className="text-sm font-semibold text-sky-700">
+                    ログイン中の学生
+                  </p>
                   <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
                     山田 太郎
                   </h2>
@@ -52,7 +54,9 @@ export default function StudentMyPage() {
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   <p className="font-medium text-slate-500">提出締切</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-950">7月18日 23:59</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    7月18日 23:59
+                  </p>
                 </div>
               </div>
 
@@ -63,11 +67,15 @@ export default function StudentMyPage() {
                 </div>
                 <div className="rounded-3xl bg-slate-100 p-5">
                   <p className="text-sm text-slate-500">学年</p>
-                  <p className="mt-3 text-xl font-semibold text-slate-950">B3</p>
+                  <p className="mt-3 text-xl font-semibold text-slate-950">
+                    B3
+                  </p>
                 </div>
                 <div className="rounded-3xl bg-slate-100 p-5">
                   <p className="text-sm text-slate-500">研究テーマ</p>
-                  <p className="mt-3 text-lg font-semibold text-slate-950">推薦システムの比較研究</p>
+                  <p className="mt-3 text-lg font-semibold text-slate-950">
+                    推薦システムの比較研究
+                  </p>
                 </div>
               </div>
             </div>
@@ -78,19 +86,33 @@ export default function StudentMyPage() {
                   key={action.title}
                   className="rounded-[1.75rem] border border-white/75 bg-white/85 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
                 >
-                  <p className="text-sm font-semibold text-slate-950">{action.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{action.description}</p>
+                  <p className="text-sm font-semibold text-slate-950">
+                    {action.title}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {action.description}
+                  </p>
                 </article>
               ))}
             </div>
 
-            <div id="status" className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
+            <div
+              id="status"
+              className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8"
+            >
               <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-sky-700">志望提出状況</p>
-                  <h3 className="mt-1 text-2xl font-semibold text-slate-950">第1〜第3志望を確認する</h3>
+                  <p className="text-sm font-semibold text-sky-700">
+                    志望提出状況
+                  </p>
+                  <h3 className="mt-1 text-2xl font-semibold text-slate-950">
+                    第1〜第3志望を確認する
+                  </h3>
                 </div>
-                <a className="text-sm font-semibold text-sky-700 transition hover:text-sky-900" href="#application">
+                <a
+                  className="text-sm font-semibold text-sky-700 transition hover:text-sky-900"
+                  href="#application"
+                >
                   志望入力へ進む
                 </a>
               </div>
@@ -102,11 +124,17 @@ export default function StudentMyPage() {
                     className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between"
                   >
                     <div>
-                      <p className="text-sm font-medium text-slate-500">{item.label}</p>
-                      <p className="mt-1 text-lg font-semibold text-slate-950">{item.value}</p>
+                      <p className="text-sm font-medium text-slate-500">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-slate-950">
+                        {item.value}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-slate-500">{item.status}</span>
+                      <span className="text-sm font-medium text-slate-500">
+                        {item.status}
+                      </span>
                       <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                         {index === 0 ? "優先" : index === 1 ? "保存" : "未着手"}
                       </span>
@@ -119,8 +147,12 @@ export default function StudentMyPage() {
 
           <aside className="space-y-6">
             <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
-              <p className="text-sm font-semibold text-indigo-700">現在所属ゼミ</p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">データベースゼミ</h3>
+              <p className="text-sm font-semibold text-indigo-700">
+                現在所属ゼミ
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                データベースゼミ
+              </h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
                 現在は3年次の所属ゼミとして、研究テーマ「推薦システムの比較研究」に関連するゼミを表示しています。
               </p>
@@ -128,11 +160,15 @@ export default function StudentMyPage() {
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">指導教員</p>
-                  <p className="mt-2 text-base font-semibold text-slate-950">田中 先生</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950">
+                    田中 先生
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">現在の状態</p>
-                  <p className="mt-2 text-base font-semibold text-slate-950">配属済み</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950">
+                    配属済み
+                  </p>
                 </div>
               </div>
 
@@ -141,9 +177,16 @@ export default function StudentMyPage() {
               </div>
             </div>
 
-            <div id="application" className="rounded-[2rem] border border-white/80 bg-slate-950 p-6 text-white shadow-[0_18px_60px_rgba(15,23,42,0.16)] md:p-8">
-              <p className="text-sm font-semibold text-slate-300">次にやること</p>
-              <h3 className="mt-2 text-2xl font-semibold">志望理由を仕上げる</h3>
+            <div
+              id="application"
+              className="rounded-[2rem] border border-white/80 bg-slate-950 p-6 text-white shadow-[0_18px_60px_rgba(15,23,42,0.16)] md:p-8"
+            >
+              <p className="text-sm font-semibold text-slate-300">
+                次にやること
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold">
+                志望理由を仕上げる
+              </h3>
               <p className="mt-3 text-sm leading-7 text-slate-300">
                 現在のマッチ度、文字数、未入力項目を確認して、提出画面に進めるようにします。
               </p>

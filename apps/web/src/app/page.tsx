@@ -12,13 +12,22 @@ export default function Home() {
             </h1>
           </div>
           <nav className="flex flex-wrap gap-2 text-sm font-medium text-slate-600">
-            <a className="rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-slate-700" href="#overview">
+            <a
+              className="rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-slate-700"
+              href="#overview"
+            >
               概要
             </a>
-            <a className="rounded-full bg-slate-100 px-4 py-2 transition hover:bg-slate-200" href="#features">
+            <a
+              className="rounded-full bg-slate-100 px-4 py-2 transition hover:bg-slate-200"
+              href="#features"
+            >
               機能
             </a>
-            <a className="rounded-full bg-slate-100 px-4 py-2 transition hover:bg-slate-200" href="#roles">
+            <a
+              className="rounded-full bg-slate-100 px-4 py-2 transition hover:bg-slate-200"
+              href="#roles"
+            >
               対象ユーザー
             </a>
           </nav>
@@ -42,7 +51,10 @@ export default function Home() {
                 </span>
                 最初の画面。
               </h2>
-              <p id="overview" className="max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
+              <p
+                id="overview"
+                className="max-w-2xl text-base leading-8 text-slate-600 md:text-lg"
+              >
                 ゼミ情報、FAQ、志望提出、教員向けの応募管理までを一つの画面群にまとめる前提で、まずはログイン後に迷わない起点ページを用意します。
               </p>
             </div>
@@ -65,18 +77,30 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-3">
               <article className="rounded-3xl border border-white/80 bg-white/90 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <p className="text-sm font-medium text-slate-500">学生</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-950">ゼミを探す</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">一覧、詳細、FAQ、志望提出へ自然に遷移できる導線。</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  ゼミを探す
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  一覧、詳細、FAQ、志望提出へ自然に遷移できる導線。
+                </p>
               </article>
               <article className="rounded-3xl border border-white/80 bg-white/90 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <p className="text-sm font-medium text-slate-500">教員</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-950">応募を確認する</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">応募者一覧、分析、CSV出力に進める入口。</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  応募を確認する
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  応募者一覧、分析、CSV出力に進める入口。
+                </p>
               </article>
               <article className="rounded-3xl border border-white/80 bg-white/90 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <p className="text-sm font-medium text-slate-500">運営</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-950">設定を管理する</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">募集期間、ゼミ、教員、配属結果の管理導線。</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  設定を管理する
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  募集期間、ゼミ、教員、配属結果の管理導線。
+                </p>
               </article>
             </div>
           </div>
@@ -96,27 +120,43 @@ export default function Home() {
 
               <div className="space-y-4 py-5">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">What users see</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                    What users see
+                  </p>
                   <p className="mt-2 text-base font-medium leading-7">
                     メニュー、導線、対象ユーザーを最初に見せて、迷わず次の画面へ進める。
                   </p>
                 </div>
                 <div id="features" className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl bg-white/5 p-4">
-                    <p className="text-sm font-semibold text-white">共通レイアウト</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">メニューバーとヘッダーを共通化。</p>
+                    <p className="text-sm font-semibold text-white">
+                      共通レイアウト
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      メニューバーとヘッダーを共通化。
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-white/5 p-4">
-                    <p className="text-sm font-semibold text-white">レスポンシブ</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">モバイルでも読みやすく崩れない。</p>
+                    <p className="text-sm font-semibold text-white">
+                      レスポンシブ
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      モバイルでも読みやすく崩れない。
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-white/5 p-4">
-                    <p className="text-sm font-semibold text-white">権限別導線</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">学生・教員・運営で表示を切り替える。</p>
+                    <p className="text-sm font-semibold text-white">
+                      権限別導線
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      学生・教員・運営で表示を切り替える。
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-white/5 p-4">
                     <p className="text-sm font-semibold text-white">拡張前提</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">後続画面を追加しやすい起点にする。</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      後続画面を追加しやすい起点にする。
+                    </p>
                   </div>
                 </div>
               </div>
@@ -127,18 +167,30 @@ export default function Home() {
         <section id="roles" className="grid gap-4 pb-6 md:grid-cols-3">
           <article className="rounded-[1.75rem] border border-white/70 bg-white/85 p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <p className="text-sm font-semibold text-sky-700">学生向け</p>
-            <h3 className="mt-3 text-xl font-semibold text-slate-950">ゼミ選択の起点</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-600">ゼミ一覧、詳細、FAQ、志望提出へつながる導線をまとめる。</p>
+            <h3 className="mt-3 text-xl font-semibold text-slate-950">
+              ゼミ選択の起点
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              ゼミ一覧、詳細、FAQ、志望提出へつながる導線をまとめる。
+            </p>
           </article>
           <article className="rounded-[1.75rem] border border-white/70 bg-white/85 p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <p className="text-sm font-semibold text-indigo-700">教員向け</p>
-            <h3 className="mt-3 text-xl font-semibold text-slate-950">応募確認の起点</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-600">応募者一覧、詳細、分析画面へすばやく進める。</p>
+            <h3 className="mt-3 text-xl font-semibold text-slate-950">
+              応募確認の起点
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              応募者一覧、詳細、分析画面へすばやく進める。
+            </p>
           </article>
           <article className="rounded-[1.75rem] border border-white/70 bg-white/85 p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <p className="text-sm font-semibold text-violet-700">運営向け</p>
-            <h3 className="mt-3 text-xl font-semibold text-slate-950">管理の起点</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-600">募集期間やゼミ設定、CSVインポートを扱う入口にする。</p>
+            <h3 className="mt-3 text-xl font-semibold text-slate-950">
+              管理の起点
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              募集期間やゼミ設定、CSVインポートを扱う入口にする。
+            </p>
           </article>
         </section>
       </section>

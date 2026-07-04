@@ -37,7 +37,9 @@ export default function AssignmentStatusPage() {
         <div className="grid flex-1 gap-6 py-10 lg:grid-cols-[1.05fr_0.95fr] lg:py-14">
           <section className="space-y-6">
             <div className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
-              <p className="text-sm font-semibold text-sky-700">学生の提出状況</p>
+              <p className="text-sm font-semibold text-sky-700">
+                学生の提出状況
+              </p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
                 志望提出の進み具合を確認する
               </h2>
@@ -52,11 +54,15 @@ export default function AssignmentStatusPage() {
                 </div>
                 <div className="rounded-3xl bg-slate-100 p-5">
                   <p className="text-sm text-slate-500">提出日時</p>
-                  <p className="mt-3 text-xl font-semibold text-slate-950">7月2日 18:40</p>
+                  <p className="mt-3 text-xl font-semibold text-slate-950">
+                    7月2日 18:40
+                  </p>
                 </div>
                 <div className="rounded-3xl bg-slate-100 p-5">
                   <p className="text-sm text-slate-500">マッチ度</p>
-                  <p className="mt-3 text-xl font-semibold text-slate-950">82%</p>
+                  <p className="mt-3 text-xl font-semibold text-slate-950">
+                    82%
+                  </p>
                 </div>
               </div>
             </div>
@@ -64,10 +70,17 @@ export default function AssignmentStatusPage() {
             <div className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-indigo-700">志望の内訳</p>
-                  <h3 className="mt-1 text-2xl font-semibold text-slate-950">第1〜第3志望</h3>
+                  <p className="text-sm font-semibold text-indigo-700">
+                    志望の内訳
+                  </p>
+                  <h3 className="mt-1 text-2xl font-semibold text-slate-950">
+                    第1〜第3志望
+                  </h3>
                 </div>
-                <a className="text-sm font-semibold text-sky-700 transition hover:text-sky-900" href="/mypage">
+                <a
+                  className="text-sm font-semibold text-sky-700 transition hover:text-sky-900"
+                  href="/mypage"
+                >
                   マイページへ戻る
                 </a>
               </div>
@@ -80,10 +93,16 @@ export default function AssignmentStatusPage() {
                   >
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="text-sm font-medium text-slate-500">{row.label}</p>
-                        <p className="mt-1 text-lg font-semibold text-slate-950">{row.value}</p>
+                        <p className="text-sm font-medium text-slate-500">
+                          {row.label}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-slate-950">
+                          {row.value}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium text-slate-600">{row.detail}</p>
+                      <p className="text-sm font-medium text-slate-600">
+                        {row.detail}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -104,11 +123,15 @@ export default function AssignmentStatusPage() {
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">定員差</p>
-                  <p className="mt-2 text-base font-semibold text-slate-950">残り 1 名</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950">
+                    残り 1 名
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">応募倍率</p>
-                  <p className="mt-2 text-base font-semibold text-slate-950">1.2 倍</p>
+                  <p className="mt-2 text-base font-semibold text-slate-950">
+                    1.2 倍
+                  </p>
                 </div>
               </div>
             </div>
