@@ -1,8 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { mintAccessToken } from "@/lib/access-token";
-import { isEmailAllowed, parseAllowedDomains } from "@/lib/allowed-domains";
-import { isEmailRegistered } from "@/lib/is-email-registered";
+import { parseAllowedDomains } from "@/lib/allowed-domains";
+import { shouldAllowSignIn } from "@/lib/should-allow-sign-in";
 
 // アクセストークンの有効期限が残りこの秒数を切ったら再発行する。
 const ACCESS_TOKEN_REFRESH_MARGIN_SECONDS = 5 * 60;
@@ -19,13 +19,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [Google],
   callbacks: {
     async signIn({ profile }) {
-      // ドメイン制限に加え、事前にusersへ投入済みのメールアドレスのみ
-      // ログインを許可する(教員はgmail.com等ドメインが揃わないため、
-      // ドメイン制限だけでは学生・教員を限定できない)。
-      if (!isEmailAllowed(profile?.email, allowedDomains)) {
-        return false;
-      }
-      return await isEmailRegistered(profile?.email);
+      return await shouldAllowSignIn(profile?.email, allowedDomains);
     },
     async jwt({ token, profile }) {
       // 初回サインイン時にGoogleのsub(=google_id)をトークンへ保存する。
