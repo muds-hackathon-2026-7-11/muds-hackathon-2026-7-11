@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthStatus } from "@/components/auth-status";
 import { ProfileCard } from "@/components/profile-card";
 
 type Me = {
@@ -54,6 +55,13 @@ export default async function Home() {
       </div>
 
       <div className="flex flex-col gap-4 sm:w-72">
+        <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
+          <p className="text-sm text-foreground/60">ログイン状態</p>
+          <div className="mt-2">
+            <AuthStatus />
+          </div>
+        </section>
+
         <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
           <p className="text-sm text-foreground/60">所属ゼミ</p>
           <p className="mt-1 font-semibold">準備中</p>

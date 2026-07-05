@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
 from api.routers import me, questions, seminars
@@ -15,6 +16,12 @@ if settings.auth_dev_mode:
     )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.web_app_url],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(seminars.router)
 app.include_router(questions.router)
 app.include_router(me.router)
