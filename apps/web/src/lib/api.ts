@@ -27,6 +27,11 @@ export async function apiFetch(
   session: Session | null,
   init: RequestInit = {},
 ): Promise<Response> {
+  if (typeof window === "undefined") {
+    throw new Error(
+      "apiFetch はクライアントコンポーネント専用です。サーバー側からは serverApiFetch を使ってください。",
+    );
+  }
   return fetch(`${BROWSER_API_URL}${path}`, withAuthHeaders(session, init));
 }
 
@@ -36,6 +41,11 @@ export async function serverApiFetch(
   session: Session | null,
   init: RequestInit = {},
 ): Promise<Response> {
+  if (typeof window !== "undefined") {
+    throw new Error(
+      "serverApiFetch はサーバー側専用です。クライアントコンポーネントからは apiFetch を使ってください。",
+    );
+  }
   const serverApiUrl = process.env.API_BASE_URL ?? "http://localhost:8100";
   return fetch(`${serverApiUrl}${path}`, withAuthHeaders(session, init));
 }

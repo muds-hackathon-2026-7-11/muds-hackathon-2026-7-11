@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +26,13 @@ class Settings(BaseSettings):
     # --- CORS ---
     # ブラウザ(apps/web)から直接叩けるようにするオリジン。slack-botと共有の
     # WEB_APP_URL(ブラウザから見えるURL)をそのまま使う(#42)。
+    # CORSのOriginヘッダは末尾スラッシュを含まないため、比較がズレないよう正規化する。
     web_app_url: str = "http://localhost:3100"
+
+    @field_validator("web_app_url")
+    @classmethod
+    def _strip_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
 
 
 settings = Settings()

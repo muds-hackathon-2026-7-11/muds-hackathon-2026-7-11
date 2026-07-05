@@ -2,11 +2,17 @@
 
 import pytest
 
-from api.config import settings
-
-pytestmark = pytest.mark.asyncio
+from api.config import Settings, settings
 
 
+def test_web_app_url_strips_trailing_slash() -> None:
+    # Originヘッダには末尾スラッシュが付かないため、比較がズレないよう正規化する。
+    assert Settings(web_app_url="http://localhost:3100/").web_app_url == (
+        "http://localhost:3100"
+    )
+
+
+@pytest.mark.asyncio
 async def test_allows_configured_web_origin(client) -> None:
     resp = await client.get("/health", headers={"Origin": settings.web_app_url})
 
@@ -14,6 +20,7 @@ async def test_allows_configured_web_origin(client) -> None:
     assert resp.headers["access-control-allow-origin"] == settings.web_app_url
 
 
+@pytest.mark.asyncio
 async def test_preflight_allows_authorization_header(client) -> None:
     resp = await client.options(
         "/me",
@@ -28,6 +35,7 @@ async def test_preflight_allows_authorization_header(client) -> None:
     assert resp.headers["access-control-allow-origin"] == settings.web_app_url
 
 
+@pytest.mark.asyncio
 async def test_rejects_unconfigured_origin(client) -> None:
     resp = await client.get("/health", headers={"Origin": "http://evil.example.com"})
 

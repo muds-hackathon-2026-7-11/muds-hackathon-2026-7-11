@@ -7,6 +7,7 @@ const session = { accessToken: "test-token" } as Session;
 describe("apiFetch / serverApiFetch", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -26,7 +27,16 @@ describe("apiFetch / serverApiFetch", () => {
     );
   });
 
+  it("apiFetch throws when called outside a browser (no window)", async () => {
+    vi.stubGlobal("window", undefined);
+
+    await expect(apiFetch("/me", session)).rejects.toThrow(
+      "serverApiFetch を使ってください",
+    );
+  });
+
   it("serverApiFetch uses API_BASE_URL (Docker internal)", async () => {
+    vi.stubGlobal("window", undefined);
     vi.stubEnv("API_BASE_URL", "http://api:8000");
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -37,6 +47,12 @@ describe("apiFetch / serverApiFetch", () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       "http://api:8000/me",
       expect.anything(),
+    );
+  });
+
+  it("serverApiFetch throws when called inside a browser", async () => {
+    await expect(serverApiFetch("/me", session)).rejects.toThrow(
+      "apiFetch を使ってください",
     );
   });
 
