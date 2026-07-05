@@ -54,8 +54,8 @@ migration: ## generate a new Alembic migration (usage: make migration m="message
 seed: ## insert dev seed data (seminars)
 	cd apps/api && uv run python -m api.seed
 
-import-seminars: ## import real seminar/teacher data from CSV (usage: make import-seminars csv=data/xxx.csv)
-	cd apps/api && uv run python -m api.import_seminars "../../$(csv)"
+import-seminars: ## import real seminar/teacher data from CSV (default data/seminar_teacher.csv; override with csv=...)
+	cd apps/api && uv run python -m api.import_seminars "../../$(or $(csv),data/seminar_teacher.csv)"
 
 link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
 	cd apps/api && uv run python -m api.link_slack_user $(id)

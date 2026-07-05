@@ -5,12 +5,12 @@
 
 ## ゼミ・教員データ
 
-1. チームのスプレッドシートからCSVをエクスポートし、このディレクトリに置く
+1. `data/seminar_teacher.csv`という名前のcsvを置く
    (列: `ゼミ名, ゼミ紹介文, 教員写真URL, 定員, 対象年度, 教員氏名, 教員メールアドレス`)
 2. DBに投入する:
 
    ```sh
-   make import-seminars csv=data/<ファイル名>.csv
+   make import-seminars
    ```
 
-同じ「ゼミ名」の行を教員の人数分繰り返せば、複数教員のゼミとして登録される。
+   別名のファイルを使う場合は `make import-seminars csv=data/<ファイル名>.csv` のように指定する。
