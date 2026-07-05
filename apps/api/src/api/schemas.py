@@ -21,6 +21,12 @@ class MeOut(BaseModel):
     slack_user_id: str | None
 
 
+class UserExistsOut(BaseModel):
+    """メールアドレスが事前登録済みか(ログイン許可判定用)。"""
+
+    exists: bool
+
+
 class SeminarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
