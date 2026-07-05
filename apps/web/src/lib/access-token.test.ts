@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { generateKeyPairSync } from "node:crypto";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
