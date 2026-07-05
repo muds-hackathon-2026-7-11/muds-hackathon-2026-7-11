@@ -34,5 +34,10 @@ class Settings(BaseSettings):
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
+    # --- web-api間シークレット ---
+    # ログイン前(未認証)に呼ぶ必要がありJWT検証を通せないエンドポイント
+    # (/users/exists 等)を、web以外からの直接アクセスから守るための合言葉。
+    internal_api_secret: str = ""
+
 
 settings = Settings()

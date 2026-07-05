@@ -1,30 +1,20 @@
 import Link from "next/link";
-import { AuthStatus } from "@/components/auth-status";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { ProfileCard } from "@/components/profile-card";
+import { serverApiFetch } from "@/lib/api-server";
+import type { Session } from "next-auth";
 
 type Me = {
   name: string;
-  student_id: string | null;
+  email: string;
   grade: string | null;
   research_theme: string | null;
 };
 
-// ログイン機能の実装後、false にすれば GET /me の実データ表示に戻る。
-const USE_MOCK_PROFILE = true;
-
-const MOCK_ME: Me = {
-  name: "山田 太郎",
-  student_id: "s2300000",
-  grade: "B3",
-  research_theme:
-    "音声処理とLLMを組み合わせた誤り訂正システムの研究に関心があります。",
-};
-
-async function getMe(): Promise<Me | null> {
+async function getMe(session: Session | null): Promise<Me | null> {
   try {
-    const res = await fetch(`${process.env.API_BASE_URL}/me`, {
-      cache: "no-store",
-    });
+    const res = await serverApiFetch("/me", session, { cache: "no-store" });
     if (!res.ok) {
       return null;
     }
@@ -35,7 +25,11 @@ async function getMe(): Promise<Me | null> {
 }
 
 export default async function Home() {
-  const me = USE_MOCK_PROFILE ? MOCK_ME : await getMe();
+  const session = await auth();
+  if (!session) {
+    redirect("/login");
+  }
+  const me = await getMe(session);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:flex-row sm:items-start">
@@ -43,7 +37,7 @@ export default async function Home() {
         {me ? (
           <ProfileCard
             name={me.name}
-            studentId={me.student_id}
+            email={me.email}
             grade={me.grade}
             researchTheme={me.research_theme}
           />
@@ -55,13 +49,6 @@ export default async function Home() {
       </div>
 
       <div className="flex flex-col gap-4 sm:w-72">
-        <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-          <p className="text-sm text-foreground/60">ログイン状態</p>
-          <div className="mt-2">
-            <AuthStatus />
-          </div>
-        </section>
-
         <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
           <p className="text-sm text-foreground/60">所属ゼミ</p>
           <p className="mt-1 font-semibold">準備中</p>

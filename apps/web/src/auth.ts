@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { mintAccessToken } from "@/lib/access-token";
-import { isEmailAllowed, parseAllowedDomains } from "@/lib/allowed-domains";
+import { parseAllowedDomains } from "@/lib/allowed-domains";
+import { shouldAllowSignIn } from "@/lib/should-allow-sign-in";
 
 // アクセストークンの有効期限が残りこの秒数を切ったら再発行する。
 const ACCESS_TOKEN_REFRESH_MARGIN_SECONDS = 5 * 60;
@@ -18,7 +19,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [Google],
   callbacks: {
     async signIn({ profile }) {
-      return isEmailAllowed(profile?.email, allowedDomains);
+      return await shouldAllowSignIn(profile?.email, allowedDomains);
     },
     async jwt({ token, profile }) {
       // 初回サインイン時にGoogleのsub(=google_id)をトークンへ保存する。

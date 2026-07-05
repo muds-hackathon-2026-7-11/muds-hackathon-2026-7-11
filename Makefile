@@ -60,8 +60,8 @@ seed: ## insert dev seed data (seminars)
 import-seminars: ## import real seminar/teacher data from CSV (default data/seminar_teacher.csv; override with csv=...)
 	cd apps/api && uv run python -m api.import_seminars "../../$(or $(csv),data/seminar_teacher.csv)"
 
-import-users: ## import real student/teacher data from Slack member CSV (default data/users.csv; override with csv=...)
-	cd apps/api && uv run python -m api.import_users "../../$(or $(csv),data/users.csv)"
+import-users: ## import real student/teacher data from Slack workspace member CSV (default data/slack_member.csv; override with csv=...)
+	cd apps/api && uv run python -m api.import_users "../../$(or $(csv),data/slack_member.csv)"
 
 import-data: import-seminars import-users ## run import-seminars then import-users with default CSV paths
 

@@ -16,8 +16,15 @@ class MeOut(BaseModel):
     name: str
     role: UserRole
     student_id: str | None
+    grade: str | None
     research_theme: str | None
     slack_user_id: str | None
+
+
+class UserExistsOut(BaseModel):
+    """メールアドレスが事前登録済みか(ログイン許可判定用)。"""
+
+    exists: bool
 
 
 class SeminarOut(BaseModel):

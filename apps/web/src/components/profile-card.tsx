@@ -1,23 +1,27 @@
+import { LogoutButton } from "./logout-button";
+
 type ProfileCardProps = {
   name: string;
-  studentId: string | null;
+  email: string;
   grade: string | null;
   researchTheme: string | null;
 };
 
 export function ProfileCard({
   name,
-  studentId,
+  email,
   grade,
   researchTheme,
 }: ProfileCardProps) {
-  const meta = [studentId, grade].filter(Boolean).join("・");
-
   return (
     <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-      <div className="border-b border-black/[.08] pb-4 dark:border-white/[.145]">
-        <p className="font-semibold">{name}</p>
-        <p className="text-sm text-foreground/60">{meta}</p>
+      <div className="flex items-start justify-between gap-4 border-b border-black/[.08] pb-4 dark:border-white/[.145]">
+        <div>
+          <p className="font-semibold">{name}</p>
+          <p className="text-sm text-foreground/60">{email}</p>
+          <p className="text-sm text-foreground/60">{grade ?? "未設定"}</p>
+        </div>
+        <LogoutButton />
       </div>
 
       <div className="pt-4">
