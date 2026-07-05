@@ -12,6 +12,9 @@ export async function isEmailRegistered(
     const res = await serverApiFetch(
       `/users/exists?email=${encodeURIComponent(email)}`,
       null,
+      {
+        headers: { "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "" },
+      },
     );
     if (!res.ok) {
       return false;
