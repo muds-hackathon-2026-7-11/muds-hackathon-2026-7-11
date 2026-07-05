@@ -152,11 +152,18 @@ async def _existing_active_emails(db_session, *, exclude: str) -> set[str]:
     このリポジトリのテストは実Postgresを使い回すため(conftest.py参照)、
     active_emailsに含めないと対象外のユーザーまで巻き込んで非アクティブ化
     してしまう(rollbackされるため永続はしないが、テストの検証対象がぼやける)。
+
+    CI等、他にデータが無いまっさらなDBだと exclude で唯一のアクティブ
+    ユーザーを除いた瞬間に空集合になり、「CSVが空」の安全装置(全員を
+    非アクティブ化しないためのガード)が誤発動してしまう。それを防ぐため、
+    実データの有無によらず必ず1件以上になるダミーのメールを混ぜておく。
     """
     result = await db_session.execute(
         select(User.email).where(User.is_active.is_(True))
     )
-    return set(result.scalars().all()) - {exclude}
+    emails = set(result.scalars().all()) - {exclude}
+    emails.add("placeholder-keep-non-empty@example.com")
+    return emails
 
 
 @pytest.mark.asyncio
