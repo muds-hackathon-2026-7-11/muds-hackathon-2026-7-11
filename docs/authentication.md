@@ -16,6 +16,31 @@
 - 発行側（フロント）: `apps/web`（Issue #6）
 - 検証側（バックエンド）: `apps/api`（Issue #23。`auth.py` / `get_current_user` / `GET /me`）
 
+## チーム開発者向けセットアップ
+
+「キーを入れるだけ」では動きません。**Google側の設定（テストユーザー登録）** と、
+**各自の環境で生成する鍵** の切り分けが要点です。
+
+| 項目 | 区分 | やること |
+|---|---|---|
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | **チームで共有** | OAuthクライアントの所有者がgit以外(Slack/1Password等)で配布 |
+| Google Console の**テストユーザー登録** | **所有者が各人を追加** | OAuth同意画面の「テストユーザー」に各メンバーのGoogleアカウントを追加(公開ステータスが「テスト」の間はこれが無いと `access_denied`) |
+| `AUTH_SECRET` / `AUTH_JWT_PRIVATE_KEY` / `AUTH_URL` | **各自の環境で生成** | `make setup-auth` が自動生成(共有不要・環境内で完結) |
+
+### 各メンバーの手順
+```bash
+make install        # 依存インストール(初回)
+make setup-auth     # AUTH_SECRET / AUTH_JWT_PRIVATE_KEY / AUTH_URL を .env に自動生成(べき等)
+# → 共有された AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET を .env に貼る
+make dev            # http://localhost:3100 で「Googleでログイン」
+```
+
+- `make setup-auth` は既に値がある項目は上書きしません(何度実行してもOK)。
+- **Googleログイン無しで開発**するなら、`AUTH_GOOGLE_*` 未設定でも `AUTH_DEV_MODE=true`(既定)のまま
+  バックエンドはダミー認証で動きます（フロントのログインUIだけ使えない状態）。
+- テストユーザー管理を無くしたい場合は、OAuth同意画面を「本番(公開)」にすると
+  テストユーザー登録なしでログイン可能（非機微スコープのため審査不要。未確認アプリ警告は出る）。
+
 ## 2つの動作モード
 
 ### 開発モード（既定 / 実Google不要）

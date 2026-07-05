@@ -44,9 +44,13 @@
 
 ```bash
 cp .env.example .env
-make install   # pnpm install + uv sync
-make dev       # docker compose up --build (db / api / web / slack-bot)
+make install     # pnpm install + uv sync
+make setup-auth  # ローカル認証キー(AUTH_SECRET/AUTH_JWT_PRIVATE_KEY)を.envに自動生成
+make dev         # docker compose up --build (db / api / web / slack-bot)
 ```
+
+Googleログインを使う場合の追加設定（共有するOAuthクライアント・テストユーザー登録など）は
+[docs/authentication.md](docs/authentication.md) を参照。
 
 起動後のURL:
 
