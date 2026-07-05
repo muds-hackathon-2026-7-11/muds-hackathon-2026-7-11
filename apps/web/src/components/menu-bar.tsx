@@ -9,6 +9,15 @@ const navItems = [
   { label: "配属状況", href: "/assignment" },
 ] as const;
 
+function navLinkClassName(isActive: boolean): string {
+  return [
+    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+    isActive
+      ? "bg-foreground text-background"
+      : "text-foreground/70 hover:bg-black/[.04] hover:text-foreground dark:hover:bg-white/[.08]",
+  ].join(" ");
+}
+
 export function MenuBar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -28,12 +37,7 @@ export function MenuBar() {
                 key={item.href}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={[
-                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-foreground text-background"
-                    : "text-foreground/70 hover:bg-black/[.04] hover:text-foreground dark:hover:bg-white/[.08]",
-                ].join(" ")}
+                className={navLinkClassName(isActive)}
               >
                 {item.label}
               </Link>
@@ -46,7 +50,7 @@ export function MenuBar() {
           disabled
           aria-label="設定(準備中)"
           title="準備中"
-          className="hidden h-9 w-9 cursor-not-allowed items-center justify-center rounded-full text-foreground/30 sm:flex"
+          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full text-foreground/30"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -101,12 +105,7 @@ export function MenuBar() {
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={[
-                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-foreground text-background"
-                    : "text-foreground/70 hover:bg-black/[.04] hover:text-foreground dark:hover:bg-white/[.08]",
-                ].join(" ")}
+                className={navLinkClassName(isActive)}
               >
                 {item.label}
               </Link>
