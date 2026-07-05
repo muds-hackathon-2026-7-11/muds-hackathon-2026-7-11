@@ -18,12 +18,19 @@ router = APIRouter(prefix="/users", tags=["users"])
 async def check_user_exists(
     email: str, db: AsyncSession = Depends(get_db)
 ) -> UserExistsOut:
-    """メールアドレスがusersに事前登録済みか返す(ログイン許可判定用)。
+    """メールアドレスがusersに事前登録済み(かつ有効)か返す(ログイン許可判定用)。
 
     事前登録済みのメールアドレスのみログインを許可するために、
     NextAuthのsignInコールバック(認証成立前=セッション無し)から呼ばれる。
     JWT認証は使えないため、web-api間の合言葉(require_internal_secret)で
     外部からの直接アクセス(学籍番号の総当たり等)を防ぐ。
+
+    is_active=false(卒業/退学者)はexists=falseとして扱い、ログインを拒否する。
     """
-    result = await db.execute(select(User).where(User.email == email.strip().lower()))
+    result = await db.execute(
+        select(User).where(
+            User.email == email.strip().lower(),
+            User.is_active.is_(True),
+        )
+    )
     return UserExistsOut(exists=result.scalar_one_or_none() is not None)
