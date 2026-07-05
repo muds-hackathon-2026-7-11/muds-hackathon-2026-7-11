@@ -152,7 +152,9 @@ async def import_csv(path: Path) -> None:
             teacher, created = await _get_or_create_teacher(
                 session,
                 name=row["教員氏名"].strip(),
-                email=row["教員メールアドレス"].strip(),
+                # import_users.py(Slackメンバー一覧の取り込み)と同じ正規化にし、
+                # 大文字小文字違いで同一教員が別レコードとして重複作成されるのを防ぐ。
+                email=row["教員メールアドレス"].strip().lower(),
                 photo_url=row["教員写真URL"].strip() or None,
             )
             if created:
