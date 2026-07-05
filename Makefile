@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed import-seminars link-slack-user backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -56,6 +56,9 @@ migration: ## generate a new Alembic migration (usage: make migration m="message
 
 seed: ## insert dev seed data (seminars)
 	cd apps/api && uv run python -m api.seed
+
+import-seminars: ## import real seminar/teacher data from CSV (default data/seminar_teacher.csv; override with csv=...)
+	cd apps/api && uv run python -m api.import_seminars "../../$(or $(csv),data/seminar_teacher.csv)"
 
 link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
 	cd apps/api && uv run python -m api.link_slack_user $(id)
