@@ -16,6 +16,7 @@ class MeOut(BaseModel):
     name: str
     role: UserRole
     student_id: str | None
+    grade: str | None
     research_theme: str | None
     slack_user_id: str | None
 

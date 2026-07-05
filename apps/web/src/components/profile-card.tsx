@@ -1,5 +1,8 @@
+import { LogoutButton } from "./logout-button";
+
 type ProfileCardProps = {
   name: string;
+  email: string;
   studentId: string | null;
   grade: string | null;
   researchTheme: string | null;
@@ -7,6 +10,7 @@ type ProfileCardProps = {
 
 export function ProfileCard({
   name,
+  email,
   studentId,
   grade,
   researchTheme,
@@ -15,9 +19,13 @@ export function ProfileCard({
 
   return (
     <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-      <div className="border-b border-black/[.08] pb-4 dark:border-white/[.145]">
-        <p className="font-semibold">{name}</p>
-        <p className="text-sm text-foreground/60">{meta}</p>
+      <div className="flex items-start justify-between gap-4 border-b border-black/[.08] pb-4 dark:border-white/[.145]">
+        <div>
+          <p className="font-semibold">{name}</p>
+          <p className="text-sm text-foreground/60">{email}</p>
+          <p className="text-sm text-foreground/60">{meta}</p>
+        </div>
+        <LogoutButton />
       </div>
 
       <div className="pt-4">
