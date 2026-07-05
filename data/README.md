@@ -30,3 +30,13 @@
    別名のファイルを使う場合は `make import-users csv=data/<ファイル名>.csv` のように指定する。
    ログイン前に投入しておけば、学生が実際にGoogleログインした際にメールアドレス
    一致で自動的にアカウントが紐付く。
+
+## まとめて投入
+
+デフォルトのファイル名(`seminar_teacher.csv`, `users.csv`)で両方揃っていれば、
+
+```sh
+make import-data
+```
+
+で`import-seminars`→`import-users`の順にまとめて実行できる。

@@ -66,7 +66,11 @@ def parse_fullname(fullname: str, email: str) -> ParsedProfile | None:
 
 
 async def _get_or_create_user(
-    session: AsyncSession, *, email: str, slack_user_id: str, profile: ParsedProfile
+    session: AsyncSession,
+    *,
+    email: str,
+    slack_user_id: str | None,
+    profile: ParsedProfile,
 ) -> tuple[User, bool]:
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -102,7 +106,9 @@ async def import_csv(path: Path) -> None:
         skipped = 0
 
         for row in rows:
-            email = row["email"].strip()
+            # Google OAuthのemail claimは小文字で返るため、大文字小文字の違いで
+            # 同一人物が別ユーザーとして再作成されないよう小文字に正規化する。
+            email = row["email"].strip().lower()
             profile = parse_fullname(row["fullname"], email)
             if profile is None:
                 skipped += 1
@@ -112,7 +118,7 @@ async def import_csv(path: Path) -> None:
             _, was_created = await _get_or_create_user(
                 session,
                 email=email,
-                slack_user_id=row["userid"].strip(),
+                slack_user_id=row["userid"].strip() or None,
                 profile=profile,
             )
             if was_created:

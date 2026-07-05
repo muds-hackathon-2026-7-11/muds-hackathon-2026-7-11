@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed import-seminars import-users link-slack-user backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed import-seminars import-users import-data link-slack-user backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -62,6 +62,8 @@ import-seminars: ## import real seminar/teacher data from CSV (default data/semi
 
 import-users: ## import real student/teacher data from Slack member CSV (default data/users.csv; override with csv=...)
 	cd apps/api && uv run python -m api.import_users "../../$(or $(csv),data/users.csv)"
+
+import-data: import-seminars import-users ## run import-seminars then import-users with default CSV paths
 
 link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
 	cd apps/api && uv run python -m api.link_slack_user $(id)
