@@ -8,7 +8,6 @@ import type { Session } from "next-auth";
 type Me = {
   name: string;
   email: string;
-  student_id: string | null;
   grade: string | null;
   research_theme: string | null;
 };
@@ -39,7 +38,6 @@ export default async function Home() {
           <ProfileCard
             name={me.name}
             email={me.email}
-            studentId={me.student_id}
             grade={me.grade}
             researchTheme={me.research_theme}
           />
