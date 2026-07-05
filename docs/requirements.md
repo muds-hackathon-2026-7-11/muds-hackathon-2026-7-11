@@ -301,7 +301,8 @@ CSVから一括登録。
 | name | varchar | NOT NULL | 氏名 |
 | role | enum | NOT NULL | student / teacher / admin |
 | grade | varchar | NULL | 学年(例: "B3", "MIDS/B1") |
-| research_theme | varchar | NULL | 研究テーマ・研究概要 |
+| research_theme | varchar | NULL | 研究テーマ・研究概要(学生本人が記入。教員はNULL) |
+| photo_url | varchar | NULL | 本人の写真(教員向け) |
 | is_active | boolean | NOT NULL DEFAULT true | ソフトデリート用(教員削除等) |
 | created_at | timestamp | NOT NULL | |
 | updated_at | timestamp | NOT NULL | |
@@ -309,6 +310,7 @@ CSVから一括登録。
 - `grade` はSlack表示名(`[B3] 氏名` 形式)からパースして同期。Slack連携時とログイン時に再取得すれば進級時の一括更新は不要
 - パース失敗時は NULL のままにし、マイページから本人が手動設定できる逃げ道を用意する
 - ユーザー削除は物理削除せず `is_active = false`(answers 等がFK参照しているため)
+- `photo_url` はゼミ詳細ページの教員紹介欄で使う。担当ゼミの `seminars.photo_url`(研究室写真)が設定されていればそちらを優先表示し、未設定の場合のみこの教員写真にフォールバックする
 
 #### seminar_teachers(担当教員)
 
