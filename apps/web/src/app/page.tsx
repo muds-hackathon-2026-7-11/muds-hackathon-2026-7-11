@@ -21,7 +21,7 @@ const MOCK_ME: Me = {
 
 async function getMe(): Promise<Me | null> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/me`, {
+    const res = await fetch(`${process.env.API_BASE_URL}/me`, {
       cache: "no-store",
     });
     if (!res.ok) {
