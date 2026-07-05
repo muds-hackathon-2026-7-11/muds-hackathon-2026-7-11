@@ -22,5 +22,10 @@ class Settings(BaseSettings):
     auth_dev_mode: bool = False
     auth_dev_user_email: str = "dev-student@example.com"
 
+    # --- CORS ---
+    # ブラウザ(apps/web)から直接叩けるようにするオリジン。slack-botと共有の
+    # WEB_APP_URL(ブラウザから見えるURL)をそのまま使う(#42)。
+    web_app_url: str = "http://localhost:3100"
+
 
 settings = Settings()

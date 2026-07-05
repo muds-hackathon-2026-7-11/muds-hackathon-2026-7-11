@@ -93,6 +93,6 @@ JWKS 経由で検証する。
 4. **起動して確認**: `make dev` → `http://localhost:3100` で「Googleでログイン」。
 
 ## メモ
-- ブラウザから FastAPI を直接叩く場合は API 側の CORS 対応が別途必要（別Issue）。
+- ブラウザから FastAPI を直接叩く場合、API側は `WEB_APP_URL` のオリジンのみCORS許可している（#42）。クライアントコンポーネントからは `apiFetch`、サーバーコンポーネント/Route Handler/Server Actionからは `serverApiFetch`（`apps/web/src/lib/api.ts`）を使い分けること。
 - 大学ドメイン限定にするには `AUTH_ALLOWED_EMAIL_DOMAINS`（カンマ区切り）を設定。空なら全許可。
 - アクセストークンの有効期限は 1 時間。期限が近づくとセッション更新時に自動で再発行される。
