@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ProfileCard } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
@@ -26,6 +27,9 @@ async function getMe(session: Session | null): Promise<Me | null> {
 
 export default async function Home() {
   const session = await auth();
+  if (!session) {
+    redirect("/login");
+  }
   const me = await getMe(session);
 
   return (
