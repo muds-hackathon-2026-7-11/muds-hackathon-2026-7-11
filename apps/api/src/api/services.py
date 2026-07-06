@@ -47,6 +47,10 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     status=open なだけでなく、starts_at <= today <= ends_at も満たす必要がある。
     運営が翌年度分を準備目的で早めに open にしても、開始日前は「募集中」として
     扱わないようにするため。
+
+    募集期間(1ヶ月程度)は「今年度が何年か」とは別の概念。ゼミ生の所属判定
+    (current_academic_year)には使わないこと — 募集期間外は常にNoneになる
+    ため、それに依存すると質問通知・現在のゼミ生表示が年中止まってしまう。
     """
     today = date.today()
     result = await db.execute(
@@ -62,24 +66,30 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     return result.scalar_one_or_none()
 
 
+def current_academic_year(today: date | None = None) -> int:
+    """今年度(4月始まり)を、募集期間の有無に関わらず暦日から計算する。
+
+    例: 2026-07-06 -> 2026年度。2026-03-31 -> 2025年度。
+    """
+    d = today or date.today()
+    return d.year if d.month >= 4 else d.year - 1
+
+
 async def find_answer_candidates(
     db: AsyncSession, *, seminar_id: uuid.UUID, exclude_user_id: uuid.UUID
 ) -> list[User]:
     """質問への回答候補者(今年度の現役ゼミ生+担当教員)のうち、
     Slack連携済み(slack_user_id設定済み)のユーザーを返す。
 
-    質問者自身(exclude_user_id)は除く。
+    質問者自身(exclude_user_id)は除く。募集期間中かどうかには関係なく、
+    年中いつでも通知できるようにする(質問・相談機能は募集期間限定ではない)。
     """
-    term = await get_current_term(db)
-    if term is None:
-        return []
-
     members_result = await db.execute(
         select(User)
         .join(SeminarMember, SeminarMember.student_id == User.id)
         .where(
             SeminarMember.seminar_id == seminar_id,
-            SeminarMember.academic_year == term.academic_year,
+            SeminarMember.academic_year == current_academic_year(),
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
         )

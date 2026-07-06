@@ -1,19 +1,17 @@
 import uuid
-from datetime import date
 
 import pytest
 from sqlalchemy import select
 
 from api.models import (
     AnswerRequest,
-    RecruitmentTerm,
-    RecruitmentTermStatus,
     Seminar,
     SeminarMember,
     SeminarTeacher,
     User,
     UserRole,
 )
+from api.services import current_academic_year
 from api.slack_client import SentDM
 
 pytestmark = pytest.mark.asyncio
@@ -28,19 +26,6 @@ async def _make_seminar(db_session) -> Seminar:
     db_session.add(seminar)
     await db_session.flush()
     return seminar
-
-
-async def _make_open_term(db_session) -> RecruitmentTerm:
-    today = date.today()
-    term = RecruitmentTerm(
-        academic_year=3000 + int(uuid.uuid4().int % 1000),
-        starts_at=today,
-        ends_at=today,
-        status=RecruitmentTermStatus.open,
-    )
-    db_session.add(term)
-    await db_session.flush()
-    return term
 
 
 async def _make_user(
@@ -72,7 +57,6 @@ async def _post_question(client, *, seminar_id, slack_user_id: str, content: str
 async def test_notifies_current_members_and_teachers(
     client, db_session, fake_slack_client
 ) -> None:
-    term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
     asker_slack_id = _unique("U-asker")
@@ -83,7 +67,7 @@ async def test_notifies_current_members_and_teachers(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=term.academic_year,
+            academic_year=current_academic_year(),
         )
     )
     teacher = await _make_user(db_session, UserRole.teacher, _unique("U-teacher"))
@@ -110,7 +94,6 @@ async def test_notifies_current_members_and_teachers(
 async def test_does_not_notify_users_without_slack_link(
     client, db_session, fake_slack_client
 ) -> None:
-    term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
     asker_slack_id = _unique("U-asker")
@@ -121,7 +104,7 @@ async def test_does_not_notify_users_without_slack_link(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=unlinked_member.id,
-            academic_year=term.academic_year,
+            academic_year=current_academic_year(),
         )
     )
     await db_session.flush()
@@ -137,7 +120,6 @@ async def test_does_not_notify_users_without_slack_link(
 async def test_does_not_notify_the_asker_even_if_current_member(
     client, db_session, fake_slack_client
 ) -> None:
-    term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
     asker_slack_id = _unique("U-asker")
@@ -146,7 +128,7 @@ async def test_does_not_notify_the_asker_even_if_current_member(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=asker.id,
-            academic_year=term.academic_year,
+            academic_year=current_academic_year(),
         )
     )
     await db_session.flush()
@@ -162,7 +144,6 @@ async def test_does_not_notify_the_asker_even_if_current_member(
 async def test_does_not_notify_past_members(
     client, db_session, fake_slack_client
 ) -> None:
-    term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
     asker_slack_id = _unique("U-asker")
@@ -173,7 +154,7 @@ async def test_does_not_notify_past_members(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=past_member.id,
-            academic_year=term.academic_year - 1,
+            academic_year=current_academic_year() - 1,
         )
     )
     await db_session.flush()
@@ -189,7 +170,6 @@ async def test_does_not_notify_past_members(
 async def test_notification_failure_does_not_block_question_creation(
     client, db_session, fake_slack_client, monkeypatch
 ) -> None:
-    term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
 
     asker_slack_id = _unique("U-asker")
@@ -200,7 +180,7 @@ async def test_notification_failure_does_not_block_question_creation(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=term.academic_year,
+            academic_year=current_academic_year(),
         )
     )
     await db_session.flush()

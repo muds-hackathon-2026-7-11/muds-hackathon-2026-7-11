@@ -15,6 +15,7 @@ from api.models import (
     User,
     UserRole,
 )
+from api.services import current_academic_year
 
 pytestmark = pytest.mark.asyncio
 
@@ -81,20 +82,22 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
         )
     )
 
+    # 現在のゼミ生判定は募集期間(academic_year)ではなく暦日の今年度で行うため、
+    # ここは実際のcurrent_academic_year()に合わせる。
     current_student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
     past_student = await _make_user(db_session, UserRole.student, "過去の研究テーマ")
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=current_student.id,
-            academic_year=academic_year,
+            academic_year=current_academic_year(),
         )
     )
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=past_student.id,
-            academic_year=academic_year - 1,
+            academic_year=current_academic_year() - 1,
         )
     )
     await db_session.flush()
@@ -118,6 +121,30 @@ async def test_get_seminar_detail_unknown_id_returns_404(client) -> None:
     resp = await client.get(f"/seminars/{uuid.uuid4()}")
 
     assert resp.status_code == 404
+
+
+async def test_get_seminar_detail_shows_current_members_without_active_term(
+    client, db_session
+) -> None:
+    # 現在のゼミ生表示は、募集期間(recruitment_terms)が1件も無い/期間外でも
+    # 暦日の今年度で判定されるべき(募集期間限定の機能ではないため)。
+    seminar = await _make_seminar(db_session)
+    current_student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id,
+            student_id=current_student.id,
+            academic_year=current_academic_year(),
+        )
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["capacity"] is None
+    assert {m["name"] for m in body["current_members"]} == {current_student.name}
 
 
 async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(

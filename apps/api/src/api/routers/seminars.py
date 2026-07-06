@@ -20,7 +20,7 @@ from api.schemas import (
     SeminarOut,
     TeacherOut,
 )
-from api.services import get_current_term
+from api.services import current_academic_year, get_current_term
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
 
@@ -104,21 +104,22 @@ async def get_seminar(
         SeminarMaterialOut.model_validate(m) for m in materials_result.scalars().all()
     ]
 
-    current_members: list[SeminarMemberOut] = []
-    if term is not None:
-        members_result = await db.execute(
-            select(User)
-            .join(SeminarMember, SeminarMember.student_id == User.id)
-            .where(
-                SeminarMember.seminar_id == seminar_id,
-                SeminarMember.academic_year == term.academic_year,
-            )
-            .order_by(User.name)
+    # 現在のゼミ生は募集期間の有無に関わらず、暦日から計算した今年度で判定する
+    # (募集期間はいつでもNoneになり得るため、それに依存すると募集期間外は
+    # 常に現在のゼミ生が0人表示になってしまう)。
+    members_result = await db.execute(
+        select(User)
+        .join(SeminarMember, SeminarMember.student_id == User.id)
+        .where(
+            SeminarMember.seminar_id == seminar_id,
+            SeminarMember.academic_year == current_academic_year(),
         )
-        current_members = [
-            SeminarMemberOut(id=u.id, name=u.name, research_theme=u.research_theme)
-            for u in members_result.scalars().all()
-        ]
+        .order_by(User.name)
+    )
+    current_members = [
+        SeminarMemberOut(id=u.id, name=u.name, research_theme=u.research_theme)
+        for u in members_result.scalars().all()
+    ]
 
     return SeminarDetailOut(
         id=seminar.id,
