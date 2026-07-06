@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed import-seminars import-users import-data link-slack-user backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-data link-slack-user backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -56,6 +56,9 @@ migration: ## generate a new Alembic migration (usage: make migration m="message
 
 seed: ## insert dev seed data (seminars)
 	cd apps/api && uv run python -m api.seed
+
+ensure-recruitment-term: ## create a recruitment period for a year if missing (usage: make ensure-recruitment-term year=2026)
+	cd apps/api && uv run python -m api.ensure_recruitment_term $(year)
 
 import-seminars: ## import real seminar/teacher data from CSV (default data/seminar_teacher.csv; override with csv=...)
 	cd apps/api && uv run python -m api.import_seminars "../../$(or $(csv),data/seminar_teacher.csv)"

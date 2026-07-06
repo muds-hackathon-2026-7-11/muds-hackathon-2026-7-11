@@ -71,6 +71,7 @@ make format     # web(Biome) + api・slack-bot(ruff format)
 make migrate    # devのDBにAlembicマイグレーションを適用
 make migration m="message"  # 新しいAlembicマイグレーションを生成
 make seed       # 開発用のゼミデータを投入(べき等)
+make ensure-recruitment-term year=2026  # 対象年度の募集期間を作成(べき等。実データ投入の前提)
 make link-slack-user id=U0XXXXXXX  # 自分のSlackユーザーIDをテスト用ユーザーに紐付け(Slack連携の動作確認用)
 make backup     # 手動でDBバックアップを取得(./backups/manual_*.dump)
 make backup-list  # バックアップ一覧を表示

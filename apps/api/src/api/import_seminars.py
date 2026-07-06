@@ -35,7 +35,8 @@ async def _get_recruitment_term(
     if term is None:
         raise SystemExit(
             f"{academic_year}年度の募集期間(recruitment_terms)が存在しません。"
-            "先に運営が募集期間を作成してください。"
+            f"先に `make ensure-recruitment-term year={academic_year}` を"
+            "実行してください。"
         )
     return term
 

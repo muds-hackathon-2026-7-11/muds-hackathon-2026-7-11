@@ -3,6 +3,23 @@
 実在の個人情報(教員氏名・メールアドレス・写真URL等)を含むデータファイルを置く場所。
 このディレクトリの中身(このREADME以外)はgit管理対象外。
 
+## セットアップの流れ(初回・まとめ)
+
+リポジトリ全体のセットアップ(`make install` / `make setup-auth` / `make dev`)は
+ルートの [README.md](../README.md) 参照。DB起動後、実データを投入するまでの流れ:
+
+```sh
+make migrate                          # テーブル作成
+make ensure-recruitment-term year=2026  # 対象年度の募集期間を作成(べき等)
+# data/seminar_teacher.csv と data/slack_member.csv をこのディレクトリに置く(下記参照)
+make import-data                      # ゼミ・教員・学生データをまとめて投入
+```
+
+`make ensure-recruitment-term`が無いと、`make import-seminars`(および`import-data`)は
+「◯年度の募集期間が存在しません」で失敗する(定員・応募は年度単位のrecruitment_termsに
+紐づく設計のため)。ダミーデータまで入る`make seed`は使わず、この専用コマンドで
+募集期間だけを作れる。
+
 ## ゼミ・教員データ
 
 1. `data/seminar_teacher.csv`という名前のcsvを置く
