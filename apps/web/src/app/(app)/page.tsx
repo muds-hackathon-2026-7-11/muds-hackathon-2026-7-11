@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LogoutButton } from "@/components/logout-button";
-import { ProfileCard } from "@/components/profile-card";
+import { ProfileCard, type ResearchTag } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
 import type { Session } from "next-auth";
 
@@ -11,6 +11,7 @@ type Me = {
   email: string;
   grade: string | null;
   research_theme: string | null;
+  interest_tags: ResearchTag[];
 };
 
 async function getMe(session: Session | null): Promise<Me | null> {
@@ -25,12 +26,31 @@ async function getMe(session: Session | null): Promise<Me | null> {
   }
 }
 
+async function getResearchTags(
+  session: Session | null,
+): Promise<ResearchTag[]> {
+  try {
+    const res = await serverApiFetch("/research-tags", session, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return [];
+    }
+    return (await res.json()) as ResearchTag[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function Home() {
   const session = await auth();
   if (!session) {
     redirect("/login");
   }
-  const me = await getMe(session);
+  const [me, researchTags] = await Promise.all([
+    getMe(session),
+    getResearchTags(session),
+  ]);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4">
@@ -46,6 +66,8 @@ export default async function Home() {
               email={me.email}
               grade={me.grade}
               researchTheme={me.research_theme}
+              interestTags={me.interest_tags}
+              allTags={researchTags}
             />
           ) : (
             <section className="rounded-lg border border-black/[.08] p-6 text-foreground/60 dark:border-white/[.145]">

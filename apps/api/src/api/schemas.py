@@ -12,6 +12,14 @@ from api.models import (
 )
 
 
+class ResearchTagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    category: str
+
+
 class MeOut(BaseModel):
     """認証済みユーザー自身の情報(GET /me)。"""
 
@@ -24,7 +32,15 @@ class MeOut(BaseModel):
     student_id: str | None
     grade: str | None
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
+
+
+class MeUpdateIn(BaseModel):
+    """本人の研究概要・興味分野タグの更新(PATCH /me)。"""
+
+    research_theme: str | None = Field(default=None, max_length=2000)
+    interest_tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
 
 class UserExistsOut(BaseModel):
@@ -49,6 +65,7 @@ class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarMaterialOut(BaseModel):
@@ -63,6 +80,7 @@ class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarDetailOut(SeminarOut):

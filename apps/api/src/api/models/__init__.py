@@ -14,6 +14,7 @@ from api.models.recruitment import (
     RecruitmentTermStatus,
     SeminarRecruitment,
 )
+from api.models.research_tag import ResearchTag, UserInterestTag
 from api.models.seminar import (
     MaterialType,
     Seminar,
@@ -39,11 +40,13 @@ __all__ = [
     "QuestionStatus",
     "RecruitmentTerm",
     "RecruitmentTermStatus",
+    "ResearchTag",
     "Seminar",
     "SeminarMaterial",
     "SeminarMember",
     "SeminarRecruitment",
     "SeminarTeacher",
     "User",
+    "UserInterestTag",
     "UserRole",
 ]
