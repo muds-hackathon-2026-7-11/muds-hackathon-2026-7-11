@@ -9,8 +9,10 @@ const LOCAL_DRAFT_KEY = "application-form-local-draft";
 
 // 募集期間外(is_editable=false)はAPIへの保存自体ができない(バックエンドが
 // 現在募集中の期間がない場合はPUTを拒否する)。そのため、この間の自動保存は
-// ブラウザのlocalStorageへ書くだけにし、募集期間が始まったら本人が改めて
-// 内容を確認・上書きしてサーバーへ保存する想定にする。
+// ブラウザのlocalStorageへ書くだけにする。
+// ただし既に提出済みの内容がある場合(choices.length > 0)は使わない
+// (canUseLocalDraft判定。募集期間外に試し書きした内容がlocalStorageに残ると、
+// 実際の提出内容より優先されてしまい、提出済みの内容を覆い隠してしまうため)。
 function loadLocalDraft(): [Slot, Slot, Slot] | null {
   if (typeof window === "undefined") {
     return null;
@@ -124,8 +126,13 @@ export function ApplicationForm({
   initialApplication,
 }: ApplicationFormProps) {
   const { data: session } = useSession();
+  // localStorageの下書きは「まだ何も提出していない」時だけ使う。既に提出済みの
+  // 内容がある場合にlocalStorageを優先/保存すると、期間外に試し書きした内容が
+  // 実際の提出内容を永久に覆い隠してしまうため。
+  const canUseLocalDraft =
+    !initialApplication.is_editable && initialApplication.choices.length === 0;
   const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() => {
-    if (!initialApplication.is_editable) {
+    if (canUseLocalDraft) {
       return loadLocalDraft() ?? toSlots(initialApplication.choices);
     }
     return toSlots(initialApplication.choices);
@@ -138,6 +145,7 @@ export function ApplicationForm({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   // 提出済みの内容は誤って書き換えないよう、まず読み取り専用で表示し、
@@ -149,6 +157,14 @@ export function ApplicationForm({
     null,
   );
   const isFirstRender = useRef(true);
+  // 編集中は自動保存しないため、通常は「戻る」時にサーバーへ送るものは何もない
+  // (何もPUTしていない)。ただし「提出する」を押した際にPUTだけ成功し、直後の
+  // POST(/submit)が失敗するケースがあり、その場合はサーバー側が編集後の内容
+  // で上書きされたまま残ってしまう。このrefはその「サーバー側が編集前と
+  // 食い違っている」状態だけを追跡し、戻る時に本当に必要な場合だけサーバーへ
+  // 書き戻す(毎回PUTすると提出日時が更新されたりマッチ度が消えたりするため、
+  // 不要な時は絶対に呼ばない)。
+  const serverDirtySinceEdit = useRef(false);
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -186,10 +202,15 @@ export function ApplicationForm({
   }
 
   // 保存(PUT)本体。バリデーションはせず、渡された内容をそのまま保存する。
-  // 編集中は自動保存しない(編集するボタンがある画面には提出済みの内容を
-  // 表示したいため、提出するを押すまでサーバー側の内容を変えない)。
-  // 保存対象を引数で明示的に受け取る(「提出する」の直前に保存する時、
-  // 現在のslots stateをそのまま渡すため)。
+  // 呼び出し元は「提出する」と、提出失敗後の「戻る」(サーバー側が編集後の
+  // 内容のまま残っている場合のみ)の2箇所。編集中の入力そのものからは
+  // 呼ばれない(自動保存はしない)。保存対象を引数で明示的に受け取るのは、
+  // 「戻る」の時は現在のslots stateではなくスナップショットを送りたいため。
+  //
+  // 注意: バックエンドのPUTは、既に提出済み(status=submitted)のフォームに
+  // 対しては内容が変わっていなくても提出日時(submitted_at)を更新し、
+  // match_score/match_feedbackを常にクリアする。呼ぶたびにこの副作用が
+  // 起きるため、本当に必要な時(=serverDirtySinceEdit)以外は呼ばないこと。
   const persistChoices = useCallback(
     async (slotsToSave: [Slot, Slot, Slot]): Promise<boolean> => {
       try {
@@ -223,15 +244,16 @@ export function ApplicationForm({
     [session],
   );
 
-  // 募集期間外はAPIへ保存できないので、入力が止まってから一定時間後に
-  // ブラウザのlocalStorageにだけ自動保存する。募集期間中(isEditable)は
-  // 自動保存しない(提出するを押すまでサーバー側の内容を変えないため)。
+  // 募集期間外・かつまだ提出済みの内容が無い時だけ、入力が止まってから
+  // 一定時間後にブラウザのlocalStorageに自動保存する(募集期間中は提出する
+  // を押すまでサーバー側の内容を変えない。既に提出済みならlocalStorageを
+  // 使わない=canUseLocalDraft)。
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    if (isEditable) {
+    if (!canUseLocalDraft) {
       return;
     }
 
@@ -240,7 +262,7 @@ export function ApplicationForm({
       setAutosaveState("saved");
     }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [isEditable, slots]);
+  }, [canUseLocalDraft, slots]);
 
   async function handleSubmitClick(): Promise<void> {
     setErrorMessage(null);
@@ -262,6 +284,10 @@ export function ApplicationForm({
       if (!saved) {
         return;
       }
+      // ここでPUTが成功した時点でサーバー側は編集後の内容になっている。
+      // この後のPOSTが失敗すると、サーバー側は編集前のスナップショットと
+      // 食い違ったまま残るため、「戻る」で必ず書き戻す必要がある。
+      serverDirtySinceEdit.current = true;
 
       const res = await apiFetch("/applications/me/submit", session, {
         method: "POST",
@@ -277,6 +303,7 @@ export function ApplicationForm({
       clearLocalDraft();
       setIsLocked(true);
       setSnapshotSlots(null);
+      serverDirtySinceEdit.current = false;
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
@@ -286,24 +313,49 @@ export function ApplicationForm({
 
   function handleEditClick(): void {
     setSnapshotSlots(slots);
+    serverDirtySinceEdit.current = false;
     setIsLocked(false);
     setErrorMessage(null);
     setSubmittedMessage(null);
     setAutosaveState("idle");
   }
 
-  // 編集中は自動保存しない(サーバー側は提出するを押すまで変わらない)ため、
-  // 元に戻すはローカルの表示をスナップショットへ戻すだけでよい。
-  function handleRevertClick(): void {
-    if (snapshotSlots) {
-      setSlots(snapshotSlots);
+  // 通常(提出を試みていない、または提出が最後まで成功している)は、編集中に
+  // サーバーへ何も送っていないため、戻るはローカルの表示を戻すだけでよい。
+  // 「提出する」でPUTだけ成功しPOSTが失敗した場合(serverDirtySinceEdit)だけ、
+  // サーバー側が編集後の内容のままなので、スナップショットを明示的に書き戻す。
+  // 毎回PUTしないのは、PUTのたびに提出日時が更新されたりマッチ度が消えたり
+  // する副作用があり、何も送る必要が無い時にそれを起こしたくないため。
+  async function handleRevertClick(): Promise<void> {
+    if (!snapshotSlots) {
+      setIsLocked(true);
+      return;
     }
-    setSnapshotSlots(null);
-    setIsLocked(true);
+
+    if (!serverDirtySinceEdit.current) {
+      setSlots(snapshotSlots);
+      setSnapshotSlots(null);
+      setIsLocked(true);
+      setErrorMessage(null);
+      return;
+    }
+
+    setIsReverting(true);
     setErrorMessage(null);
+    try {
+      const ok = await persistChoices(snapshotSlots);
+      if (!ok) {
+        return;
+      }
+      serverDirtySinceEdit.current = false;
+      setSnapshotSlots(null);
+      setIsLocked(true);
+    } finally {
+      setIsReverting(false);
+    }
   }
 
-  const isBusy = isSubmitting;
+  const isBusy = isSubmitting || isReverting;
   const autosaveLabel = {
     idle: "",
     saving: "保存中...",
@@ -320,10 +372,16 @@ export function ApplicationForm({
               提出日時: {formatDateTime(submittedAt)}
             </p>
           )}
-          {!isEditable && (
+          {!isEditable && canUseLocalDraft && (
             <p className="text-sm text-red-600 dark:text-red-400">
               ※
-              現在は募集期間外です。内容はこの端末に保存されますが、提出はできません。
+              現在は募集期間外です。提出はできません。
+            </p>
+          )}
+          {!isEditable && !canUseLocalDraft && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              ※
+              現在は募集期間外です。提出はできません。
             </p>
           )}
         </div>
@@ -466,7 +524,7 @@ export function ApplicationForm({
                 disabled={isBusy}
                 className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
               >
-                戻る
+                {isReverting ? "戻しています..." : "戻る"}
               </button>
             )}
           </div>

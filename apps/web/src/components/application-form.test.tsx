@@ -113,7 +113,7 @@ describe("ApplicationForm", () => {
     expect(screen.getByDisplayValue("興味があるため")).toBeInTheDocument();
   });
 
-  it("reverts to the read-only view without calling the API", async () => {
+  it("reverts to the read-only view without calling the API when nothing was ever sent to the server", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const submitted = emptyDraft({
@@ -144,7 +144,75 @@ describe("ApplicationForm", () => {
     expect(
       screen.getByRole("button", { name: "編集する" }),
     ).toBeInTheDocument();
+    // 編集中は自動保存しないため、通常の戻るはクライアント側だけで完結し、
+    // APIを呼ばない(毎回PUTすると提出日時が更新される副作用があるため)。
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("re-persists the snapshot to the server when reverting after a submit's PUT succeeded but POST failed", async () => {
+    const user = userEvent.setup();
+    const original: ApplicationFormData = {
+      id: "form-1",
+      status: "submitted",
+      submitted_at: "2026-07-01T00:00:00Z",
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+      is_editable: true,
+    };
+    const putAfterEdit: ApplicationFormData = {
+      ...original,
+      choices: [{ ...original.choices[0], reason: "書き換え中" }],
+    };
+    const revertPutResponse: ApplicationFormData = original;
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(putAfterEdit), { status: 200 }),
+      ) // 提出するボタン: PUTは成功
+      .mockResolvedValueOnce(new Response(null, { status: 500 })) // 提出するボタン: POSTは失敗
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(revertPutResponse), { status: 200 }),
+      ); // 戻るボタン: 巻き戻しのPUT
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={original} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "編集する" }));
+    const textarea = screen.getByDisplayValue("興味があるため");
+    await user.clear(textarea);
+    await user.type(textarea, "書き換え中");
+    await user.click(screen.getByRole("button", { name: "提出する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    await user.click(screen.getByRole("button", { name: "戻る" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("興味があるため")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: "編集する" }),
+    ).toBeInTheDocument();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const [url, init] = fetchSpy.mock.calls[2] as [string, RequestInit];
+    expect(url).toContain("/applications/me");
+    expect(init.method).toBe("PUT");
+    const body = JSON.parse(init.body as string);
+    expect(body.choices).toEqual([
+      { seminar_id: "sem-1", priority: 1, reason: "興味があるため" },
+    ]);
   });
 
   it("shows an error and does not call the API when no seminar is selected", async () => {
@@ -290,5 +358,37 @@ describe("ApplicationForm", () => {
       },
       { timeout: 2000 },
     );
+  });
+
+  it("does not let a stale localStorage draft override an already-submitted application", () => {
+    window.localStorage.setItem(
+      "application-form-local-draft",
+      JSON.stringify([
+        { seminarId: "sem-2", reason: "試し書き" },
+        { seminarId: "", reason: "" },
+        { seminarId: "", reason: "" },
+      ]),
+    );
+
+    const submitted = emptyDraft({
+      status: "submitted",
+      is_editable: false,
+      submitted_at: "2026-07-01T00:00:00Z",
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+    });
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={submitted} />,
+    );
+
+    expect(screen.getByDisplayValue("興味があるため")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("試し書き")).not.toBeInTheDocument();
   });
 });
