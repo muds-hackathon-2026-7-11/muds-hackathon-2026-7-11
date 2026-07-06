@@ -159,3 +159,38 @@ class SeminarRecruitmentOut(BaseModel):
     seminar_name: str
     capacity: int | None
     is_recruiting: bool | None
+
+
+# --- 教員向け応募者管理 (#58) ---
+
+
+class PastSeminarOut(BaseModel):
+    seminar_name: str
+    academic_year: int
+
+
+class ApplicantOut(BaseModel):
+    student_id: str | None
+    name: str
+    grade: str | None
+    priority: int
+    reason: str
+    past_seminars: list[PastSeminarOut]
+
+
+class SeminarApplicantsOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    applicants: list[ApplicantOut]
+
+
+class TeacherRecruitmentUpdate(BaseModel):
+    capacity: int = Field(ge=0)
+    is_recruiting: bool | None = None
+
+
+class TeacherRecruitmentOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    capacity: int | None
+    is_recruiting: bool | None
