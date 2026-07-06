@@ -59,19 +59,4 @@ describe("ProfileCard", () => {
 
     expect(screen.getByRole("button", { name: "編集" })).toBeDisabled();
   });
-
-  it("renders a logout button", () => {
-    render(
-      <ProfileCard
-        name="山田 太郎"
-        email="s2300000@stu.musashino-u.ac.jp"
-        grade={null}
-        researchTheme={null}
-      />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "ログアウト" }),
-    ).toBeInTheDocument();
-  });
 });

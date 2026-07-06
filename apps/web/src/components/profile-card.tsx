@@ -1,5 +1,3 @@
-import { LogoutButton } from "./logout-button";
-
 type ProfileCardProps = {
   name: string;
   email: string;
@@ -15,13 +13,10 @@ export function ProfileCard({
 }: ProfileCardProps) {
   return (
     <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-      <div className="flex items-start justify-between gap-4 border-b border-black/[.08] pb-4 dark:border-white/[.145]">
-        <div>
-          <p className="font-semibold">{name}</p>
-          <p className="text-sm text-foreground/60">{email}</p>
-          <p className="text-sm text-foreground/60">{grade ?? "未設定"}</p>
-        </div>
-        <LogoutButton />
+      <div className="border-b border-black/[.08] pb-4 dark:border-white/[.145]">
+        <p className="font-semibold">{name}</p>
+        <p className="text-sm text-foreground/60">{email}</p>
+        <p className="text-sm text-foreground/60">{grade ?? "未設定"}</p>
       </div>
 
       <div className="pt-4">
