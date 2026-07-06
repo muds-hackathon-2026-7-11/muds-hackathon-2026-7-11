@@ -28,11 +28,11 @@ body {
 
 /* 画面外周のビネット。縁から内側に向かって黒くぼかし、中央を明るく見せる。 */
 .vignette {
-  box-shadow: inset 0 0 12rem 3rem rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 3rem 0 rgba(0, 0, 0, 0.3);
 }
 
 @media (prefers-color-scheme: dark) {
   .vignette {
-    box-shadow: inset 0 0 12rem 3rem rgba(0, 0, 0, 0.75);
+    box-shadow: inset 0 0 3rem 0 rgba(0, 0, 0, 0.7);
   }
 }
