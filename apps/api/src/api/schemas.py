@@ -150,6 +150,8 @@ class ApplicationFormOut(BaseModel):
     # 現在アクティブな募集期間の内容ならtrue。falseは過去期間の閲覧専用表示
     # (提出期間外でも直近の提出内容は見えるが、編集・再提出はできない)。
     is_editable: bool
+
+
 # --- 運営: 募集ラウンド・定員設定 (#57) ---
 
 
