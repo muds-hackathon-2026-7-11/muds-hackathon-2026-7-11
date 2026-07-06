@@ -6,6 +6,7 @@ import { useState } from "react";
 
 const navItems = [
   { label: "マイページ", href: "/" },
+  { label: "志望提出", href: "/apply" },
   { label: "配属状況", href: "/assignment" },
 ] as const;
 
