@@ -1,11 +1,15 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import get_current_user
 from api.db import get_db
 from api.models import (
+    ApplicationChoice,
+    ApplicationForm,
+    ApplicationStatus,
     Seminar,
     SeminarMaterial,
     SeminarMember,
@@ -14,10 +18,12 @@ from api.models import (
     User,
 )
 from api.schemas import (
+    PriorityCounts,
     SeminarDetailOut,
     SeminarMaterialOut,
     SeminarMemberOut,
     SeminarOut,
+    SeminarStatsOut,
     TeacherOut,
 )
 from api.services import get_current_term
@@ -65,6 +71,106 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
         )
         for seminar, capacity in result.all()
     ]
+
+
+@router.get("/stats", response_model=list[SeminarStatsOut])
+async def seminar_stats(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[SeminarStatsOut]:
+    """現在の募集ラウンド基準で、ゼミ別の応募状況を集計して返す。
+
+    ルート定義は `/{seminar_id}` より前に置くこと（"stats" がUUIDとして
+    解釈されるのを避けるため）。
+    """
+    seminars = (
+        (await db.execute(select(Seminar).order_by(Seminar.name))).scalars().all()
+    )
+    term = await get_current_term(db)
+
+    if term is None:
+        return [
+            SeminarStatsOut(
+                id=s.id,
+                name=s.name,
+                capacity=None,
+                applicant_count=0,
+                priority_counts=PriorityCounts(first=0, second=0, third=0),
+                grade_counts={},
+                ratio=None,
+                continuing_count=0,
+            )
+            for s in seminars
+        ]
+
+    # ゼミごとの定員
+    capacity_rows = await db.execute(
+        select(SeminarRecruitment.seminar_id, SeminarRecruitment.capacity).where(
+            SeminarRecruitment.term_id == term.id
+        )
+    )
+    capacity_by_seminar: dict[uuid.UUID, int] = {
+        sid: cap for sid, cap in capacity_rows.all()
+    }
+
+    # 志望内容（当該ラウンドの提出済み・在籍学生のみ）
+    choice_rows = await db.execute(
+        select(ApplicationChoice.seminar_id, ApplicationChoice.priority, User.grade)
+        .join(
+            ApplicationForm,
+            ApplicationChoice.application_form_id == ApplicationForm.id,
+        )
+        .join(User, ApplicationForm.student_id == User.id)
+        .where(
+            ApplicationForm.term_id == term.id,
+            ApplicationForm.status == ApplicationStatus.submitted,
+            User.is_active.is_(True),
+        )
+    )
+    applicant_count: dict[uuid.UUID, int] = {}
+    priority_by_seminar: dict[uuid.UUID, dict[int, int]] = {}
+    grade_by_seminar: dict[uuid.UUID, dict[str, int]] = {}
+    for seminar_id, priority, grade in choice_rows.all():
+        applicant_count[seminar_id] = applicant_count.get(seminar_id, 0) + 1
+        priorities = priority_by_seminar.setdefault(seminar_id, {1: 0, 2: 0, 3: 0})
+        priorities[priority] = priorities.get(priority, 0) + 1
+        grades = grade_by_seminar.setdefault(seminar_id, {})
+        grade_key = grade or "不明"
+        grades[grade_key] = grades.get(grade_key, 0) + 1
+
+    # 継続者（現年度の所属ゼミ生数）
+    member_rows = await db.execute(
+        select(SeminarMember.seminar_id, func.count())
+        .where(SeminarMember.academic_year == term.academic_year)
+        .group_by(SeminarMember.seminar_id)
+    )
+    continuing_by_seminar: dict[uuid.UUID, int] = {
+        sid: cnt for sid, cnt in member_rows.all()
+    }
+
+    stats: list[SeminarStatsOut] = []
+    for s in seminars:
+        capacity = capacity_by_seminar.get(s.id)
+        count = applicant_count.get(s.id, 0)
+        ratio = round(count / capacity, 2) if capacity else None
+        priorities = priority_by_seminar.get(s.id, {1: 0, 2: 0, 3: 0})
+        stats.append(
+            SeminarStatsOut(
+                id=s.id,
+                name=s.name,
+                capacity=capacity,
+                applicant_count=count,
+                priority_counts=PriorityCounts(
+                    first=priorities.get(1, 0),
+                    second=priorities.get(2, 0),
+                    third=priorities.get(3, 0),
+                ),
+                grade_counts=grade_by_seminar.get(s.id, {}),
+                ratio=ratio,
+                continuing_count=continuing_by_seminar.get(s.id, 0),
+            )
+        )
+    return stats
 
 
 @router.get("/{seminar_id}", response_model=SeminarDetailOut)
