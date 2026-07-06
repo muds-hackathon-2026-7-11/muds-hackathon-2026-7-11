@@ -44,9 +44,13 @@
 
 ```bash
 cp .env.example .env
-make install   # pnpm install + uv sync
-make dev       # docker compose up --build (db / api / web / slack-bot)
+make install     # pnpm install + uv sync
+make setup-auth  # ローカル認証キー(AUTH_SECRET/AUTH_JWT_PRIVATE_KEY)を.envに自動生成
+make dev         # docker compose up --build (db / api / web / slack-bot)
 ```
+
+Googleログインを使う場合の追加設定（共有するOAuthクライアント・テストユーザー登録など）は
+[docs/authentication.md](docs/authentication.md) を参照。
 
 起動後のURL:
 
@@ -67,6 +71,7 @@ make format     # web(Biome) + api・slack-bot(ruff format)
 make migrate    # devのDBにAlembicマイグレーションを適用
 make migration m="message"  # 新しいAlembicマイグレーションを生成
 make seed       # 開発用のゼミデータを投入(べき等)
+make ensure-recruitment-term year=2026  # dev/デモ用に対象年度の募集期間を1件作成(べき等)
 make link-slack-user id=U0XXXXXXX  # 自分のSlackユーザーIDをテスト用ユーザーに紐付け(Slack連携の動作確認用)
 make backup     # 手動でDBバックアップを取得(./backups/manual_*.dump)
 make backup-list  # バックアップ一覧を表示

@@ -1,5 +1,4 @@
 import asyncio
-from datetime import date
 from typing import TypedDict
 
 from sqlalchemy import select
@@ -10,8 +9,6 @@ from api.models import (
     AnswerSource,
     MaterialType,
     Question,
-    RecruitmentTerm,
-    RecruitmentTermStatus,
     Seminar,
     SeminarMaterial,
     SeminarMember,
@@ -20,6 +17,7 @@ from api.models import (
     User,
     UserRole,
 )
+from api.recruitment_terms import get_or_create_recruitment_term
 from api.services import record_answer
 
 CURRENT_ACADEMIC_YEAR = 2026
@@ -241,33 +239,9 @@ async def _get_or_create_user(
     return user, True
 
 
-async def _get_or_create_recruitment_term(
-    session: AsyncSession, academic_year: int
-) -> tuple[RecruitmentTerm, bool]:
-    result = await session.execute(
-        select(RecruitmentTerm).where(RecruitmentTerm.academic_year == academic_year)
-    )
-    term = result.scalar_one_or_none()
-    if term is not None:
-        return term, False
-
-    # 開発中ずっと「募集中」として扱われるよう、期間は年度いっぱいまで広めに取る
-    # (本来の募集期間は4〜5月の1ヶ月程度を想定しているが、シードデータは
-    # 開発・デモ用途で使い続けられることを優先する)。
-    term = RecruitmentTerm(
-        academic_year=academic_year,
-        starts_at=date(academic_year, 4, 1),
-        ends_at=date(academic_year, 12, 31),
-        status=RecruitmentTermStatus.open,
-    )
-    session.add(term)
-    await session.flush()
-    return term, True
-
-
 async def seed_all() -> None:
     async with async_session() as session:
-        term, term_created = await _get_or_create_recruitment_term(
+        term, term_created = await get_or_create_recruitment_term(
             session, CURRENT_ACADEMIC_YEAR
         )
 

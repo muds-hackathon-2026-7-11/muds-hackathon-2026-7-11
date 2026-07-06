@@ -247,12 +247,14 @@ CSVから一括登録。
 
 #### recruitment_terms(募集期間・年度)
 
-全ゼミ共通の募集期間を年度単位で管理する。
+全ゼミ共通の募集期間を年度単位で管理する。1年度に何回募集するか(前期・後期等)
+は固定せず、運営がUI/APIで自由に期間を作成できるようにするため、
+academic_yearに一意制約は設けない(同一年度に複数レコードを許可する)。
 
 | カラム | 型 | 制約 | 説明 |
 |---|---|---|---|
 | id | UUID | PK | |
-| academic_year | int | UNIQUE, NOT NULL | 対象年度(例: 2026) |
+| academic_year | int | NOT NULL | 対象年度(例: 2026) |
 | starts_at | date | NOT NULL | 募集開始日 |
 | ends_at | date | NOT NULL | 募集終了日(提出締切) |
 | status | enum | NOT NULL | preparing / open / closed |
@@ -260,7 +262,9 @@ CSVから一括登録。
 | updated_at | timestamp | NOT NULL | |
 
 - 提出可否の判定は `status = open` かつ `ends_at` 以前で行う
-- 運営の「募集期間設定」画面はこのテーブルを編集する
+- 運営の「募集期間設定」画面はこのテーブルを編集する([Backend] 運営: 募集ラウンド・定員設定API #57)
+- 「現在アクティブな募集」は、運営が作成する各期間の日付レンジが重ならない
+  運用を前提に、`status = open` かつ日付レンジ内のものを高々1件に絞り込んで判定する
 
 #### seminars(ゼミ)
 
@@ -301,7 +305,8 @@ CSVから一括登録。
 | name | varchar | NOT NULL | 氏名 |
 | role | enum | NOT NULL | student / teacher / admin |
 | grade | varchar | NULL | 学年(例: "B3", "MIDS/B1") |
-| research_theme | varchar | NULL | 研究テーマ・研究概要 |
+| research_theme | varchar | NULL | 研究テーマ・研究概要(学生本人が記入。教員はNULL) |
+| photo_url | varchar | NULL | 本人の写真(教員向け) |
 | is_active | boolean | NOT NULL DEFAULT true | ソフトデリート用(教員削除等) |
 | created_at | timestamp | NOT NULL | |
 | updated_at | timestamp | NOT NULL | |
@@ -309,6 +314,7 @@ CSVから一括登録。
 - `grade` はSlack表示名(`[B3] 氏名` 形式)からパースして同期。Slack連携時とログイン時に再取得すれば進級時の一括更新は不要
 - パース失敗時は NULL のままにし、マイページから本人が手動設定できる逃げ道を用意する
 - ユーザー削除は物理削除せず `is_active = false`(answers 等がFK参照しているため)
+- `photo_url` はゼミ詳細ページの教員紹介欄で使う。担当ゼミの `seminars.photo_url`(研究室写真)が設定されていればそちらを優先表示し、未設定の場合のみこの教員写真にフォールバックする
 
 #### seminar_teachers(担当教員)
 

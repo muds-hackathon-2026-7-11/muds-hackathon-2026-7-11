@@ -1,11 +1,32 @@
-from fastapi import FastAPI
+import logging
 
-from api.routers import answers, questions, seminars
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.config import settings
+from api.routers import answers, me, questions, seminars, users
+
+logger = logging.getLogger(__name__)
+
+if settings.auth_dev_mode:
+    # 本番で誤って有効化した場合に気づけるよう、起動時に警告を出す。
+    logger.warning(
+        "AUTH_DEV_MODE is ON: JWT検証をスキップしX-Dev-User-Emailで認証します。"
+        "ローカル/CI専用の設定です。本番では必ず false にしてください。"
+    )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.web_app_url],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(seminars.router)
 app.include_router(questions.router)
 app.include_router(answers.router)
+app.include_router(me.router)
+app.include_router(users.router)
 
 
 @app.get("/health")

@@ -3,7 +3,28 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.models import MaterialType, QuestionStatus
+from api.models import MaterialType, QuestionStatus, UserRole
+
+
+class MeOut(BaseModel):
+    """認証済みユーザー自身の情報(GET /me)。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    name: str
+    role: UserRole
+    student_id: str | None
+    grade: str | None
+    research_theme: str | None
+    slack_user_id: str | None
+
+
+class UserExistsOut(BaseModel):
+    """メールアドレスが事前登録済みか(ログイン許可判定用)。"""
+
+    exists: bool
 
 
 class SeminarOut(BaseModel):

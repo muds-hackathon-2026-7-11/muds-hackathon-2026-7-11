@@ -1,4 +1,4 @@
-.PHONY: help install dev dev-build down logs ps lint typecheck test format migrate migration seed link-slack-user backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-data link-slack-user backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -7,6 +7,9 @@ install: ## install JS and Python dependencies
 	pnpm install
 	cd apps/api && uv sync
 	cd services/slack-bot && uv sync
+
+setup-auth: ## generate local auth keys into .env (AUTH_SECRET / AUTH_JWT_PRIVATE_KEY, idempotent)
+	./scripts/setup-auth.sh
 
 dev: ## start db/api/web via docker compose (build if needed)
 	docker compose up --build
@@ -53,6 +56,17 @@ migration: ## generate a new Alembic migration (usage: make migration m="message
 
 seed: ## insert dev seed data (seminars)
 	cd apps/api && uv run python -m api.seed
+
+ensure-recruitment-term: ## create a recruitment period for a year if missing (usage: make ensure-recruitment-term year=2026)
+	cd apps/api && uv run python -m api.ensure_recruitment_term $(year)
+
+import-seminars: ## import real seminar/teacher data from CSV (default data/seminar_teacher.csv; override with csv=...)
+	cd apps/api && uv run python -m api.import_seminars "../../$(or $(csv),data/seminar_teacher.csv)"
+
+import-users: ## import real student/teacher data from Slack workspace member CSV (default data/slack_member.csv; override with csv=...)
+	cd apps/api && uv run python -m api.import_users "../../$(or $(csv),data/slack_member.csv)"
+
+import-data: import-seminars import-users ## run import-seminars then import-users with default CSV paths
 
 link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
 	cd apps/api && uv run python -m api.link_slack_user $(id)
