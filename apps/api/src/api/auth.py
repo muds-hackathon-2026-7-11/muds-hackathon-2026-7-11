@@ -178,6 +178,20 @@ async def get_current_user(
     )
 
 
+async def require_internal_secret(request: Request) -> None:
+    """web-api間の合言葉を要求する依存。
+
+    ログイン前(未認証)に呼ぶ必要がありJWT検証を通せないエンドポイント
+    (/users/exists 等)を、webサーバー以外からの直接アクセスから守る。
+    """
+    provided = request.headers.get("X-Internal-Secret")
+    if not settings.internal_api_secret or provided != settings.internal_api_secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="このエンドポイントは内部からのみ呼び出せます。",
+        )
+
+
 def require_role(
     *roles: UserRole,
 ) -> Callable[[User], Awaitable[User]]:

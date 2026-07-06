@@ -31,4 +31,5 @@ class User(IDMixin, TimestampMixin, Base):
     )
     grade: Mapped[str | None] = mapped_column(String, nullable=True)
     research_theme: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

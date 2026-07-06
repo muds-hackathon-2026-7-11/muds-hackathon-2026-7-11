@@ -51,3 +51,7 @@ next-env.d.ts
 
 # personal private materials - local only, never commit/share
 /.private/
+
+# 実在の個人情報を含むデータファイル(スプレッドシート経由で配布、gitには入れない)
+/data/*
+!/data/README.md
