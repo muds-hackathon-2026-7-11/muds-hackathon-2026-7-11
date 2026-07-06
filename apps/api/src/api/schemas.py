@@ -3,7 +3,12 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.models import MaterialType, QuestionStatus, UserRole
+from api.models import (
+    MaterialType,
+    QuestionStatus,
+    RecruitmentTermStatus,
+    UserRole,
+)
 
 
 class MeOut(BaseModel):
@@ -90,3 +95,43 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+# --- 運営: 募集ラウンド・定員設定 (#57) ---
+
+
+class RecruitmentTermCreate(BaseModel):
+    academic_year: int
+    starts_at: date
+    ends_at: date
+    status: RecruitmentTermStatus = RecruitmentTermStatus.preparing
+
+
+class RecruitmentTermUpdate(BaseModel):
+    starts_at: date | None = None
+    ends_at: date | None = None
+    status: RecruitmentTermStatus | None = None
+
+
+class RecruitmentTermOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    academic_year: int
+    starts_at: date
+    ends_at: date
+    status: RecruitmentTermStatus
+
+
+class SeminarRecruitmentUpsert(BaseModel):
+    capacity: int = Field(ge=0)
+    is_recruiting: bool = True
+
+
+class SeminarRecruitmentOut(BaseModel):
+    """募集ラウンドでのゼミ別設定。未設定のゼミは値が null。"""
+
+    seminar_id: uuid.UUID
+    seminar_name: str
+    capacity: int | None
+    is_recruiting: bool | None
