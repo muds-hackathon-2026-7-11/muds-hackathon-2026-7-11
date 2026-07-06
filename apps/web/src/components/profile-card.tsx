@@ -33,11 +33,14 @@ type ProfileCardProps = {
 };
 
 async function extractErrorDetail(res: Response): Promise<string> {
+  const fallback = "保存に失敗しました。";
   try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "保存に失敗しました。";
+    const body = (await res.json()) as { detail?: unknown };
+    // FastAPIのバリデーションエラー(422)はdetailが配列で返るため、
+    // string以外はそのまま描画せずフォールバックにする。
+    return typeof body.detail === "string" ? body.detail : fallback;
   } catch {
-    return "保存に失敗しました。";
+    return fallback;
   }
 }
 

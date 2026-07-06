@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
+from api.auth import get_current_user, require_role
 from api.db import get_db
-from api.models import ResearchTag, User, UserInterestTag
+from api.models import ResearchTag, User, UserInterestTag, UserRole
 from api.schemas import MeOut, MeUpdateIn, ResearchTagOut
 
 router = APIRouter(tags=["auth"])
@@ -52,15 +52,20 @@ async def read_me(
 async def update_me(
     payload: MeUpdateIn,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(
+        require_role(UserRole.student, UserRole.teacher, UserRole.admin)
+    ),
 ) -> MeOut:
     """本人の研究概要・興味分野タグを更新する。"""
-    if payload.interest_tag_ids:
+    # 同じタグIDが複数回送られても1件として扱う(順序は維持)。
+    tag_ids = list(dict.fromkeys(payload.interest_tag_ids))
+
+    if tag_ids:
         result = await db.execute(
-            select(ResearchTag.id).where(ResearchTag.id.in_(payload.interest_tag_ids))
+            select(ResearchTag.id).where(ResearchTag.id.in_(tag_ids))
         )
         valid_ids = {row[0] for row in result.all()}
-        unknown_ids = set(payload.interest_tag_ids) - valid_ids
+        unknown_ids = set(tag_ids) - valid_ids
         if unknown_ids:
             ids_label = ", ".join(str(tag_id) for tag_id in sorted(unknown_ids))
             raise HTTPException(
@@ -71,12 +76,7 @@ async def update_me(
     user.research_theme = payload.research_theme
 
     await db.execute(delete(UserInterestTag).where(UserInterestTag.user_id == user.id))
-    db.add_all(
-        [
-            UserInterestTag(user_id=user.id, tag_id=tag_id)
-            for tag_id in payload.interest_tag_ids
-        ]
-    )
+    db.add_all([UserInterestTag(user_id=user.id, tag_id=tag_id) for tag_id in tag_ids])
     await db.flush()
 
     tags = await _get_interest_tags(db, user_id=user.id)

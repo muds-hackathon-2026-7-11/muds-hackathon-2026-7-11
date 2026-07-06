@@ -148,6 +148,37 @@ async def test_patch_me_can_clear_research_theme(client, db_session) -> None:
     assert resp.json()["research_theme"] is None
 
 
+async def test_patch_me_dedupes_repeated_tag_id(client, db_session) -> None:
+    user = await _make_user(db_session)
+    tag = await _make_tag(db_session, "機械学習")
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={
+            "research_theme": None,
+            "interest_tag_ids": [str(tag.id), str(tag.id)],
+        },
+    )
+
+    assert resp.status_code == 200
+    assert [t["name"] for t in resp.json()["interest_tags"]] == [tag.name]
+
+
+async def test_patch_me_forbidden_for_inactive_user(client, db_session) -> None:
+    user = await _make_user(db_session)
+    user.is_active = False
+    await db_session.flush()
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={"research_theme": "退会後の変更", "interest_tag_ids": []},
+    )
+
+    assert resp.status_code == 403
+
+
 async def test_patch_me_only_updates_own_profile(client, db_session) -> None:
     user_a = await _make_user(db_session)
     user_b = await _make_user(db_session)
