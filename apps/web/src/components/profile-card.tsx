@@ -221,9 +221,7 @@ export function ProfileCard({
               </div>
 
               <div className="flex min-h-0 flex-col">
-                <p className="text-sm text-foreground/60">
-                  タグ
-                </p>
+                <p className="text-sm text-foreground/60">タグ</p>
                 <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-black/[.08] bg-black/[.02] p-3 dark:border-white/[.145] dark:bg-white/[.03]">
                   {groupTagsByCategory(allTags).map(([category, tags]) => (
                     <div key={category}>
