@@ -1,8 +1,65 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+
+const AUTOSAVE_DELAY_MS = 1000;
+const LOCAL_DRAFT_KEY = "application-form-local-draft";
+
+// 募集期間外(is_editable=false)はAPIへの保存自体ができない(バックエンドが
+// 現在募集中の期間がない場合はPUTを拒否する)。そのため、この間の自動保存は
+// ブラウザのlocalStorageへ書くだけにし、募集期間が始まったら本人が改めて
+// 内容を確認・上書きしてサーバーへ保存する想定にする。
+function loadLocalDraft(): [Slot, Slot, Slot] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 3) {
+      return null;
+    }
+    return parsed as [Slot, Slot, Slot];
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDraft(slots: [Slot, Slot, Slot]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(slots));
+  } catch {
+    // ストレージが使えない環境(プライベートモード等)では何もしない。
+  }
+}
+
+function clearLocalDraft(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(LOCAL_DRAFT_KEY);
+  } catch {
+    // ストレージが使えない環境(プライベートモード等)では何もしない。
+  }
+}
+
+async function extractErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: string };
+    return body.detail ?? "エラーが発生しました。";
+  } catch {
+    return "エラーが発生しました。";
+  }
+}
 
 export type Seminar = {
   id: string;
@@ -67,18 +124,24 @@ export function ApplicationForm({
   initialApplication,
 }: ApplicationFormProps) {
   const { data: session } = useSession();
-  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() =>
-    toSlots(initialApplication.choices),
-  );
+  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() => {
+    if (!initialApplication.is_editable) {
+      return loadLocalDraft() ?? toSlots(initialApplication.choices);
+    }
+    return toSlots(initialApplication.choices);
+  });
   const [status, setStatus] = useState(initialApplication.status);
   const [submittedAt, setSubmittedAt] = useState(
     initialApplication.submitted_at,
   );
   const isEditable = initialApplication.is_editable;
-  const [isSaving, setIsSaving] = useState(false);
+  const [autosaveState, setAutosaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const isFirstRender = useRef(true);
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -115,31 +178,23 @@ export function ApplicationForm({
       .map(({ index }) => PRIORITY_LABELS[index]);
   }
 
-  async function extractErrorDetail(res: Response): Promise<string> {
-    try {
-      const body = (await res.json()) as { detail?: string };
-      return body.detail ?? "エラーが発生しました。";
-    } catch {
-      return "エラーが発生しました。";
-    }
-  }
-
-  async function saveDraft(): Promise<boolean> {
-    setErrorMessage(null);
-    setSavedMessage(null);
-
-    const missing = missingReasonLabels();
-    if (missing.length > 0) {
-      setErrorMessage(`${missing.join("・")}の志望理由が未入力です。`);
-      return false;
-    }
-
-    setIsSaving(true);
+  // 保存(PUT)本体。バリデーションはせず、今の入力内容をそのまま保存する
+  // (Googleフォームのように、ボタンを押さなくても裏で保存され続ける)。
+  const persistChoices = useCallback(async (): Promise<boolean> => {
     try {
       const res = await apiFetch("/applications/me", session, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ choices: buildPayloadChoices() }),
+        body: JSON.stringify({
+          choices: slots
+            .map((slot, index) => ({ slot, priority: index + 1 }))
+            .filter(({ slot }) => slot.seminarId !== "")
+            .map(({ slot, priority }) => ({
+              seminar_id: slot.seminarId,
+              priority,
+              reason: slot.reason,
+            })),
+        }),
       });
       if (!res.ok) {
         setErrorMessage(await extractErrorDetail(res));
@@ -153,27 +208,56 @@ export function ApplicationForm({
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
       return false;
-    } finally {
-      setIsSaving(false);
     }
-  }
+  }, [session, slots]);
 
-  async function handleSaveClick(): Promise<void> {
-    const ok = await saveDraft();
-    if (ok) {
-      setSavedMessage("下書きを保存しました。");
+  // 入力が止まってから一定時間後に自動保存する(タイピング中に毎回保存
+  // リクエストを送らないため)。募集期間外はAPIへは保存できないので、
+  // ブラウザのlocalStorageにだけ保存する(募集期間中はAPIへ保存する)。
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
     }
-  }
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!isEditable) {
+      const timer = setTimeout(() => {
+        saveLocalDraft(slots);
+        setAutosaveState("saved");
+      }, AUTOSAVE_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+
+    const timer = setTimeout(async () => {
+      setAutosaveState("saving");
+      setErrorMessage(null);
+      const ok = await persistChoices();
+      setAutosaveState(ok ? "saved" : "error");
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [isEditable, isSubmitting, persistChoices, slots]);
 
   async function handleSubmitClick(): Promise<void> {
+    setErrorMessage(null);
+    setSubmittedMessage(null);
+
     if (buildPayloadChoices().length === 0) {
       setErrorMessage("志望を1件以上入力してください。");
+      return;
+    }
+    const missing = missingReasonLabels();
+    if (missing.length > 0) {
+      setErrorMessage(`${missing.join("・")}の志望理由が未入力です。`);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const saved = await saveDraft();
+      const saved = await persistChoices();
       if (!saved) {
         return;
       }
@@ -189,7 +273,8 @@ export function ApplicationForm({
       setStatus(data.status);
       setSubmittedAt(data.submitted_at);
       setSlots(toSlots(data.choices));
-      setSavedMessage("志望を提出しました。");
+      setSubmittedMessage("志望を提出しました。");
+      clearLocalDraft();
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
@@ -197,35 +282,48 @@ export function ApplicationForm({
     }
   }
 
-  const isBusy = isSaving || isSubmitting;
+  const isBusy = isSubmitting;
+  const autosaveLabel = {
+    idle: "",
+    saving: "保存中...",
+    saved: isEditable ? "保存済み" : "端末に保存済み",
+    error: "",
+  }[autosaveState];
 
   return (
     <div className="flex flex-col gap-4">
-      {submittedAt && (
-        <p className="text-sm text-foreground/60">
-          提出日時: {formatDateTime(submittedAt)}
-        </p>
-      )}
-      {isEditable && status === "submitted" && (
-        <p className="text-sm text-foreground/60">
-          締切前であれば、内容を編集して再提出できます。
-        </p>
-      )}
-      {!isEditable && (
-        <p className="text-sm text-red-600 dark:text-red-400">
-          ※
-          現在は募集期間外です。内容の記入はできますが、保存・提出はできません。
-        </p>
-      )}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          {submittedAt && (
+            <p className="text-sm text-foreground/60">
+              提出日時: {formatDateTime(submittedAt)}
+            </p>
+          )}
+          {isEditable && status === "submitted" && (
+            <p className="text-sm text-foreground/60">
+              締切前であれば、内容を編集して再提出できます。
+            </p>
+          )}
+          {!isEditable && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              ※
+              現在は募集期間外です。内容はこの端末に保存されますが、提出はできません。
+            </p>
+          )}
+        </div>
+        {autosaveLabel && (
+          <p className="shrink-0 text-xs text-foreground/40">{autosaveLabel}</p>
+        )}
+      </div>
 
       {errorMessage && (
         <p className="rounded-lg border border-black/[.08] p-4 text-sm dark:border-white/[.145]">
           {errorMessage}
         </p>
       )}
-      {savedMessage && !errorMessage && (
+      {submittedMessage && !errorMessage && (
         <p className="rounded-lg border border-black/[.08] p-4 text-sm text-foreground/60 dark:border-white/[.145]">
-          {savedMessage}
+          {submittedMessage}
         </p>
       )}
 
@@ -293,15 +391,6 @@ export function ApplicationForm({
       })}
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={handleSaveClick}
-          disabled={isBusy || !isEditable}
-          title={isEditable ? undefined : "募集期間外のため保存できません"}
-          className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-        >
-          {isSaving ? "保存中..." : "下書き保存"}
-        </button>
         <button
           type="button"
           onClick={handleSubmitClick}
