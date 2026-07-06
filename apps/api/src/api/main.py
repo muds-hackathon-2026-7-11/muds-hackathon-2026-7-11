@@ -4,7 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
-from api.routers import match, me, questions, recruitment, seminars, teacher, users, applications
+from api.routers import (
+    applications,
+    match,
+    me,
+    questions,
+    recruitment,
+    seminars,
+    teacher,
+    users,
+)
 
 logger = logging.getLogger(__name__)
 
