@@ -7,7 +7,7 @@ import { useState } from "react";
 const navItems = [
   { label: "マイページ", href: "/" },
   { label: "志望提出", href: "/apply" },
-  { label: "配属状況", href: "/assignment" },
+  { label: "応募状況", href: "/assignment" },
 ] as const;
 
 function navLinkClassName(isActive: boolean): string {
