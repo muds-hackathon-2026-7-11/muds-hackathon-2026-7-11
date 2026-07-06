@@ -73,6 +73,31 @@ async def test_invalid_role_is_rejected_by_db_check_constraint(db_session) -> No
         )
 
 
+async def test_recruitment_term_allows_multiple_rounds_in_same_year(
+    db_session,
+) -> None:
+    # 1年度に何回募集するか(前期・後期等)は固定せず、運営が自由に複数回
+    # 作れるようにするため、academic_yearに一意制約は無い。
+    academic_year = int(uuid.uuid4().int % 100000)
+    db_session.add(
+        RecruitmentTerm(
+            academic_year=academic_year,
+            starts_at=date(2026, 4, 1),
+            ends_at=date(2026, 9, 30),
+            status=RecruitmentTermStatus.open,
+        )
+    )
+    db_session.add(
+        RecruitmentTerm(
+            academic_year=academic_year,
+            starts_at=date(2026, 10, 1),
+            ends_at=date(2027, 3, 31),
+            status=RecruitmentTermStatus.preparing,
+        )
+    )
+    await db_session.flush()
+
+
 async def test_deleting_seminar_cascades_to_seminar_members(db_session) -> None:
     seminar = await _make_seminar(db_session)
     student = await _make_user(db_session)

@@ -27,7 +27,11 @@ class ApplicationStatus(str, enum.Enum):
 
 
 class ApplicationForm(IDMixin, TimestampMixin, Base):
-    """提出全体を管理。学生1人×1年度につき1レコード。"""
+    """提出全体を管理。学生1人×1募集期間(term_id)につき1レコード。
+
+    1年度に複数の募集期間(前期・後期等)を持てるため、同一学生が同一年度内に
+    複数レコードを持つこと自体は正常(募集期間ごとに1件)。
+    """
 
     __tablename__ = "application_forms"
     __table_args__ = (

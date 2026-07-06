@@ -247,12 +247,14 @@ CSVから一括登録。
 
 #### recruitment_terms(募集期間・年度)
 
-全ゼミ共通の募集期間を年度単位で管理する。
+全ゼミ共通の募集期間を年度単位で管理する。1年度に何回募集するか(前期・後期等)
+は固定せず、運営がUI/APIで自由に期間を作成できるようにするため、
+academic_yearに一意制約は設けない(同一年度に複数レコードを許可する)。
 
 | カラム | 型 | 制約 | 説明 |
 |---|---|---|---|
 | id | UUID | PK | |
-| academic_year | int | UNIQUE, NOT NULL | 対象年度(例: 2026) |
+| academic_year | int | NOT NULL | 対象年度(例: 2026) |
 | starts_at | date | NOT NULL | 募集開始日 |
 | ends_at | date | NOT NULL | 募集終了日(提出締切) |
 | status | enum | NOT NULL | preparing / open / closed |
@@ -260,7 +262,9 @@ CSVから一括登録。
 | updated_at | timestamp | NOT NULL | |
 
 - 提出可否の判定は `status = open` かつ `ends_at` 以前で行う
-- 運営の「募集期間設定」画面はこのテーブルを編集する
+- 運営の「募集期間設定」画面はこのテーブルを編集する([Backend] 運営: 募集ラウンド・定員設定API #57)
+- 「現在アクティブな募集」は、運営が作成する各期間の日付レンジが重ならない
+  運用を前提に、`status = open` かつ日付レンジ内のものを高々1件に絞り込んで判定する
 
 #### seminars(ゼミ)
 

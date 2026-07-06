@@ -1,9 +1,8 @@
 """指定年度の募集期間(recruitment_terms)を作成する(べき等)。
 
-import_seminars.py は対象年度の募集期間が事前に存在することを前提にしている
-(定員・応募はrecruitment_terms/seminar_recruitmentsに年度単位で紐づくため)。
-ダミーのゼミ・学生データまで入ってしまうapi.seedを使わずに、この1件だけを
-作りたい場合に使う。
+ダミーのゼミ・学生データまで入ってしまうapi.seedを使わずに、開発用に
+最低限の募集期間を1件だけ作りたい場合に使う。実運用での募集期間の
+作成・編集(前期・後期など複数回への対応含む)は運営向けAPI(#57)で行う。
 
 使い方: uv run python -m api.ensure_recruitment_term <年度>
 """

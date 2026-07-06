@@ -39,5 +39,13 @@ class Settings(BaseSettings):
     # (/users/exists 等)を、web以外からの直接アクセスから守るための合言葉。
     internal_api_secret: str = ""
 
+    # --- マッチ度診断(#59) ---
+    # OpenAI(ChatGPT)でマッチ度を採点する。
+    # openai_base_url は Azure OpenAI やプロキシ等、OpenAI互換エンドポイントの
+    # 差し替え用(未設定なら公式のOpenAI)。
+    openai_api_key: str = ""
+    openai_base_url: str | None = None
+    match_model: str = "gpt-4o-mini"
+
 
 settings = Settings()

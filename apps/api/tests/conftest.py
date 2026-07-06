@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from api.db import async_session, get_db
 from api.main import app
+from api.match_client import FakeMatchClient, get_match_client
 from api.slack_client import FakeSlackClient, get_slack_client
 
 
@@ -27,12 +28,18 @@ def fake_slack_client():
 
 
 @pytest_asyncio.fixture
-async def client(db_session, fake_slack_client):
+def fake_match_client():
+    return FakeMatchClient()
+
+
+@pytest_asyncio.fixture
+async def client(db_session, fake_slack_client, fake_match_client):
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_slack_client] = lambda: fake_slack_client
+    app.dependency_overrides[get_match_client] = lambda: fake_match_client
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
