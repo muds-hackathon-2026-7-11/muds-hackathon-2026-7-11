@@ -130,7 +130,6 @@ export function ApplicationForm({
     }
     return toSlots(initialApplication.choices);
   });
-  const [status, setStatus] = useState(initialApplication.status);
   const [submittedAt, setSubmittedAt] = useState(
     initialApplication.submitted_at,
   );
@@ -141,6 +140,14 @@ export function ApplicationForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  // 提出済みの内容は誤って書き換えないよう、まず読み取り専用で表示し、
+  // 「編集する」を押すまで入力できないようにする。
+  const [isLocked, setIsLocked] = useState(
+    initialApplication.is_editable && initialApplication.status === "submitted",
+  );
+  const [snapshotSlots, setSnapshotSlots] = useState<[Slot, Slot, Slot] | null>(
+    null,
+  );
   const isFirstRender = useRef(true);
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
@@ -178,68 +185,62 @@ export function ApplicationForm({
       .map(({ index }) => PRIORITY_LABELS[index]);
   }
 
-  // 保存(PUT)本体。バリデーションはせず、今の入力内容をそのまま保存する
-  // (Googleフォームのように、ボタンを押さなくても裏で保存され続ける)。
-  const persistChoices = useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await apiFetch("/applications/me", session, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          choices: slots
-            .map((slot, index) => ({ slot, priority: index + 1 }))
-            .filter(({ slot }) => slot.seminarId !== "")
-            .map(({ slot, priority }) => ({
-              seminar_id: slot.seminarId,
-              priority,
-              reason: slot.reason,
-            })),
-        }),
-      });
-      if (!res.ok) {
-        setErrorMessage(await extractErrorDetail(res));
+  // 保存(PUT)本体。バリデーションはせず、渡された内容をそのまま保存する。
+  // 編集中は自動保存しない(編集するボタンがある画面には提出済みの内容を
+  // 表示したいため、提出するを押すまでサーバー側の内容を変えない)。
+  // 保存対象を引数で明示的に受け取る(「提出する」の直前に保存する時、
+  // 現在のslots stateをそのまま渡すため)。
+  const persistChoices = useCallback(
+    async (slotsToSave: [Slot, Slot, Slot]): Promise<boolean> => {
+      try {
+        const res = await apiFetch("/applications/me", session, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            choices: slotsToSave
+              .map((slot, index) => ({ slot, priority: index + 1 }))
+              .filter(({ slot }) => slot.seminarId !== "")
+              .map(({ slot, priority }) => ({
+                seminar_id: slot.seminarId,
+                priority,
+                reason: slot.reason,
+              })),
+          }),
+        });
+        if (!res.ok) {
+          setErrorMessage(await extractErrorDetail(res));
+          return false;
+        }
+        const data = (await res.json()) as ApplicationFormData;
+        setSubmittedAt(data.submitted_at);
+        setSlots(toSlots(data.choices));
+        return true;
+      } catch {
+        setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
         return false;
       }
-      const data = (await res.json()) as ApplicationFormData;
-      setStatus(data.status);
-      setSubmittedAt(data.submitted_at);
-      setSlots(toSlots(data.choices));
-      return true;
-    } catch {
-      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
-      return false;
-    }
-  }, [session, slots]);
+    },
+    [session],
+  );
 
-  // 入力が止まってから一定時間後に自動保存する(タイピング中に毎回保存
-  // リクエストを送らないため)。募集期間外はAPIへは保存できないので、
-  // ブラウザのlocalStorageにだけ保存する(募集期間中はAPIへ保存する)。
+  // 募集期間外はAPIへ保存できないので、入力が止まってから一定時間後に
+  // ブラウザのlocalStorageにだけ自動保存する。募集期間中(isEditable)は
+  // 自動保存しない(提出するを押すまでサーバー側の内容を変えないため)。
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    if (isSubmitting) {
+    if (isEditable) {
       return;
     }
 
-    if (!isEditable) {
-      const timer = setTimeout(() => {
-        saveLocalDraft(slots);
-        setAutosaveState("saved");
-      }, AUTOSAVE_DELAY_MS);
-      return () => clearTimeout(timer);
-    }
-
-    const timer = setTimeout(async () => {
-      setAutosaveState("saving");
-      setErrorMessage(null);
-      const ok = await persistChoices();
-      setAutosaveState(ok ? "saved" : "error");
+    const timer = setTimeout(() => {
+      saveLocalDraft(slots);
+      setAutosaveState("saved");
     }, AUTOSAVE_DELAY_MS);
-
     return () => clearTimeout(timer);
-  }, [isEditable, isSubmitting, persistChoices, slots]);
+  }, [isEditable, slots]);
 
   async function handleSubmitClick(): Promise<void> {
     setErrorMessage(null);
@@ -257,7 +258,7 @@ export function ApplicationForm({
 
     setIsSubmitting(true);
     try {
-      const saved = await persistChoices();
+      const saved = await persistChoices(slots);
       if (!saved) {
         return;
       }
@@ -270,11 +271,12 @@ export function ApplicationForm({
         return;
       }
       const data = (await res.json()) as ApplicationFormData;
-      setStatus(data.status);
       setSubmittedAt(data.submitted_at);
       setSlots(toSlots(data.choices));
       setSubmittedMessage("志望を提出しました。");
       clearLocalDraft();
+      setIsLocked(true);
+      setSnapshotSlots(null);
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
@@ -282,11 +284,30 @@ export function ApplicationForm({
     }
   }
 
+  function handleEditClick(): void {
+    setSnapshotSlots(slots);
+    setIsLocked(false);
+    setErrorMessage(null);
+    setSubmittedMessage(null);
+    setAutosaveState("idle");
+  }
+
+  // 編集中は自動保存しない(サーバー側は提出するを押すまで変わらない)ため、
+  // 元に戻すはローカルの表示をスナップショットへ戻すだけでよい。
+  function handleRevertClick(): void {
+    if (snapshotSlots) {
+      setSlots(snapshotSlots);
+    }
+    setSnapshotSlots(null);
+    setIsLocked(true);
+    setErrorMessage(null);
+  }
+
   const isBusy = isSubmitting;
   const autosaveLabel = {
     idle: "",
     saving: "保存中...",
-    saved: isEditable ? "保存済み" : "端末に保存済み",
+    saved: "保存済み",
     error: "",
   }[autosaveState];
 
@@ -297,11 +318,6 @@ export function ApplicationForm({
           {submittedAt && (
             <p className="text-sm text-foreground/60">
               提出日時: {formatDateTime(submittedAt)}
-            </p>
-          )}
-          {isEditable && status === "submitted" && (
-            <p className="text-sm text-foreground/60">
-              締切前であれば、内容を編集して再提出できます。
             </p>
           )}
           {!isEditable && (
@@ -327,80 +343,135 @@ export function ApplicationForm({
         </p>
       )}
 
-      {slots.map((slot, index) => {
-        const excludedIds = selectedSeminarIdsExcept(index);
-        const options = seminars.filter(
-          (seminar) =>
-            !excludedIds.has(seminar.id) || seminar.id === slot.seminarId,
-        );
+      {isEditable && isLocked ? (
+        <>
+          <div className="flex flex-col gap-4">
+            {slots
+              .map((slot, index) => ({ slot, index }))
+              .filter(({ slot }) => slot.seminarId !== "")
+              .map(({ slot, index }) => {
+                const seminarName =
+                  seminars.find((s) => s.id === slot.seminarId)?.name ??
+                  "(削除されたゼミ)";
+                return (
+                  <section
+                    key={PRIORITY_LABELS[index]}
+                    className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                  >
+                    <p className="text-sm text-foreground/60">
+                      {PRIORITY_LABELS[index]}
+                    </p>
+                    <p className="mt-1 font-semibold">{seminarName}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm">
+                      {slot.reason}
+                    </p>
+                  </section>
+                );
+              })}
+          </div>
 
-        const seminarSelectId = `seminar-select-${index}`;
-        const reasonInputId = `reason-input-${index}`;
-
-        return (
-          <section
-            key={PRIORITY_LABELS[index]}
-            className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
-          >
-            <label
-              htmlFor={seminarSelectId}
-              className="block text-sm font-semibold"
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleEditClick}
+              className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
             >
-              {PRIORITY_LABELS[index]}
-            </label>
+              編集する
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {slots.map((slot, index) => {
+            const excludedIds = selectedSeminarIdsExcept(index);
+            const options = seminars.filter(
+              (seminar) =>
+                !excludedIds.has(seminar.id) || seminar.id === slot.seminarId,
+            );
 
-            <select
-              id={seminarSelectId}
-              value={slot.seminarId}
-              onChange={(e) => updateSlot(index, { seminarId: e.target.value })}
-              disabled={isBusy}
-              className="mt-2 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-            >
-              <option value="">選択してください</option>
-              {options.map((seminar) => (
-                <option key={seminar.id} value={seminar.id}>
-                  {seminar.name}
-                </option>
-              ))}
-            </select>
+            const seminarSelectId = `seminar-select-${index}`;
+            const reasonInputId = `reason-input-${index}`;
 
-            <div className="mt-3">
-              <div className="flex items-center justify-between">
+            return (
+              <section
+                key={PRIORITY_LABELS[index]}
+                className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+              >
                 <label
-                  htmlFor={reasonInputId}
-                  className="text-sm text-foreground/60"
+                  htmlFor={seminarSelectId}
+                  className="block text-sm font-semibold"
                 >
-                  志望理由
+                  {PRIORITY_LABELS[index]}
                 </label>
-                <span className="text-xs text-foreground/40">
-                  {slot.reason.length}文字
-                </span>
-              </div>
-              <textarea
-                id={reasonInputId}
-                value={slot.reason}
-                onChange={(e) => updateSlot(index, { reason: e.target.value })}
-                disabled={isBusy}
-                rows={4}
-                placeholder="このゼミを志望する理由を入力してください"
-                className="mt-1 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-              />
-            </div>
-          </section>
-        );
-      })}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={handleSubmitClick}
-          disabled={isBusy || !isEditable}
-          title={isEditable ? undefined : "募集期間外のため提出できません"}
-          className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isSubmitting ? "提出中..." : "提出する"}
-        </button>
-      </div>
+                <select
+                  id={seminarSelectId}
+                  value={slot.seminarId}
+                  onChange={(e) =>
+                    updateSlot(index, { seminarId: e.target.value })
+                  }
+                  disabled={isBusy}
+                  className="mt-2 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                >
+                  <option value="">選択してください</option>
+                  {options.map((seminar) => (
+                    <option key={seminar.id} value={seminar.id}>
+                      {seminar.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="mt-3">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor={reasonInputId}
+                      className="text-sm text-foreground/60"
+                    >
+                      志望理由
+                    </label>
+                    <span className="text-xs text-foreground/40">
+                      {slot.reason.length}文字
+                    </span>
+                  </div>
+                  <textarea
+                    id={reasonInputId}
+                    value={slot.reason}
+                    onChange={(e) =>
+                      updateSlot(index, { reason: e.target.value })
+                    }
+                    disabled={isBusy}
+                    rows={4}
+                    placeholder="このゼミを志望する理由を入力してください"
+                    className="mt-1 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  />
+                </div>
+              </section>
+            );
+          })}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleSubmitClick}
+              disabled={isBusy || !isEditable}
+              title={isEditable ? undefined : "募集期間外のため提出できません"}
+              className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "提出中..." : "提出する"}
+            </button>
+            {snapshotSlots && (
+              <button
+                type="button"
+                onClick={handleRevertClick}
+                disabled={isBusy}
+                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+              >
+                戻る
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
