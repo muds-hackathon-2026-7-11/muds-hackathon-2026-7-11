@@ -18,11 +18,16 @@ class RecruitmentTermStatus(str, enum.Enum):
 
 
 class RecruitmentTerm(IDMixin, TimestampMixin, Base):
-    """募集期間・年度。全ゼミ共通で1つの募集ラウンドを表す。"""
+    """募集期間・年度。全ゼミ共通の募集ラウンドを表す。
+
+    1年度に何回募集するか(前期・後期等)は固定せず、運営がUI/APIで
+    自由に期間(starts_at/ends_at)を設定できるようにするため、
+    academic_yearに一意制約は設けない(同一年度に複数行を許可する)。
+    """
 
     __tablename__ = "recruitment_terms"
 
-    academic_year: Mapped[int] = mapped_column(Integer, unique=True)
+    academic_year: Mapped[int] = mapped_column(Integer)
     starts_at: Mapped[date] = mapped_column(Date)
     ends_at: Mapped[date] = mapped_column(Date)
     status: Mapped[RecruitmentTermStatus] = mapped_column(
