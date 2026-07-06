@@ -25,8 +25,8 @@ export function MenuBar() {
   return (
     <header className="border-b border-black/[.08] bg-background dark:border-white/[.145]">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          ゼミ選択支援
+        <Link href="/" className="font-brand text-lg font-semibold tracking-tight">
+          Zemi-Match
         </Link>
 
         <nav className="ml-auto hidden items-center gap-1 sm:flex">
