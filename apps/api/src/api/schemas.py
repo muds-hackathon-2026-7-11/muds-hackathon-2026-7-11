@@ -194,3 +194,14 @@ class TeacherRecruitmentOut(BaseModel):
     seminar_name: str
     capacity: int | None
     is_recruiting: bool | None
+
+
+# --- マッチ度診断 (#59) ---
+
+
+class MatchOut(BaseModel):
+    seminar_id: uuid.UUID
+    score: int | None
+    feedback: dict | None
+    # score を出せない場合(研究テーマ/ゼミ紹介が未設定など)の説明。
+    message: str | None = None
