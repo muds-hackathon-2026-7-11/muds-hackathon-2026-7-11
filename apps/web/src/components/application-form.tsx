@@ -74,61 +74,11 @@ export function ApplicationForm({
   const [submittedAt, setSubmittedAt] = useState(
     initialApplication.submitted_at,
   );
-  const [isEditable] = useState(initialApplication.is_editable);
+  const isEditable = initialApplication.is_editable;
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
-
-  if (!isEditable) {
-    const filledChoices = initialApplication.choices
-      .slice()
-      .sort((a, b) => a.priority - b.priority);
-    return (
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <div className="flex items-center justify-between">
-          <p className="font-semibold">
-            {status === "submitted" ? "提出済み" : "下書き"}
-          </p>
-          {submittedAt && (
-            <p className="text-sm text-foreground/60">
-              提出日時: {formatDateTime(submittedAt)}
-            </p>
-          )}
-        </div>
-        <p className="mt-2 text-sm text-foreground/60">
-          現在は提出期間外のため、閲覧のみ可能です。
-        </p>
-
-        {filledChoices.length === 0 ? (
-          <p className="mt-4 text-foreground/60">提出物はありません。</p>
-        ) : (
-          <div className="mt-4 flex flex-col gap-4">
-            {filledChoices.map((choice) => {
-              const seminarName =
-                seminars.find((s) => s.id === choice.seminar_id)?.name ??
-                "(削除されたゼミ)";
-              return (
-                <div
-                  key={choice.priority}
-                  className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
-                >
-                  <p className="text-sm text-foreground/60">
-                    {PRIORITY_LABELS[choice.priority - 1] ??
-                      `第${choice.priority}志望`}
-                  </p>
-                  <p className="mt-1 font-semibold">{seminarName}</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm">
-                    {choice.reason}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    );
-  }
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -251,23 +201,22 @@ export function ApplicationForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-        <div className="flex items-center justify-between">
-          <p className="font-semibold">
-            状態: {status === "submitted" ? "提出済み" : "下書き"}
-          </p>
-          {submittedAt && (
-            <p className="text-sm text-foreground/60">
-              提出日時: {formatDateTime(submittedAt)}
-            </p>
-          )}
-        </div>
-        {status === "submitted" && (
-          <p className="mt-2 text-sm text-foreground/60">
-            締切前であれば、内容を編集して再提出できます。
-          </p>
-        )}
-      </section>
+      {submittedAt && (
+        <p className="text-sm text-foreground/60">
+          提出日時: {formatDateTime(submittedAt)}
+        </p>
+      )}
+      {isEditable && status === "submitted" && (
+        <p className="text-sm text-foreground/60">
+          締切前であれば、内容を編集して再提出できます。
+        </p>
+      )}
+      {!isEditable && (
+        <p className="text-sm text-red-600 dark:text-red-400">
+          ※
+          現在は募集期間外です。内容の記入はできますが、保存・提出はできません。
+        </p>
+      )}
 
       {errorMessage && (
         <p className="rounded-lg border border-black/[.08] p-4 text-sm dark:border-white/[.145]">
@@ -347,7 +296,8 @@ export function ApplicationForm({
         <button
           type="button"
           onClick={handleSaveClick}
-          disabled={isBusy}
+          disabled={isBusy || !isEditable}
+          title={isEditable ? undefined : "募集期間外のため保存できません"}
           className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
         >
           {isSaving ? "保存中..." : "下書き保存"}
@@ -355,7 +305,8 @@ export function ApplicationForm({
         <button
           type="button"
           onClick={handleSubmitClick}
-          disabled={isBusy}
+          disabled={isBusy || !isEditable}
+          title={isEditable ? undefined : "募集期間外のため提出できません"}
           className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? "提出中..." : "提出する"}
