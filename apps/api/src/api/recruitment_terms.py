@@ -24,11 +24,18 @@ async def get_or_create_recruitment_term(
     開発中ずっと「募集中」として扱われるよう、期間は年度いっぱいまで広めに取る
     (本来の募集期間は1ヶ月程度を想定しているが、開発・デモ用途で
     使い続けられることを優先する)。
+
+    academic_yearに一意制約は無い(運営が#57のAPIで複数回作成できる)ため、
+    既に2件以上あってもクラッシュしないよう、最初の1件だけを見て「取得」
+    とみなす(dev/デモ用の簡易ヘルパーとしての妥協。厳密な選択は#57で行う)。
     """
     result = await session.execute(
-        select(RecruitmentTerm).where(RecruitmentTerm.academic_year == academic_year)
+        select(RecruitmentTerm)
+        .where(RecruitmentTerm.academic_year == academic_year)
+        .order_by(RecruitmentTerm.starts_at)
+        .limit(1)
     )
-    term = result.scalar_one_or_none()
+    term = result.scalars().first()
     if term is not None:
         return term, False
 
