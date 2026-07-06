@@ -345,7 +345,6 @@ describe("ApplicationForm", () => {
     );
 
     expect(screen.getByText(/現在は募集期間外です/)).toBeInTheDocument();
-    expect(screen.getByText("提出物はありません。")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "編集する" }),
     ).not.toBeInTheDocument();

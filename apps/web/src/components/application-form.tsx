@@ -313,32 +313,28 @@ export function ApplicationForm({
       {isLocked ? (
         <>
           <div className="flex flex-col gap-4">
-            {slots.every((slot) => slot.seminarId === "") ? (
-              <p className="text-foreground/60">提出物はありません。</p>
-            ) : (
-              slots
-                .map((slot, index) => ({ slot, index }))
-                .filter(({ slot }) => slot.seminarId !== "")
-                .map(({ slot, index }) => {
-                  const seminarName =
-                    seminars.find((s) => s.id === slot.seminarId)?.name ??
-                    "(削除されたゼミ)";
-                  return (
-                    <section
-                      key={PRIORITY_LABELS[index]}
-                      className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
-                    >
-                      <p className="text-sm text-foreground/60">
-                        {PRIORITY_LABELS[index]}
-                      </p>
-                      <p className="mt-1 font-semibold">{seminarName}</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm">
-                        {slot.reason}
-                      </p>
-                    </section>
-                  );
-                })
-            )}
+            {slots
+              .map((slot, index) => ({ slot, index }))
+              .filter(({ slot }) => slot.seminarId !== "")
+              .map(({ slot, index }) => {
+                const seminarName =
+                  seminars.find((s) => s.id === slot.seminarId)?.name ??
+                  "(削除されたゼミ)";
+                return (
+                  <section
+                    key={PRIORITY_LABELS[index]}
+                    className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                  >
+                    <p className="text-sm text-foreground/60">
+                      {PRIORITY_LABELS[index]}
+                    </p>
+                    <p className="mt-1 font-semibold">{seminarName}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm">
+                      {slot.reason}
+                    </p>
+                  </section>
+                );
+              })}
           </div>
 
           {isEditable && (
