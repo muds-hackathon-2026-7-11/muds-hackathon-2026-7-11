@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from typing import TypedDict
 
 from sqlalchemy import select
@@ -7,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.db import async_session
 from api.models import (
     AnswerSource,
+    ApplicationChoice,
+    ApplicationForm,
+    ApplicationStatus,
     MaterialType,
     Question,
     Seminar,
@@ -51,6 +55,18 @@ class QASeed(TypedDict):
     seminar: str
     question: str
     answer: str | None
+
+
+class ApplicationChoiceSeed(TypedDict):
+    seminar: str
+    priority: int
+    reason: str
+
+
+class ApplicationSeed(TypedDict):
+    name: str
+    grade: str
+    choices: list[ApplicationChoiceSeed]
 
 
 SEMINARS: list[SeminarSeed] = [
@@ -196,6 +212,108 @@ QA_PAIRS: list[QASeed] = [
     },
 ]
 
+# 応募状況(GET /seminars/stats)を空にしないための、提出済み志望データ。
+APPLICATIONS: list[ApplicationSeed] = [
+    {
+        "name": "応募太郎",
+        "grade": "B3",
+        "choices": [
+            {
+                "seminar": "中村ゼミ",
+                "priority": 1,
+                "reason": "機械学習を深く学びたいため。",
+            },
+            {
+                "seminar": "福原ゼミ",
+                "priority": 2,
+                "reason": "データ基盤にも関心があるため。",
+            },
+            {
+                "seminar": "岡ゼミ",
+                "priority": 3,
+                "reason": "ロボティクスにも触れたいため。",
+            },
+        ],
+    },
+    {
+        "name": "応募花子",
+        "grade": "B3",
+        "choices": [
+            {
+                "seminar": "中村ゼミ",
+                "priority": 1,
+                "reason": "画像認識の研究をしたいため。",
+            },
+            {"seminar": "岡ゼミ", "priority": 2, "reason": "制御にも興味があるため。"},
+        ],
+    },
+    {
+        "name": "応募次郎",
+        "grade": "B3",
+        "choices": [
+            {
+                "seminar": "福原ゼミ",
+                "priority": 1,
+                "reason": "分散システムを学びたいため。",
+            },
+            {"seminar": "中村ゼミ", "priority": 2, "reason": "AIも学びたいため。"},
+            {
+                "seminar": "高橋・浦木ゼミ",
+                "priority": 3,
+                "reason": "セキュリティにも興味があるため。",
+            },
+        ],
+    },
+    {
+        "name": "応募さくら",
+        "grade": "B4",
+        "choices": [
+            {
+                "seminar": "中村ゼミ",
+                "priority": 1,
+                "reason": "深層学習を継続したいため。",
+            },
+            {
+                "seminar": "林・清木ゼミ",
+                "priority": 2,
+                "reason": "データマイニングも学びたいため。",
+            },
+        ],
+    },
+    {
+        "name": "応募健",
+        "grade": "B3",
+        "choices": [
+            {
+                "seminar": "岡ゼミ",
+                "priority": 1,
+                "reason": "自律移動ロボットに関心があるため。",
+            },
+            {
+                "seminar": "福原ゼミ",
+                "priority": 2,
+                "reason": "データベースも学びたいため。",
+            },
+        ],
+    },
+    {
+        "name": "応募舞",
+        "grade": "B4",
+        "choices": [
+            {
+                "seminar": "高橋・浦木ゼミ",
+                "priority": 1,
+                "reason": "脆弱性診断を研究したいため。",
+            },
+            {
+                "seminar": "中村ゼミ",
+                "priority": 2,
+                "reason": "機械学習にも興味があるため。",
+            },
+        ],
+    },
+]
+
 
 async def _get_or_create_seminar(
     session: AsyncSession, data: SeminarSeed
@@ -218,6 +336,7 @@ async def _get_or_create_user(
     name: str,
     role: UserRole,
     research_theme: str | None,
+    grade: str | None = None,
 ) -> tuple[User, bool]:
     # keyは name とは独立した合成キー。同姓同名の別人が紛れ込んでも
     # google_id が衝突して同一人物として扱われてしまわないようにするため。
@@ -233,6 +352,7 @@ async def _get_or_create_user(
         name=name,
         role=role,
         research_theme=research_theme,
+        grade=grade,
     )
     session.add(user)
     await session.flush()
@@ -392,6 +512,54 @@ async def seed_all() -> None:
                         source=AnswerSource.web,
                     )
 
+        application_created = 0
+        choice_created = 0
+        for i, app_data in enumerate(APPLICATIONS):
+            applicant, _ = await _get_or_create_user(
+                session,
+                key=f"applicant-{i}",
+                name=app_data["name"],
+                role=UserRole.student,
+                research_theme=None,
+                grade=app_data["grade"],
+            )
+            form_result = await session.execute(
+                select(ApplicationForm).where(
+                    ApplicationForm.term_id == term.id,
+                    ApplicationForm.student_id == applicant.id,
+                )
+            )
+            form = form_result.scalar_one_or_none()
+            if form is None:
+                form = ApplicationForm(
+                    term_id=term.id,
+                    student_id=applicant.id,
+                    status=ApplicationStatus.submitted,
+                    submitted_at=datetime.now(timezone.utc),
+                )
+                session.add(form)
+                await session.flush()
+                application_created += 1
+
+            for choice_data in app_data["choices"]:
+                seminar = seminars_by_name[choice_data["seminar"]]
+                choice_result = await session.execute(
+                    select(ApplicationChoice).where(
+                        ApplicationChoice.application_form_id == form.id,
+                        ApplicationChoice.seminar_id == seminar.id,
+                    )
+                )
+                if choice_result.scalar_one_or_none() is None:
+                    session.add(
+                        ApplicationChoice(
+                            application_form_id=form.id,
+                            seminar_id=seminar.id,
+                            priority=choice_data["priority"],
+                            reason=choice_data["reason"],
+                        )
+                    )
+                    choice_created += 1
+
         await session.commit()
 
     print(
@@ -399,7 +567,8 @@ async def seed_all() -> None:
         f"(recruitments +{recruitment_created}), teachers: +{teacher_created} "
         f"(links +{link_created}), students: +{student_created} "
         f"(memberships +{member_created}), materials: +{material_created}, "
-        f"questions: +{qa_created}"
+        f"questions: +{qa_created}, applications: +{application_created} "
+        f"(choices +{choice_created})"
     )
 
 
