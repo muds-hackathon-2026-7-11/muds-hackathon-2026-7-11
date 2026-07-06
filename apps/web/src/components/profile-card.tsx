@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 
 export type ResearchTag = {
@@ -119,6 +119,32 @@ export function ProfileCard({
     }
   }
 
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape" && !isSaving) {
+        setIsEditing(false);
+        setErrorMessage(null);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isEditing, isSaving]);
+
+  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>): void {
+    if (e.target === e.currentTarget && !isSaving) {
+      handleCancelClick();
+    }
+  }
+
   const displayedTags = allTags.filter((tag) => savedTagIds.has(tag.id));
 
   return (
@@ -156,7 +182,12 @@ export function ProfileCard({
       </div>
 
       {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        // biome-ignore lint/a11y/noStaticElementInteractions: 背景クリックで閉じるための領域(キーボードはEscで代替)
+        // biome-ignore lint/a11y/useKeyWithClickEvents: 同上、Escキーは上のuseEffectで別途処理している
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={handleBackdropClick}
+        >
           <div
             role="dialog"
             aria-modal="true"
@@ -191,10 +222,7 @@ export function ProfileCard({
 
               <div className="flex min-h-0 flex-col">
                 <p className="text-sm text-foreground/60">
-                  興味分野タグ
-                  <span className="ml-2 text-xs text-foreground/40">
-                    (枠内はスクロールできます)
-                  </span>
+                  タグ
                 </p>
                 <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-black/[.08] bg-black/[.02] p-3 dark:border-white/[.145] dark:bg-white/[.03]">
                   {groupTagsByCategory(allTags).map(([category, tags]) => (

@@ -160,4 +160,48 @@ describe("ProfileCard", () => {
     ).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("closes when the backdrop is clicked, but not when the dialog itself is clicked", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProfileCard
+        name="山田 太郎"
+        email="s2300000@stu.musashino-u.ac.jp"
+        grade="B3"
+        researchTheme="音声処理の研究"
+        allTags={allTags}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    const dialog = screen.getByRole("dialog");
+
+    await user.click(dialog);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    const backdrop = dialog.parentElement as HTMLElement;
+    await user.click(backdrop);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes when Escape is pressed", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProfileCard
+        name="山田 太郎"
+        email="s2300000@stu.musashino-u.ac.jp"
+        grade="B3"
+        researchTheme="音声処理の研究"
+        allTags={allTags}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
