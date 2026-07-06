@@ -10,15 +10,18 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    ResearchTag,
     Seminar,
     SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
     User,
+    UserInterestTag,
 )
 from api.schemas import (
     PriorityCounts,
+    ResearchTagOut,
     SeminarDetailOut,
     SeminarMaterialOut,
     SeminarMemberOut,
@@ -29,6 +32,25 @@ from api.schemas import (
 from api.services import get_current_term
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
+
+
+async def _interest_tags_by_user(
+    db: AsyncSession, *, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[ResearchTagOut]]:
+    """複数ユーザー分の興味分野タグを1クエリでまとめて取得する(N+1回避)。"""
+    if not user_ids:
+        return {}
+
+    result = await db.execute(
+        select(UserInterestTag.user_id, ResearchTag)
+        .join(ResearchTag, UserInterestTag.tag_id == ResearchTag.id)
+        .where(UserInterestTag.user_id.in_(user_ids))
+        .order_by(ResearchTag.sort_order)
+    )
+    tags_by_user: dict[uuid.UUID, list[ResearchTagOut]] = {}
+    for user_id, tag in result.all():
+        tags_by_user.setdefault(user_id, []).append(ResearchTagOut.model_validate(tag))
+    return tags_by_user
 
 
 @router.get("", response_model=list[SeminarOut])
@@ -198,9 +220,18 @@ async def get_seminar(
         .where(SeminarTeacher.seminar_id == seminar_id)
         .order_by(User.name)
     )
+    teacher_users = list(teachers_result.scalars().all())
+    teacher_tags = await _interest_tags_by_user(
+        db, user_ids=[u.id for u in teacher_users]
+    )
     teachers = [
-        TeacherOut(id=u.id, name=u.name, research_theme=u.research_theme)
-        for u in teachers_result.scalars().all()
+        TeacherOut(
+            id=u.id,
+            name=u.name,
+            research_theme=u.research_theme,
+            interest_tags=teacher_tags.get(u.id, []),
+        )
+        for u in teacher_users
     ]
 
     materials_result = await db.execute(
@@ -221,9 +252,18 @@ async def get_seminar(
             )
             .order_by(User.name)
         )
+        member_users = list(members_result.scalars().all())
+        member_tags = await _interest_tags_by_user(
+            db, user_ids=[u.id for u in member_users]
+        )
         current_members = [
-            SeminarMemberOut(id=u.id, name=u.name, research_theme=u.research_theme)
-            for u in members_result.scalars().all()
+            SeminarMemberOut(
+                id=u.id,
+                name=u.name,
+                research_theme=u.research_theme,
+                interest_tags=member_tags.get(u.id, []),
+            )
+            for u in member_users
         ]
 
     return SeminarDetailOut(

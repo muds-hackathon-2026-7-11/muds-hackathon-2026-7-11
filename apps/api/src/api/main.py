@@ -10,6 +10,7 @@ from api.routers import (
     me,
     questions,
     recruitment,
+    research_tags,
     seminars,
     teacher,
     users,
@@ -39,6 +40,7 @@ app.include_router(applications.router)
 app.include_router(recruitment.router)
 app.include_router(teacher.router)
 app.include_router(match.router)
+app.include_router(research_tags.router)
 
 
 @app.get("/health")
