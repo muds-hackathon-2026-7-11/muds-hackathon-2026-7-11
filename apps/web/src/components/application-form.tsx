@@ -4,9 +4,18 @@ import { useSession } from "next-auth/react";
 import { useCallback, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 
+// バックエンドは画面を開いた後に募集期間が終了した場合、保存・提出時に
+// このエラーを返す(現在募集中の期間がないため)。生のエラー文言のままだと
+// 何をすればいいか伝わりにくいので、ページ更新を促す文言に置き換える。
+const TERM_CLOSED_DETAIL = "現在募集中の期間がありません。";
+const TERM_CLOSED_MESSAGE = "締切が過ぎました。ページを更新してください。";
+
 async function extractErrorDetail(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: string };
+    if (body.detail === TERM_CLOSED_DETAIL) {
+      return TERM_CLOSED_MESSAGE;
+    }
     return body.detail ?? "エラーが発生しました。";
   } catch {
     return "エラーが発生しました。";

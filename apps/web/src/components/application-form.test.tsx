@@ -229,6 +229,32 @@ describe("ApplicationForm", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("shows a friendly message when the term closed while the page was open", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ detail: "現在募集中の期間がありません。" }),
+        { status: 400 },
+      ),
+    );
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+    await user.click(screen.getByRole("button", { name: "提出する" }));
+
+    expect(
+      await screen.findByText("締切が過ぎました。ページを更新してください。"),
+    ).toBeInTheDocument();
+  });
+
   it("shows an error when a selected seminar has no reason", async () => {
     const user = userEvent.setup();
     render(
