@@ -48,3 +48,6 @@ next-env.d.ts
 
 # DB backups contain real personal data (student IDs, application reasons) - never commit
 /backups/
+
+# personal private materials - local only, never commit/share
+/.private/
