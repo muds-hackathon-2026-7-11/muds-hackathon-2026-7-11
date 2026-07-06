@@ -65,6 +65,30 @@ class SeminarDetailOut(SeminarOut):
     current_members: list[SeminarMemberOut]
 
 
+class PriorityCounts(BaseModel):
+    """第1〜第3志望それぞれの人数。"""
+
+    first: int
+    second: int
+    third: int
+
+
+class SeminarStatsOut(BaseModel):
+    """ゼミごとの応募状況（現在の募集ラウンド基準）。"""
+
+    id: uuid.UUID
+    name: str
+    capacity: int | None
+    applicant_count: int
+    priority_counts: PriorityCounts
+    # 学年(users.grade)別の志望人数。grade未設定は "不明"。
+    grade_counts: dict[str, int]
+    # 倍率 = applicant_count / capacity。定員が未設定/0 の場合は null。
+    ratio: float | None
+    # 現在の所属ゼミ生数（継続者）。
+    continuing_count: int
+
+
 class QuestionCreate(BaseModel):
     seminar_id: uuid.UUID
     slack_user_id: str
