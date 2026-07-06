@@ -1,58 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
-
-const AUTOSAVE_DELAY_MS = 1000;
-const LOCAL_DRAFT_KEY = "application-form-local-draft";
-
-// 募集期間外(is_editable=false)はAPIへの保存自体ができない(バックエンドが
-// 現在募集中の期間がない場合はPUTを拒否する)。そのため、この間の自動保存は
-// ブラウザのlocalStorageへ書くだけにする。
-// ただし既に提出済みの内容がある場合(choices.length > 0)は使わない
-// (canUseLocalDraft判定。募集期間外に試し書きした内容がlocalStorageに残ると、
-// 実際の提出内容より優先されてしまい、提出済みの内容を覆い隠してしまうため)。
-function loadLocalDraft(): [Slot, Slot, Slot] | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || parsed.length !== 3) {
-      return null;
-    }
-    return parsed as [Slot, Slot, Slot];
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalDraft(slots: [Slot, Slot, Slot]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(slots));
-  } catch {
-    // ストレージが使えない環境(プライベートモード等)では何もしない。
-  }
-}
-
-function clearLocalDraft(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.removeItem(LOCAL_DRAFT_KEY);
-  } catch {
-    // ストレージが使えない環境(プライベートモード等)では何もしない。
-  }
-}
 
 async function extractErrorDetail(res: Response): Promise<string> {
   try {
@@ -126,37 +76,27 @@ export function ApplicationForm({
   initialApplication,
 }: ApplicationFormProps) {
   const { data: session } = useSession();
-  // localStorageの下書きは「まだ何も提出していない」時だけ使う。既に提出済みの
-  // 内容がある場合にlocalStorageを優先/保存すると、期間外に試し書きした内容が
-  // 実際の提出内容を永久に覆い隠してしまうため。
-  const canUseLocalDraft =
-    !initialApplication.is_editable && initialApplication.choices.length === 0;
-  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() => {
-    if (canUseLocalDraft) {
-      return loadLocalDraft() ?? toSlots(initialApplication.choices);
-    }
-    return toSlots(initialApplication.choices);
-  });
+  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() =>
+    toSlots(initialApplication.choices),
+  );
   const [submittedAt, setSubmittedAt] = useState(
     initialApplication.submitted_at,
   );
   const isEditable = initialApplication.is_editable;
-  const [autosaveState, setAutosaveState] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
-  // 提出済みの内容は誤って書き換えないよう、まず読み取り専用で表示し、
-  // 「編集する」を押すまで入力できないようにする。
+  // 提出済みの内容を誤って書き換えないよう、まず読み取り専用で表示し、
+  // 「編集する」を押すまで入力できないようにする。募集期間外の場合は
+  // 編集する自体を出さない(読み取り専用のまま)。
   const [isLocked, setIsLocked] = useState(
-    initialApplication.is_editable && initialApplication.status === "submitted",
+    !initialApplication.is_editable ||
+      initialApplication.status === "submitted",
   );
   const [snapshotSlots, setSnapshotSlots] = useState<[Slot, Slot, Slot] | null>(
     null,
   );
-  const isFirstRender = useRef(true);
   // 編集中は自動保存しないため、通常は「戻る」時にサーバーへ送るものは何もない
   // (何もPUTしていない)。ただし「提出する」を押した際にPUTだけ成功し、直後の
   // POST(/submit)が失敗するケースがあり、その場合はサーバー側が編集後の内容
@@ -244,26 +184,6 @@ export function ApplicationForm({
     [session],
   );
 
-  // 募集期間外・かつまだ提出済みの内容が無い時だけ、入力が止まってから
-  // 一定時間後にブラウザのlocalStorageに自動保存する(募集期間中は提出する
-  // を押すまでサーバー側の内容を変えない。既に提出済みならlocalStorageを
-  // 使わない=canUseLocalDraft)。
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (!canUseLocalDraft) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      saveLocalDraft(slots);
-      setAutosaveState("saved");
-    }, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [canUseLocalDraft, slots]);
-
   async function handleSubmitClick(): Promise<void> {
     setErrorMessage(null);
     setSubmittedMessage(null);
@@ -300,7 +220,6 @@ export function ApplicationForm({
       setSubmittedAt(data.submitted_at);
       setSlots(toSlots(data.choices));
       setSubmittedMessage("志望を提出しました。");
-      clearLocalDraft();
       setIsLocked(true);
       setSnapshotSlots(null);
       serverDirtySinceEdit.current = false;
@@ -317,7 +236,6 @@ export function ApplicationForm({
     setIsLocked(false);
     setErrorMessage(null);
     setSubmittedMessage(null);
-    setAutosaveState("idle");
   }
 
   // 通常(提出を試みていない、または提出が最後まで成功している)は、編集中に
@@ -356,37 +274,19 @@ export function ApplicationForm({
   }
 
   const isBusy = isSubmitting || isReverting;
-  const autosaveLabel = {
-    idle: "",
-    saving: "保存中...",
-    saved: "保存済み",
-    error: "",
-  }[autosaveState];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          {submittedAt && (
-            <p className="text-sm text-foreground/60">
-              提出日時: {formatDateTime(submittedAt)}
-            </p>
-          )}
-          {!isEditable && canUseLocalDraft && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              ※
-              現在は募集期間外です。提出はできません。
-            </p>
-          )}
-          {!isEditable && !canUseLocalDraft && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              ※
-              現在は募集期間外です。提出はできません。
-            </p>
-          )}
-        </div>
-        {autosaveLabel && (
-          <p className="shrink-0 text-xs text-foreground/40">{autosaveLabel}</p>
+      <div className="flex flex-col gap-1">
+        {submittedAt && (
+          <p className="text-sm text-foreground/60">
+            提出日時: {formatDateTime(submittedAt)}
+          </p>
+        )}
+        {!isEditable && (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            ※ 現在は募集期間外です。内容の変更・提出はできません。
+          </p>
         )}
       </div>
 
@@ -401,42 +301,48 @@ export function ApplicationForm({
         </p>
       )}
 
-      {isEditable && isLocked ? (
+      {isLocked ? (
         <>
           <div className="flex flex-col gap-4">
-            {slots
-              .map((slot, index) => ({ slot, index }))
-              .filter(({ slot }) => slot.seminarId !== "")
-              .map(({ slot, index }) => {
-                const seminarName =
-                  seminars.find((s) => s.id === slot.seminarId)?.name ??
-                  "(削除されたゼミ)";
-                return (
-                  <section
-                    key={PRIORITY_LABELS[index]}
-                    className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
-                  >
-                    <p className="text-sm text-foreground/60">
-                      {PRIORITY_LABELS[index]}
-                    </p>
-                    <p className="mt-1 font-semibold">{seminarName}</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm">
-                      {slot.reason}
-                    </p>
-                  </section>
-                );
-              })}
+            {slots.every((slot) => slot.seminarId === "") ? (
+              <p className="text-foreground/60">提出物はありません。</p>
+            ) : (
+              slots
+                .map((slot, index) => ({ slot, index }))
+                .filter(({ slot }) => slot.seminarId !== "")
+                .map(({ slot, index }) => {
+                  const seminarName =
+                    seminars.find((s) => s.id === slot.seminarId)?.name ??
+                    "(削除されたゼミ)";
+                  return (
+                    <section
+                      key={PRIORITY_LABELS[index]}
+                      className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                    >
+                      <p className="text-sm text-foreground/60">
+                        {PRIORITY_LABELS[index]}
+                      </p>
+                      <p className="mt-1 font-semibold">{seminarName}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm">
+                        {slot.reason}
+                      </p>
+                    </section>
+                  );
+                })
+            )}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleEditClick}
-              className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
-            >
-              編集する
-            </button>
-          </div>
+          {isEditable && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleEditClick}
+                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+              >
+                編集する
+              </button>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -511,8 +417,7 @@ export function ApplicationForm({
             <button
               type="button"
               onClick={handleSubmitClick}
-              disabled={isBusy || !isEditable}
-              title={isEditable ? undefined : "募集期間外のため提出できません"}
+              disabled={isBusy}
               className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "提出中..." : "提出する"}

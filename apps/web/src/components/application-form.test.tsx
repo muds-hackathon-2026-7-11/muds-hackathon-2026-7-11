@@ -38,7 +38,6 @@ beforeEach(() => {
     status: "authenticated",
     update: vi.fn(),
   } as ReturnType<typeof useSession>);
-  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -311,7 +310,7 @@ describe("ApplicationForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a warning and disables submit outside the recruitment period, but keeps inputs editable", () => {
+  it("shows a read-only view with no edit button and no inputs outside the recruitment period", () => {
     render(
       <ApplicationForm
         seminars={seminars}
@@ -320,8 +319,44 @@ describe("ApplicationForm", () => {
     );
 
     expect(screen.getByText(/現在は募集期間外です/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "提出する" })).toBeDisabled();
-    expect(screen.getAllByRole("combobox")[0]).not.toBeDisabled();
+    expect(screen.getByText("提出物はありません。")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "編集する" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "提出する" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("shows submitted choices read-only with no edit button when the recruitment period has closed", () => {
+    const submittedPastPeriod = emptyDraft({
+      status: "submitted",
+      is_editable: false,
+      submitted_at: "2026-07-01T00:00:00Z",
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+    });
+    render(
+      <ApplicationForm
+        seminars={seminars}
+        initialApplication={submittedPastPeriod}
+      />,
+    );
+
+    expect(screen.getByText("福原ゼミ")).toBeInTheDocument();
+    expect(screen.getByText("興味があるため")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "編集する" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("excludes a seminar already selected in another slot from the other selects", async () => {
@@ -337,58 +372,5 @@ describe("ApplicationForm", () => {
     expect(
       secondSelectOptions.map((option) => (option as HTMLOptionElement).value),
     ).not.toContain("sem-1");
-  });
-
-  it("auto-saves to localStorage outside the recruitment period", async () => {
-    const user = userEvent.setup();
-    render(
-      <ApplicationForm
-        seminars={seminars}
-        initialApplication={emptyDraft({ is_editable: false })}
-      />,
-    );
-
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
-
-    await waitFor(
-      () => {
-        const raw = window.localStorage.getItem("application-form-local-draft");
-        expect(raw).not.toBeNull();
-        expect(JSON.parse(raw ?? "[]")[0].seminarId).toBe("sem-1");
-      },
-      { timeout: 2000 },
-    );
-  });
-
-  it("does not let a stale localStorage draft override an already-submitted application", () => {
-    window.localStorage.setItem(
-      "application-form-local-draft",
-      JSON.stringify([
-        { seminarId: "sem-2", reason: "試し書き" },
-        { seminarId: "", reason: "" },
-        { seminarId: "", reason: "" },
-      ]),
-    );
-
-    const submitted = emptyDraft({
-      status: "submitted",
-      is_editable: false,
-      submitted_at: "2026-07-01T00:00:00Z",
-      choices: [
-        {
-          seminar_id: "sem-1",
-          priority: 1,
-          reason: "興味があるため",
-          match_score: null,
-          match_feedback: null,
-        },
-      ],
-    });
-    render(
-      <ApplicationForm seminars={seminars} initialApplication={submitted} />,
-    );
-
-    expect(screen.getByDisplayValue("興味があるため")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("試し書き")).not.toBeInTheDocument();
   });
 });
