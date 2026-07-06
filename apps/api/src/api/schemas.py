@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.models import (
+    ApplicationStatus,
     MaterialType,
     QuestionStatus,
     RecruitmentTermStatus,
@@ -119,6 +120,36 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+class ApplicationChoiceIn(BaseModel):
+    seminar_id: uuid.UUID
+    priority: int = Field(ge=1, le=3)
+    reason: str
+
+
+class ApplicationUpsertIn(BaseModel):
+    choices: list[ApplicationChoiceIn] = Field(max_length=3)
+
+
+class ApplicationChoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    seminar_id: uuid.UUID
+    priority: int
+    reason: str
+    match_score: int | None
+    match_feedback: dict | None
+
+
+class ApplicationFormOut(BaseModel):
+    id: uuid.UUID | None
+    status: ApplicationStatus
+    submitted_at: datetime | None
+    choices: list[ApplicationChoiceOut]
+    # 現在アクティブな募集期間の内容ならtrue。falseは過去期間の閲覧専用表示
+    # (提出期間外でも直近の提出内容は見えるが、編集・再提出はできない)。
+    is_editable: bool
 
 
 # --- 運営: 募集ラウンド・定員設定 (#57) ---
