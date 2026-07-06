@@ -2,8 +2,11 @@
 
 使い方: uv run python -m api.import_seminars <CSVファイルパス>
 
-CSV列: ゼミ名, ゼミ紹介文, 教員写真URL, 定員, 対象年度, 教員氏名, 教員メールアドレス
+CSV列: ゼミ名, ゼミ紹介文, 教員写真URL, 教員氏名, 教員メールアドレス
 同じ「ゼミ名」の行が複数あれば、教員が複数いるゼミとして同一ゼミに紐付ける。
+
+定員・募集期間(recruitment_terms/seminar_recruitments)はここでは扱わない。
+運営がUI/API([Backend] 運営: 募集ラウンド・定員設定API #57)から設定する。
 """
 
 import argparse
@@ -15,30 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import async_session
-from api.models import (
-    RecruitmentTerm,
-    Seminar,
-    SeminarRecruitment,
-    SeminarTeacher,
-    User,
-    UserRole,
-)
-
-
-async def _get_recruitment_term(
-    session: AsyncSession, academic_year: int
-) -> RecruitmentTerm:
-    result = await session.execute(
-        select(RecruitmentTerm).where(RecruitmentTerm.academic_year == academic_year)
-    )
-    term = result.scalar_one_or_none()
-    if term is None:
-        raise SystemExit(
-            f"{academic_year}年度の募集期間(recruitment_terms)が存在しません。"
-            f"先に `make ensure-recruitment-term year={academic_year}` を"
-            "実行してください。"
-        )
-    return term
+from api.models import Seminar, SeminarTeacher, User, UserRole
 
 
 async def _get_or_create_seminar(
@@ -53,26 +33,6 @@ async def _get_or_create_seminar(
     session.add(seminar)
     await session.flush()
     return seminar, True
-
-
-async def _get_or_create_recruitment(
-    session: AsyncSession, *, term: RecruitmentTerm, seminar: Seminar, capacity: int
-) -> bool:
-    result = await session.execute(
-        select(SeminarRecruitment).where(
-            SeminarRecruitment.term_id == term.id,
-            SeminarRecruitment.seminar_id == seminar.id,
-        )
-    )
-    recruitment = result.scalar_one_or_none()
-    if recruitment is not None:
-        recruitment.capacity = capacity
-        return False
-
-    session.add(
-        SeminarRecruitment(term_id=term.id, seminar_id=seminar.id, capacity=capacity)
-    )
-    return True
 
 
 async def _get_or_create_teacher(
@@ -118,10 +78,8 @@ async def import_csv(path: Path) -> None:
         rows = list(csv.DictReader(f))
 
     async with async_session() as session:
-        terms_by_year: dict[int, RecruitmentTerm] = {}
         seminars_by_name: dict[str, Seminar] = {}
         seminar_created = 0
-        recruitment_created = 0
         teacher_created = 0
         link_created = 0
 
@@ -137,18 +95,6 @@ async def import_csv(path: Path) -> None:
                 if created:
                     seminar_created += 1
             seminar = seminars_by_name[name]
-
-            academic_year = int(row["対象年度"])
-            if academic_year not in terms_by_year:
-                terms_by_year[academic_year] = await _get_recruitment_term(
-                    session, academic_year
-                )
-            term = terms_by_year[academic_year]
-
-            if await _get_or_create_recruitment(
-                session, term=term, seminar=seminar, capacity=int(row["定員"])
-            ):
-                recruitment_created += 1
 
             teacher, created = await _get_or_create_teacher(
                 session,
@@ -167,8 +113,8 @@ async def import_csv(path: Path) -> None:
         await session.commit()
 
     print(
-        f"seminars: +{seminar_created}, recruitments: +{recruitment_created}, "
-        f"teachers: +{teacher_created}, links: +{link_created}"
+        f"seminars: +{seminar_created}, teachers: +{teacher_created}, "
+        f"links: +{link_created}"
     )
 
 

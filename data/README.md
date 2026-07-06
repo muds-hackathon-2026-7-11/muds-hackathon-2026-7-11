@@ -9,21 +9,19 @@
 ルートの [README.md](../README.md) 参照。DB起動後、実データを投入するまでの流れ:
 
 ```sh
-make migrate                          # テーブル作成
-make ensure-recruitment-term year=2026  # 対象年度の募集期間を作成(べき等)
+make migrate       # テーブル作成
 # data/seminar_teacher.csv と data/slack_member.csv をこのディレクトリに置く(下記参照)
-make import-data                      # ゼミ・教員・学生データをまとめて投入
+make import-data   # ゼミ・教員・学生データをまとめて投入
 ```
 
-`make ensure-recruitment-term`が無いと、`make import-seminars`(および`import-data`)は
-「◯年度の募集期間が存在しません」で失敗する(定員・応募は年度単位のrecruitment_termsに
-紐づく設計のため)。ダミーデータまで入る`make seed`は使わず、この専用コマンドで
-募集期間だけを作れる。
+募集期間(recruitment_terms)・ゼミごとの定員(seminar_recruitments)は運営向けAPI/UI
+([Backend] 運営: 募集ラウンド・定員設定API #57)から設定する。CSVインポートはゼミ・
+教員・学生の基本情報のみを扱う。
 
 ## ゼミ・教員データ
 
 1. `data/seminar_teacher.csv`という名前のcsvを置く
-   (列: `ゼミ名, ゼミ紹介文, 教員写真URL, 定員, 対象年度, 教員氏名, 教員メールアドレス`)
+   (列: `ゼミ名, ゼミ紹介文, 教員写真URL, 教員氏名, 教員メールアドレス`)
 2. DBに投入する:
 
    ```sh
