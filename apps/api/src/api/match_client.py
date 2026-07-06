@@ -36,9 +36,9 @@ _USER_TEMPLATE = (
 
 
 class OpenAIMatchClient:
-    """OpenAI(または OpenAI互換API)でマッチ度を採点する。
+    """OpenAI(ChatGPT)でマッチ度を採点する。
 
-    base_url を差し替えれば Ollama/vLLM 等のローカルLLMにも切替可能。
+    base_url は Azure OpenAI やプロキシ等、OpenAI互換エンドポイントの差し替え用。
     """
 
     def __init__(self, *, api_key: str, base_url: str | None, model: str) -> None:

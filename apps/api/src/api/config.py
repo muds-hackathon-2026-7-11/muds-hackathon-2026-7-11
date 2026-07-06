@@ -40,8 +40,9 @@ class Settings(BaseSettings):
     internal_api_secret: str = ""
 
     # --- マッチ度診断(#59) ---
-    # OpenAI(または OpenAI互換のローカルLLM)でマッチ度を採点する。
-    # openai_base_url を差し替えれば Ollama/vLLM 等のローカルLLMへ切替可能。
+    # OpenAI(ChatGPT)でマッチ度を採点する。
+    # openai_base_url は Azure OpenAI やプロキシ等、OpenAI互換エンドポイントの
+    # 差し替え用(未設定なら公式のOpenAI)。
     openai_api_key: str = ""
     openai_base_url: str | None = None
     match_model: str = "gpt-4o-mini"
