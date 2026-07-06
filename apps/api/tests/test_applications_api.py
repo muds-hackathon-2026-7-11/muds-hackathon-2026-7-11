@@ -2,6 +2,7 @@ import uuid
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from api import auth
 from api.models import (
@@ -191,9 +192,7 @@ async def test_get_shows_past_submission_read_only_when_no_active_term(
     assert body["choices"][0]["reason"] == "前回の志望理由"
 
 
-async def test_get_shows_most_recent_past_term_among_several(
-    client, db_session
-) -> None:
+async def test_get_shows_form_from_the_most_recent_term(client, db_session) -> None:
     student = await _make_student(db_session)
     seminar = await _make_seminar(db_session)
 
@@ -320,7 +319,11 @@ async def test_put_replaces_existing_choices(client, db_session) -> None:
     assert body["choices"][0]["seminar_id"] == str(seminar_b.id)
 
 
-async def test_put_resets_submitted_form_back_to_draft(client, db_session) -> None:
+async def test_put_keeps_submitted_status_and_refreshes_submitted_at(
+    client, db_session
+) -> None:
+    # docs/requirements.md通り、提出後の上書きはsubmittedのまま
+    # (取り下げ扱いにはしない)、submitted_atだけ更新される。
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
@@ -333,7 +336,10 @@ async def test_put_resets_submitted_form_back_to_draft(client, db_session) -> No
             "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
         },
     )
-    await client.post("/applications/me/submit", headers=_auth_headers(student.email))
+    submit_resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+    first_submitted_at = submit_resp.json()["submitted_at"]
 
     resp = await client.put(
         "/applications/me",
@@ -346,7 +352,38 @@ async def test_put_resets_submitted_form_back_to_draft(client, db_session) -> No
     )
 
     assert resp.status_code == 200
-    assert resp.json()["status"] == "draft"
+    body = resp.json()
+    assert body["status"] == "submitted"
+    assert body["choices"][0]["reason"] == "改稿"
+    assert body["submitted_at"] is not None
+    assert body["submitted_at"] != first_submitted_at
+
+
+async def test_put_keeps_draft_status_as_draft(client, db_session) -> None:
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "B"}]
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "draft"
+    assert body["submitted_at"] is None
 
 
 async def test_put_rejects_duplicate_priority(client, db_session) -> None:
@@ -510,6 +547,37 @@ async def test_submit_without_choices_returns_400(client, db_session) -> None:
 
 async def test_submit_requires_active_term(client, db_session) -> None:
     student = await _make_student(db_session)
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 400
+
+
+async def test_submit_rejects_seminar_that_stopped_recruiting_after_draft_saved(
+    client, db_session
+) -> None:
+    # 下書き保存時は募集中だったが、提出前に運営が募集を締め切ったケース。
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    result = await db_session.execute(
+        select(SeminarRecruitment).where(SeminarRecruitment.seminar_id == seminar.id)
+    )
+    recruitment = result.scalar_one()
+    recruitment.is_recruiting = False
+    await db_session.flush()
 
     resp = await client.post(
         "/applications/me/submit", headers=_auth_headers(student.email)
