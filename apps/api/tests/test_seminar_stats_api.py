@@ -142,11 +142,9 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
         status=ApplicationStatus.submitted,
         choices=[(seminar_a, 2), (seminar_b, 1)],
     )
-    # 継続者(現年度の所属ゼミ生)を1名
+    # 継続者(現ラウンドの所属ゼミ生)を1名
     db_session.add(
-        SeminarMember(
-            seminar_id=seminar_a.id, student_id=s1.id, academic_year=term.academic_year
-        )
+        SeminarMember(seminar_id=seminar_a.id, student_id=s1.id, term_id=term.id)
     )
     await db_session.flush()
 

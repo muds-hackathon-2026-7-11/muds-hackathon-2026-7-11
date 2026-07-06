@@ -81,20 +81,21 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
         )
     )
 
+    past_term = await _make_open_term(db_session, academic_year - 1)
     current_student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
     past_student = await _make_user(db_session, UserRole.student, "過去の研究テーマ")
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=current_student.id,
-            academic_year=academic_year,
+            term_id=term.id,
         )
     )
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=past_student.id,
-            academic_year=academic_year - 1,
+            term_id=past_term.id,
         )
     )
     await db_session.flush()

@@ -152,12 +152,20 @@ async def test_applicants_grouped_with_priority_and_past_seminars(
         status=ApplicationStatus.submitted,
         choices=[(my_seminar, 2, "興味があります")],
     )
-    # s1 の過去所属
+    # s1 の過去所属(前年度=別の募集ラウンド)
+    past_term = RecruitmentTerm(
+        academic_year=term.academic_year - 1,
+        starts_at=date(term.academic_year - 1, 4, 1),
+        ends_at=date(term.academic_year - 1, 9, 30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(past_term)
+    await db_session.flush()
     db_session.add(
         SeminarMember(
             seminar_id=past_seminar.id,
             student_id=s1.id,
-            academic_year=term.academic_year - 1,
+            term_id=past_term.id,
         )
     )
     await db_session.flush()

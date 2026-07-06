@@ -138,10 +138,10 @@ async def seminar_stats(
         grade_key = grade or "不明"
         grades[grade_key] = grades.get(grade_key, 0) + 1
 
-    # 継続者（現年度の所属ゼミ生数）
+    # 継続者（現ラウンドの所属ゼミ生数）
     member_rows = await db.execute(
         select(SeminarMember.seminar_id, func.count())
-        .where(SeminarMember.academic_year == term.academic_year)
+        .where(SeminarMember.term_id == term.id)
         .group_by(SeminarMember.seminar_id)
     )
     continuing_by_seminar: dict[uuid.UUID, int] = {
@@ -217,7 +217,7 @@ async def get_seminar(
             .join(SeminarMember, SeminarMember.student_id == User.id)
             .where(
                 SeminarMember.seminar_id == seminar_id,
-                SeminarMember.academic_year == term.academic_year,
+                SeminarMember.term_id == term.id,
             )
             .order_by(User.name)
         )
