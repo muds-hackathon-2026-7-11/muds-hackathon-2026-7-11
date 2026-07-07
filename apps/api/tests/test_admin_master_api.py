@@ -250,9 +250,7 @@ async def test_delete_seminar_material(client, db_session) -> None:
     seminar = await _make_seminar(db_session)
     material = await _add_material(db_session, seminar)
 
-    resp = await client.delete(
-        f"/admin/seminars/{seminar.id}/materials/{material.id}"
-    )
+    resp = await client.delete(f"/admin/seminars/{seminar.id}/materials/{material.id}")
     assert resp.status_code == 204
     assert await db_session.get(SeminarMaterial, material.id) is None
 
@@ -260,9 +258,7 @@ async def test_delete_seminar_material(client, db_session) -> None:
 async def test_delete_material_unknown_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     seminar = await _make_seminar(db_session)
-    resp = await client.delete(
-        f"/admin/seminars/{seminar.id}/materials/{uuid.uuid4()}"
-    )
+    resp = await client.delete(f"/admin/seminars/{seminar.id}/materials/{uuid.uuid4()}")
     assert resp.status_code == 404
 
 
