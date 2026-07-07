@@ -22,6 +22,7 @@ type ResearchTag = {
 type Teacher = {
   id: string;
   name: string;
+  photo_url: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -55,6 +56,30 @@ const MATERIAL_TYPE_LABEL: Record<Material["type"], string> = {
   pdf: "PDF",
   video: "動画",
 };
+
+function TeacherAvatar({
+  name,
+  photoUrl,
+}: {
+  name: string;
+  photoUrl: string | null;
+}) {
+  if (photoUrl) {
+    return (
+      // biome-ignore lint/performance/noImgElement: photo_urlは任意の外部ドメインのため next/image のドメイン許可設定が不要なimgタグを使う
+      <img
+        src={photoUrl}
+        alt={name}
+        className="h-16 w-16 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-black/[.06] text-lg font-medium text-foreground/60 dark:bg-white/[.08]">
+      {name.charAt(0)}
+    </div>
+  );
+}
 
 function tagChartData(members: Member[]): { name: string; count: number }[] {
   const counts = new Map<string, number>();
@@ -139,25 +164,31 @@ export function SeminarDetailView({
         {seminar.teachers.length === 0 ? (
           <p className="mt-2 text-sm text-foreground/60">未設定です。</p>
         ) : (
-          <div className="mt-3 flex flex-col gap-4">
+          <div className="mt-3 flex flex-wrap gap-6">
             {seminar.teachers.map((teacher) => (
-              <div key={teacher.id}>
-                <p className="font-medium">{teacher.name}</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
-                  {teacher.research_theme ?? "未設定"}
-                </p>
-                {teacher.interest_tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {teacher.interest_tags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="rounded-full border border-black/[.08] px-3 py-1 text-xs text-foreground/70 dark:border-white/[.145]"
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div key={teacher.id} className="flex min-w-[240px] flex-1 gap-4">
+                <TeacherAvatar
+                  name={teacher.name}
+                  photoUrl={teacher.photo_url}
+                />
+                <div className="min-w-0">
+                  <p className="font-medium">{teacher.name}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
+                    {teacher.research_theme ?? "未設定"}
+                  </p>
+                  {teacher.interest_tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {teacher.interest_tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="rounded-full border border-black/[.08] px-3 py-1 text-xs text-foreground/70 dark:border-white/[.145]"
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

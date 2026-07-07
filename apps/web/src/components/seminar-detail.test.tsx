@@ -19,6 +19,7 @@ const seminar: SeminarDetail = {
     {
       id: "teacher-1",
       name: "山田教授",
+      photo_url: null,
       research_theme: "深層学習",
       interest_tags: [
         { id: "tag-1", name: "深層学習", category: "AI・機械学習" },
@@ -71,6 +72,28 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("学生A")).toBeInTheDocument();
     expect(screen.getByText("学生B")).toBeInTheDocument();
     expect(screen.getByText("2人")).toBeInTheDocument();
+  });
+
+  it("shows the teacher's initial when no photo_url is set", () => {
+    render(<SeminarDetailView seminar={seminar} slackUserId="U123" />);
+
+    expect(screen.getByText("山")).toBeInTheDocument();
+    expect(screen.queryByAltText("山田教授")).not.toBeInTheDocument();
+  });
+
+  it("shows the teacher's photo when photo_url is set", () => {
+    const withPhoto: SeminarDetail = {
+      ...seminar,
+      teachers: [
+        { ...seminar.teachers[0], photo_url: "https://example.com/p.jpg" },
+      ],
+    };
+    render(<SeminarDetailView seminar={withPhoto} slackUserId="U123" />);
+
+    expect(screen.getByAltText("山田教授")).toHaveAttribute(
+      "src",
+      "https://example.com/p.jpg",
+    );
   });
 
   it("aggregates member interest tags into a chart with counts", () => {
