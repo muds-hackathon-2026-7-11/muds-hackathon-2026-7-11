@@ -38,9 +38,14 @@ beforeEach(() => {
     status: "authenticated",
     update: vi.fn(),
   } as ReturnType<typeof useSession>);
+  // ゼミ未選択の志望理由はテスト間で共有されるjsdomのlocalStorageに
+  // 一時保存されるため、前のテストの下書きが後続テストへ漏れないよう
+  // 明示的にクリアする。
+  window.localStorage.clear();
 });
 
 afterEach(() => {
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -196,6 +201,86 @@ describe("ApplicationForm", () => {
     expect(url).toContain("/applications/me");
     expect(init.method).toBe("PUT");
     await screen.findByText("保存済み");
+  }, 10000);
+
+  it("keeps an in-progress reason for a slot with no seminar selected after autosave", async () => {
+    const user = userEvent.setup();
+    const putResponse: ApplicationFormData = {
+      id: "form-1",
+      status: "draft",
+      submitted_at: null,
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "1件目の理由",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+      is_editable: true,
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(putResponse), { status: 200 }),
+    );
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "1件目の理由",
+    );
+    // 第2志望はゼミ未選択("選択してください")のまま理由だけ書きかける。
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[1],
+      "2件目は検討中",
+    );
+
+    await screen.findByText("保存済み");
+
+    // ゼミ未選択のスロットはPUTから除外されサーバー応答にも含まれないが、
+    // 書きかけの理由がローカルで消えてはいけない。
+    expect(screen.getByDisplayValue("2件目は検討中")).toBeInTheDocument();
+  }, 10000);
+
+  it("persists an orphan reason (no seminar selected) to localStorage and restores it after remounting", async () => {
+    const user = userEvent.setup();
+
+    const { unmount } = render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    // ゼミは選ばず、志望理由だけ書きかける。
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "検討中です",
+    );
+
+    await waitFor(
+      () => {
+        expect(
+          window.localStorage.getItem("application-form-local-draft"),
+        ).toContain("検討中です");
+      },
+      { timeout: 2000 },
+    );
+
+    // ページを再読み込みした想定でアンマウント→再マウントする。
+    unmount();
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    expect(screen.getByDisplayValue("検討中です")).toBeInTheDocument();
   }, 10000);
 
   it("does not autosave immediately on mount", async () => {

@@ -14,6 +14,53 @@ const REASON_MAX_LENGTH = 400;
 // 入力が止まってから自動保存するまでの待ち時間。
 const AUTOSAVE_DELAY_MS = 1000;
 
+// ゼミ未選択("選択してください")のスロットはAPIへ保存できない
+// (ApplicationChoiceInはseminar_idが必須のため)。そのスロットの書きかけの
+// 志望理由は、ゼミが選ばれるまでの間ブラウザのlocalStorageにだけ一時保存し、
+// ページを再読み込みしても消えないようにする。
+const LOCAL_DRAFT_KEY = "application-form-local-draft";
+
+function loadLocalDraft(): [Slot, Slot, Slot] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 3) {
+      return null;
+    }
+    return parsed as [Slot, Slot, Slot];
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDraft(slots: [Slot, Slot, Slot]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(slots));
+  } catch {
+    // ストレージが使えない環境(プライベートモード等)では何もしない。
+  }
+}
+
+function clearLocalDraft(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(LOCAL_DRAFT_KEY);
+  } catch {
+    // ストレージが使えない環境(プライベートモード等)では何もしない。
+  }
+}
+
 async function extractErrorDetail(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: string };
@@ -89,9 +136,18 @@ export function ApplicationForm({
   initialApplication,
 }: ApplicationFormProps) {
   const { data: session } = useSession();
-  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() =>
-    toSlots(initialApplication.choices),
-  );
+  const [slots, setSlots] = useState<[Slot, Slot, Slot]>(() => {
+    const base = toSlots(initialApplication.choices);
+    const localDraft = loadLocalDraft();
+    if (!localDraft) {
+      return base;
+    }
+    // サーバー側で既にゼミが選択されているスロットはサーバー側を優先し、
+    // ゼミ未選択のスロットだけローカル下書きで補う。
+    return base.map((slot, index) =>
+      slot.seminarId === "" ? localDraft[index] : slot,
+    ) as [Slot, Slot, Slot];
+  });
   const [submittedAt, setSubmittedAt] = useState(
     initialApplication.submitted_at,
   );
@@ -192,7 +248,17 @@ export function ApplicationForm({
         }
         const data = (await res.json()) as ApplicationFormData;
         setSubmittedAt(data.submitted_at);
-        setSlots(toSlots(data.choices));
+        // ゼミ未選択("選択してください")のスロットはリクエストから除外して
+        // おり、サーバーの応答にも含まれない。そのスロットまで応答で
+        // 上書きすると、ゼミ未選択のまま書きかけの志望理由が消えてしまう
+        // ため、送っていないスロットは現在のローカル状態をそのまま残す。
+        const saved = toSlots(data.choices);
+        setSlots(
+          (prev) =>
+            prev.map((slot, index) =>
+              slotsToSave[index].seminarId === "" ? slot : saved[index],
+            ) as [Slot, Slot, Slot],
+        );
         return true;
       } catch {
         setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
@@ -214,6 +280,22 @@ export function ApplicationForm({
     }
 
     const timer = setTimeout(async () => {
+      // ゼミ未選択のままの志望理由はAPIへ保存できないため、
+      // localStorageへの一時保存/クリアだけ行う。
+      const hasOrphanReason = slots.some(
+        (slot) => slot.seminarId === "" && slot.reason.trim() !== "",
+      );
+      if (hasOrphanReason) {
+        saveLocalDraft(slots);
+      } else {
+        clearLocalDraft();
+      }
+
+      const hasSelectedSeminar = slots.some((slot) => slot.seminarId !== "");
+      if (!hasSelectedSeminar) {
+        return;
+      }
+
       setAutosaveState("saving");
       const ok = await persistChoices(slots);
       if (ok) {
@@ -287,6 +369,21 @@ export function ApplicationForm({
   // サーバー側が編集後の内容のままなので、スナップショットを明示的に書き戻す。
   // 毎回PUTしないのは、PUTのたびに提出日時が更新されたりマッチ度が消えたり
   // する副作用があり、何も送る必要が無い時にそれを起こしたくないため。
+  // ローカル下書き(localStorage)を、渡されたスロットの内容に合わせ直す。
+  // 「戻る」で編集中の内容を捨てる際、編集中に書きかけていた
+  // ゼミ未選択分の下書きも一緒に捨てる(スナップショット自身に
+  // ゼミ未選択の下書きが含まれていれば、それはそのまま残す)。
+  function resyncLocalDraft(slotsToKeep: [Slot, Slot, Slot]): void {
+    const hasOrphanReason = slotsToKeep.some(
+      (slot) => slot.seminarId === "" && slot.reason.trim() !== "",
+    );
+    if (hasOrphanReason) {
+      saveLocalDraft(slotsToKeep);
+    } else {
+      clearLocalDraft();
+    }
+  }
+
   async function handleRevertClick(): Promise<void> {
     if (!snapshotSlots) {
       setIsLocked(true);
@@ -295,6 +392,7 @@ export function ApplicationForm({
 
     if (!serverDirtySinceEdit.current) {
       setSlots(snapshotSlots);
+      resyncLocalDraft(snapshotSlots);
       setSnapshotSlots(null);
       setIsLocked(true);
       setErrorMessage(null);
@@ -308,6 +406,7 @@ export function ApplicationForm({
       if (!ok) {
         return;
       }
+      resyncLocalDraft(snapshotSlots);
       serverDirtySinceEdit.current = false;
       setSnapshotSlots(null);
       setIsLocked(true);
