@@ -58,6 +58,25 @@ make import-data   # ゼミ・教員・学生データをまとめて投入
    - **教員は非アクティブ化の対象外**(Slack在籍と実際の在職状況が一致しない
      ケースがあるため)。教員の退職時は手動で`is_active`を`false`にすること
 
+## ゼミ資料(PDF) — AI用の要約知識
+
+マッチ度診断・AIゼミ相談アシスタントが参照する「ゼミの要約知識」を、ゼミ紹介PDFから
+生成して投入する。
+
+1. `data/seminar_docs/` ディレクトリを作り、**ファイル名をゼミ名**にしたPDFを置く
+   (例: `data/seminar_docs/AIゼミ.pdf`)。ファイル名(拡張子除く)が `seminars.name`
+   と一致するゼミに紐づく(先に `import-seminars` でゼミを作成しておくこと)。
+2. 投入する(OpenAIでPDFを要約し `seminars.knowledge` に保存する。**OpenAIの課金/quotaが必要**):
+
+   ```sh
+   make import-seminar-docs
+   ```
+
+   別ディレクトリを使う場合は `make import-seminar-docs dir=data/<ディレクトリ>` のように指定する。
+
+- 要約はリクエスト時ではなくこの投入時に一度だけ生成し、DBに保存する(APIは実行時にPDFを読まない)。
+- PDFを差し替えたら再実行すれば `knowledge` が上書きされる。
+
 ## まとめて投入
 
 デフォルトのファイル名(`seminar_teacher.csv`, `slack_member.csv`)で両方揃っていれば、

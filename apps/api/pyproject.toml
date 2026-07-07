@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28.1",
     "openai>=2.44.0",
     "pgvector>=0.4.2",
+    "pypdf>=6.0.0",
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.32",
