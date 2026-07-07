@@ -329,6 +329,16 @@ export function AdminSeminarsView({
       setErrorMessage("募集人数は0以上の整数で入力してください。");
       return;
     }
+    if (input.targetGrades.length === 0) {
+      const seminarName =
+        seminars.find((s) => s.id === seminarId)?.name ?? "このゼミ";
+      const confirmed = window.confirm(
+        `対象学年が1つも選択されていません。「${seminarName}」を募集していない状態にして保存します。よろしいですか?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     setSavingRecruitmentId(seminarId);
     try {
       const res = await apiFetch(

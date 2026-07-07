@@ -200,9 +200,22 @@ async def test_upsert_unknown_seminar_is_404(client, db_session) -> None:
     term = await _make_term(db_session, academic_year=4106)
     resp = await client.put(
         f"/admin/recruitment-terms/{term.id}/seminars/{uuid.uuid4()}",
-        json={"capacity": 10},
+        json={"capacity": 10, "target_grades": ["B1"]},
     )
     assert resp.status_code == 404
+
+
+async def test_upsert_requires_target_grades(client, db_session) -> None:
+    # このエンドポイントは全置換のため、target_gradesの省略時に暗黙で
+    # 閉じる/開くどちらかにフォールバックさせず、明示必須にしている。
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4108)
+    seminar = await _make_seminar(db_session)
+    resp = await client.put(
+        f"/admin/recruitment-terms/{term.id}/seminars/{seminar.id}",
+        json={"capacity": 10},
+    )
+    assert resp.status_code == 422
 
 
 # --- 認可 ---

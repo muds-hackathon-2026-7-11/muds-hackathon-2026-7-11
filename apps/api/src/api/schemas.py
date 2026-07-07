@@ -210,7 +210,10 @@ class RecruitmentTermOut(BaseModel):
 class SeminarRecruitmentUpsert(BaseModel):
     capacity: int = Field(ge=0)
     # 募集対象学年(#99)。空リストは「募集していない」を意味する。
-    target_grades: list[Literal["B1", "B2", "B3", "B4"]] = Field(default_factory=list)
+    # このエンドポイントは全置換なので必須にする(省略時に暗黙で
+    # 閉じる/開くのどちらかにフォールバックすると、teacher.py側の
+    # 「省略時は既存値据え置き」という別の省略時挙動と食い違うため)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]]
 
 
 class SeminarRecruitmentOut(BaseModel):
