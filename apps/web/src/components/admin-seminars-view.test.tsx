@@ -313,7 +313,7 @@ describe("AdminSeminarsView", () => {
     ).toBeInTheDocument();
   });
 
-  it("saves the recruitment capacity for the latest term", async () => {
+  it("saves the recruitment capacity and target grades for the latest term", async () => {
     const user = userEvent.setup();
     const seminar = makeSeminar();
     const term = makeTerm();
@@ -323,7 +323,7 @@ describe("AdminSeminarsView", () => {
           seminar_id: seminar.id,
           seminar_name: seminar.name,
           capacity: 5,
-          is_recruiting: true,
+          target_grades: ["B1", "B2", "B3", "B4"],
         }),
         { status: 200 },
       ),
@@ -332,7 +332,6 @@ describe("AdminSeminarsView", () => {
     renderView({ seminars: [seminar], latestTerm: term });
 
     await user.type(screen.getByPlaceholderText("人数"), "5");
-    await user.click(screen.getByRole("checkbox", { name: "募集中" }));
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
     await waitFor(() => {
@@ -344,7 +343,6 @@ describe("AdminSeminarsView", () => {
           method: "PUT",
           body: JSON.stringify({
             capacity: 5,
-            is_recruiting: true,
             target_grades: ["B1", "B2", "B3", "B4"],
           }),
         }),
@@ -362,7 +360,7 @@ describe("AdminSeminarsView", () => {
           seminar_id: seminar.id,
           seminar_name: seminar.name,
           capacity: 5,
-          is_recruiting: true,
+          target_grades: ["B2", "B3", "B4"],
         }),
         { status: 200 },
       ),
@@ -386,14 +384,72 @@ describe("AdminSeminarsView", () => {
     });
   });
 
-  it("shows a not-yet-effective note next to the grade checkboxes", () => {
+  it("asks for confirmation before saving with no grades selected", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar({
+      name: "AIゼミ",
+    });
+    const term = makeTerm();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: [],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    for (const grade of ["B1", "B2", "B3", "B4"]) {
+      await user.click(screen.getByRole("checkbox", { name: grade }));
+    }
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("AIゼミ"));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify([])),
+        }),
+      );
+    });
+  });
+
+  it("does not save when the no-grades confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    for (const grade of ["B1", "B2", "B3", "B4"]) {
+      await user.click(screen.getByRole("checkbox", { name: grade }));
+    }
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows a hint that unchecking all grades closes recruiting", () => {
     const seminar = makeSeminar();
     const term = makeTerm();
     renderView({ seminars: [seminar], latestTerm: term });
 
     expect(
       screen.getByText(
-        "※ 対象学年の絞り込みはまだ反映されません(今後対応予定)。",
+        "対象学年をすべて外すと、このゼミは募集していない扱いになります。",
       ),
     ).toBeInTheDocument();
   });

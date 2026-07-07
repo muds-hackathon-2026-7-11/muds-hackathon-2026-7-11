@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -208,7 +209,11 @@ class RecruitmentTermOut(BaseModel):
 
 class SeminarRecruitmentUpsert(BaseModel):
     capacity: int = Field(ge=0)
-    is_recruiting: bool = True
+    # 募集対象学年(#99)。空リストは「募集していない」を意味する。
+    # このエンドポイントは全置換なので必須にする(省略時に暗黙で
+    # 閉じる/開くのどちらかにフォールバックすると、teacher.py側の
+    # 「省略時は既存値据え置き」という別の省略時挙動と食い違うため)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]]
 
 
 class SeminarRecruitmentOut(BaseModel):
@@ -217,7 +222,7 @@ class SeminarRecruitmentOut(BaseModel):
     seminar_id: uuid.UUID
     seminar_name: str
     capacity: int | None
-    is_recruiting: bool | None
+    target_grades: list[str] | None
 
 
 # --- 教員向け応募者管理 (#58) ---
@@ -245,14 +250,15 @@ class SeminarApplicantsOut(BaseModel):
 
 class TeacherRecruitmentUpdate(BaseModel):
     capacity: int = Field(ge=0)
-    is_recruiting: bool | None = None
+    # Noneなら据え置き(現状の対象学年を変更しない)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]] | None = None
 
 
 class TeacherRecruitmentOut(BaseModel):
     seminar_id: uuid.UUID
     seminar_name: str
     capacity: int | None
-    is_recruiting: bool | None
+    target_grades: list[str] | None
 
 
 # --- マッチ度診断 (#59) ---

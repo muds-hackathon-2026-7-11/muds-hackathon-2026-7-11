@@ -40,7 +40,7 @@ export type AdminSeminarRecruitment = {
   seminar_id: string;
   seminar_name: string;
   capacity: number | null;
-  is_recruiting: boolean | null;
+  target_grades: string[] | null;
 };
 
 const MATERIAL_TYPE_LABEL: Record<AdminSeminarMaterial["type"], string> = {
@@ -58,21 +58,18 @@ async function extractErrorDetail(res: Response): Promise<string> {
   }
 }
 
-// 学年ごとの募集可否はバックエンド未対応(#イシュー: 学年表記の正規化が
-// 前提のため)。UIだけ先行して用意し、保存時はtarget_gradesを送るが、
-// バックエンドは未知のフィールドとして無視するため今は反映されない。
+// 対象学年(#99)。学部4年までしか使わないためB1〜B4のみ。空配列は
+// 「募集していない」を意味する(旧is_recruiting=falseに相当)。
 const GRADE_OPTIONS = ["B1", "B2", "B3", "B4"] as const;
 
 type RecruitmentInput = {
   capacity: string;
-  isRecruiting: boolean;
   targetGrades: string[];
 };
 
 function defaultRecruitmentInput(): RecruitmentInput {
   return {
     capacity: "",
-    isRecruiting: false,
     targetGrades: [...GRADE_OPTIONS],
   };
 }
@@ -84,8 +81,7 @@ function buildInitialRecruitmentInputs(
   for (const r of recruitments) {
     map[r.seminar_id] = {
       capacity: r.capacity === null ? "" : String(r.capacity),
-      isRecruiting: r.is_recruiting ?? false,
-      targetGrades: [...GRADE_OPTIONS],
+      targetGrades: r.target_grades ?? [...GRADE_OPTIONS],
     };
   }
   return map;
@@ -333,6 +329,16 @@ export function AdminSeminarsView({
       setErrorMessage("募集人数は0以上の整数で入力してください。");
       return;
     }
+    if (input.targetGrades.length === 0) {
+      const seminarName =
+        seminars.find((s) => s.id === seminarId)?.name ?? "このゼミ";
+      const confirmed = window.confirm(
+        `対象学年が1つも選択されていません。「${seminarName}」を募集していない状態にして保存します。よろしいですか?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     setSavingRecruitmentId(seminarId);
     try {
       const res = await apiFetch(
@@ -343,8 +349,6 @@ export function AdminSeminarsView({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             capacity,
-            is_recruiting: input.isRecruiting,
-            // バックエンド未対応のため現時点では無視される(#学年別募集設定)。
             target_grades: input.targetGrades,
           }),
         },
@@ -358,8 +362,7 @@ export function AdminSeminarsView({
         ...prev,
         [seminarId]: {
           capacity: updated.capacity === null ? "" : String(updated.capacity),
-          isRecruiting: updated.is_recruiting ?? false,
-          targetGrades: prev[seminarId]?.targetGrades ?? [...GRADE_OPTIONS],
+          targetGrades: updated.target_grades ?? [...GRADE_OPTIONS],
         },
       }));
     } catch {
@@ -631,54 +634,22 @@ export function AdminSeminarsView({
               </div>
 
               <div className="mt-3">
-                <p className="text-sm text-foreground/60">募集人数</p>
+                <p className="text-sm text-foreground/60">募集人数・対象学年</p>
                 {latestTerm ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      value={recruitmentInputs[seminar.id]?.capacity ?? ""}
-                      onChange={(e) =>
-                        updateRecruitmentInput(seminar.id, {
-                          capacity: e.target.value,
-                        })
-                      }
-                      placeholder="人数"
-                      className="w-24 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
-                    />
-                    <label className="flex items-center gap-1.5 text-sm">
+                  <div className="mt-2 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <input
-                        type="checkbox"
-                        checked={
-                          recruitmentInputs[seminar.id]?.isRecruiting ?? false
-                        }
+                        type="number"
+                        min={0}
+                        value={recruitmentInputs[seminar.id]?.capacity ?? ""}
                         onChange={(e) =>
                           updateRecruitmentInput(seminar.id, {
-                            isRecruiting: e.target.checked,
+                            capacity: e.target.value,
                           })
                         }
+                        placeholder="人数"
+                        className="w-24 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
                       />
-                      募集中
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleSaveRecruitment(seminar.id)}
-                      disabled={savingRecruitmentId === seminar.id}
-                      className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-                    >
-                      {savingRecruitmentId === seminar.id
-                        ? "保存中..."
-                        : "保存する"}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm text-foreground/40">
-                    募集ラウンドがまだ作成されていません。
-                  </p>
-                )}
-                {latestTerm && (
-                  <div className="mt-2">
-                    <div className="flex flex-wrap gap-3">
                       {GRADE_OPTIONS.map((grade) => (
                         <label
                           key={grade}
@@ -698,11 +669,25 @@ export function AdminSeminarsView({
                           {grade}
                         </label>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRecruitment(seminar.id)}
+                        disabled={savingRecruitmentId === seminar.id}
+                        className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                      >
+                        {savingRecruitmentId === seminar.id
+                          ? "保存中..."
+                          : "保存する"}
+                      </button>
                     </div>
-                    <p className="mt-1 text-xs text-foreground/40">
-                      ※ 対象学年の絞り込みはまだ反映されません(今後対応予定)。
+                    <p className="text-xs text-foreground/40">
+                      対象学年をすべて外すと、このゼミは募集していない扱いになります。
                     </p>
                   </div>
+                ) : (
+                  <p className="mt-1 text-sm text-foreground/40">
+                    募集ラウンドがまだ作成されていません。
+                  </p>
                 )}
               </div>
 

@@ -393,6 +393,7 @@ async def seed_all() -> None:
                         term_id=term.id,
                         seminar_id=seminar.id,
                         capacity=seminar_data["capacity"],
+                        target_grades=["B1", "B2", "B3", "B4"],
                     )
                 )
                 recruitment_created += 1

@@ -2,8 +2,9 @@ import enum
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,4 +53,7 @@ class SeminarRecruitment(IDMixin, Base):
         PGUUID(as_uuid=True), ForeignKey("seminars.id", ondelete="CASCADE")
     )
     capacity: Mapped[int] = mapped_column(Integer)
-    is_recruiting: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 募集対象学年(#99)。空リストは「募集していない」を表す
+    # (is_recruiting相当。B1〜B4以外の学年は常に対象外なので専用の値は
+    # 持たせない。値の正規化・比較は api.services.normalize_grade を使う)。
+    target_grades: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)

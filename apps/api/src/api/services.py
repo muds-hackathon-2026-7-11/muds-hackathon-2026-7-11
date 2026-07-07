@@ -21,6 +21,27 @@ from api.slack_client import SlackClient
 
 logger = logging.getLogger(__name__)
 
+# 学年別募集(#99)の対象学年。学部生のみを対象とし、大学院生・guest等は
+# 対象外(常に学年別募集ゼミには応募できない)。
+GRADE_OPTIONS: tuple[str, ...] = ("B1", "B2", "B3", "B4")
+
+
+def normalize_grade(raw: str | None) -> str | None:
+    """学年文字列をB1〜B4のいずれかに正規化する(#99)。
+
+    実データのusers.gradeは表記が統一されておらず(例:
+    "MIDS/B1"、"M1 guest"、空文字)、そのままでは学年別募集の対象判定に
+    使えない。末尾がB1〜B4のいずれかに一致すれば学部生としてその学年に
+    含める(例: "MIDS/B1" -> "B1")。M1/M2/D1/guestや空文字はどのB1〜B4にも
+    一致しないため、常に学年別募集の対象外(None)として扱う。
+    """
+    if raw is None:
+        return None
+    for grade in GRADE_OPTIONS:
+        if raw.endswith(grade):
+            return grade
+    return None
+
 
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     """今アクティブな募集ラウンドを1件返す(なければNone)。
