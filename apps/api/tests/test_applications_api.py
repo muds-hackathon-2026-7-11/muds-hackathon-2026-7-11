@@ -293,6 +293,28 @@ async def test_get_rejects_inactive_student(client, db_session) -> None:
     assert resp.status_code == 403
 
 
+async def test_get_allows_admin_who_is_also_a_student(client, db_session) -> None:
+    # role=adminでも実際には在学中の学生であるユーザーがいるため、
+    # self-serviceな/me系エンドポイントはadminも許可する。
+    await _close_all_open_terms(db_session)
+    admin = User(
+        google_id=_unique("google"),
+        email=f"{_unique('admin')}@example.com",
+        name="テスト管理者",
+        role=UserRole.admin,
+        grade="B3",
+    )
+    db_session.add(admin)
+    await db_session.flush()
+
+    resp = await client.get(
+        "/applications/me",
+        headers={"X-Dev-User-Email": admin.email, "X-Dev-User-Role": "admin"},
+    )
+
+    assert resp.status_code == 200
+
+
 # --- PUT /applications/me ---
 
 

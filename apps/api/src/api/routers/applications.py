@@ -2,6 +2,11 @@
 
 学生が第1〜第3志望とその理由を、現在アクティブな募集期間
 (api.services.get_current_term)に対して下書き保存・提出する。
+
+role=adminであっても実際には在学中の学生であるユーザーがいるため、
+/me系エンドポイントはstudentに加えてadminも許可する(常に本人の
+データのみを操作するself-serviceなエンドポイントであり、他人の
+志望を操作できるわけではないため安全)。
 """
 
 import uuid
@@ -158,7 +163,7 @@ async def _require_current_term(db: AsyncSession) -> RecruitmentTerm:
 @router.get("/me", response_model=ApplicationFormOut)
 async def get_my_application(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(UserRole.student)),
+    user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
     term = await get_current_term(db)
     if term is not None:
@@ -181,7 +186,7 @@ async def get_my_application(
 async def upsert_my_application(
     payload: ApplicationUpsertIn,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(UserRole.student)),
+    user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
     term = await _require_current_term(db)
     _validate_choice_shape(payload.choices)
@@ -238,7 +243,7 @@ async def upsert_my_application(
 @router.post("/me/submit", response_model=ApplicationFormOut)
 async def submit_my_application(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(UserRole.student)),
+    user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
     term = await _require_current_term(db)
 
