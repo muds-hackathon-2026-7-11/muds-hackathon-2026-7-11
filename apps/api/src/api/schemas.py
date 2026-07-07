@@ -20,6 +20,13 @@ class ResearchTagOut(BaseModel):
     category: str
 
 
+class CurrentSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
 class MeOut(BaseModel):
     """認証済みユーザー自身の情報(GET /me)。"""
 
@@ -34,6 +41,8 @@ class MeOut(BaseModel):
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
+    # 現在の年度に所属しているゼミ(学生のみ。無ければNone)。
+    current_seminar: CurrentSeminarOut | None
 
 
 class MeUpdateIn(BaseModel):

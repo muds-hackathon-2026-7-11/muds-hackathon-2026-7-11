@@ -1,9 +1,18 @@
 import uuid
+from datetime import date, timedelta
 
 import pytest
 
 from api import auth
-from api.models import ResearchTag, User, UserRole
+from api.models import (
+    RecruitmentTerm,
+    RecruitmentTermStatus,
+    ResearchTag,
+    Seminar,
+    SeminarMember,
+    User,
+    UserRole,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -35,6 +44,25 @@ async def _make_tag(db_session, name: str) -> ResearchTag:
     return tag
 
 
+async def _make_term(db_session, academic_year: int) -> RecruitmentTerm:
+    term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=1),
+        ends_at=date.today() + timedelta(days=30),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(term)
+    await db_session.flush()
+    return term
+
+
+async def _make_seminar(db_session) -> Seminar:
+    seminar = Seminar(name=_unique("seminar"))
+    db_session.add(seminar)
+    await db_session.flush()
+    return seminar
+
+
 def _auth_headers(email: str) -> dict[str, str]:
     return {"X-Dev-User-Email": email, "X-Dev-User-Role": "student"}
 
@@ -42,6 +70,44 @@ def _auth_headers(email: str) -> dict[str, str]:
 @pytest.fixture(autouse=True)
 def _enable_dev_auth(monkeypatch):
     monkeypatch.setattr(auth.settings, "auth_dev_mode", True)
+
+
+# --- GET /me: current_seminar ---
+
+
+async def test_get_me_includes_current_seminar_when_assigned(
+    client, db_session
+) -> None:
+    # current_academic_year()は「直近に作成された募集期間」を見るため、
+    # 他のテスト/実データより新しい年度にして「現在」として扱われるようにする。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    user = await _make_user(db_session)
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=user.id, term_id=term.id)
+    )
+    await db_session.flush()
+
+    resp = await client.get("/me", headers=_auth_headers(user.email))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_seminar"] is not None
+    assert body["current_seminar"]["name"] == seminar.name
+
+
+async def test_get_me_current_seminar_is_null_when_not_assigned(
+    client, db_session
+) -> None:
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    await _make_term(db_session, academic_year)
+    user = await _make_user(db_session)
+
+    resp = await client.get("/me", headers=_auth_headers(user.email))
+
+    assert resp.status_code == 200
+    assert resp.json()["current_seminar"] is None
 
 
 # --- GET /me ---
