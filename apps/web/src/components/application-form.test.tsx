@@ -557,7 +557,7 @@ describe("ApplicationForm", () => {
     );
     await user.click(screen.getByRole("button", { name: "提出する" }));
 
-    await screen.findByText("志望を提出しました。");
+    await screen.findByText("提出が完了しました。");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
 
     const [firstUrl, firstInit] = fetchSpy.mock.calls[0] as [

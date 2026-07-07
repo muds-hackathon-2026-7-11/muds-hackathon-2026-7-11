@@ -364,7 +364,7 @@ export function ApplicationForm({
       const data = (await res.json()) as ApplicationFormData;
       setSubmittedAt(data.submitted_at);
       setSlots(toSlots(data.choices));
-      setSubmittedMessage("志望を提出しました。");
+      setSubmittedMessage("提出が完了しました。");
       setIsLocked(true);
       setSnapshotSlots(null);
       serverDirtySinceEdit.current = false;
@@ -441,26 +441,24 @@ export function ApplicationForm({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         {submittedAt && (
-          <p className="text-sm text-foreground/60">
+          <p className="text-sm text-zinc-500">
             提出日時: {formatDateTime(submittedAt)}
           </p>
         )}
         {!isEditable && (
-          <p className="text-sm text-red-600 dark:text-red-400">
+          <p className="text-sm text-red-600">
             ※ 現在は募集期間外です。内容の変更・提出はできません。
           </p>
         )}
       </div>
 
       {errorMessage && (
-        <p className="rounded-lg border border-black/[.08] p-4 text-sm dark:border-white/[.145]">
+        <p className="rounded-2xl border-2 border-red-300 bg-white p-4 text-sm text-red-600 shadow-sm">
           {errorMessage}
         </p>
       )}
       {submittedMessage && !errorMessage && (
-        <p className="rounded-lg border border-black/[.08] p-4 text-sm text-foreground/60 dark:border-white/[.145]">
-          {submittedMessage}
-        </p>
+        <p className="text-xl text-zinc-700">{submittedMessage}</p>
       )}
 
       {isLocked ? (
@@ -476,13 +474,15 @@ export function ApplicationForm({
                 return (
                   <section
                     key={PRIORITY_LABELS[index]}
-                    className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                    className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
                   >
-                    <p className="text-sm text-foreground/60">
+                    <p className="text-lg font-bold text-zinc-700">
                       {PRIORITY_LABELS[index]}
                     </p>
-                    <p className="mt-1 font-semibold">{seminarName}</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm">
+                    <p className="mt-1 text-lg font-bold text-zinc-800">
+                      {seminarName}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
                       {slot.reason}
                     </p>
                   </section>
@@ -495,7 +495,7 @@ export function ApplicationForm({
               <button
                 type="button"
                 onClick={handleEditClick}
-                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                className="rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
               >
                 編集する
               </button>
@@ -517,11 +517,11 @@ export function ApplicationForm({
             return (
               <section
                 key={PRIORITY_LABELS[index]}
-                className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 <label
                   htmlFor={seminarSelectId}
-                  className="block text-sm font-semibold"
+                  className="block text-2xl font-bold text-zinc-800"
                 >
                   {PRIORITY_LABELS[index]}
                 </label>
@@ -533,7 +533,7 @@ export function ApplicationForm({
                     updateSlot(index, { seminarId: e.target.value })
                   }
                   disabled={isBusy}
-                  className="mt-2 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  className="mt-2 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                 >
                   <option value="">選択してください</option>
                   {options.map((seminar) => (
@@ -547,11 +547,11 @@ export function ApplicationForm({
                   <div className="flex items-center justify-between">
                     <label
                       htmlFor={reasonInputId}
-                      className="text-sm text-foreground/60"
+                      className="text-sm text-zinc-500"
                     >
                       志望理由
                     </label>
-                    <span className="text-xs text-foreground/40">
+                    <span className="text-xs text-zinc-400">
                       {slot.reason.length}/{REASON_MAX_LENGTH}文字
                     </span>
                   </div>
@@ -565,7 +565,7 @@ export function ApplicationForm({
                     rows={4}
                     maxLength={REASON_MAX_LENGTH}
                     placeholder="このゼミを志望する理由を入力してください"
-                    className="mt-1 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                    className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                 </div>
               </section>
@@ -577,7 +577,7 @@ export function ApplicationForm({
               type="button"
               onClick={handleSubmitClick}
               disabled={isBusy}
-              className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
             >
               {isSubmitting ? "提出中..." : "提出する"}
             </button>
@@ -586,7 +586,7 @@ export function ApplicationForm({
                 type="button"
                 onClick={handleRevertClick}
                 disabled={isBusy}
-                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                className="rounded-full border border-[#e6e6e6] bg-white px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-[#e6e6e6]/50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isReverting ? "戻しています..." : "戻る"}
               </button>
