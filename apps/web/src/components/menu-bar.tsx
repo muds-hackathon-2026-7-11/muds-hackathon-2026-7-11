@@ -6,16 +6,16 @@ import { useState } from "react";
 
 const navItems = [
   { label: "マイページ", href: "/" },
-  { label: "志望提出", href: "/apply" },
-  { label: "応募状況", href: "/assignment" },
+  { label: "志望理由提出", href: "/apply" },
+  { label: "志望状況一覧", href: "/assignment" },
 ] as const;
 
 function navLinkClassName(isActive: boolean): string {
   return [
     "rounded-full px-4 py-2 text-sm font-medium transition-colors",
     isActive
-      ? "bg-foreground text-background"
-      : "text-foreground/70 hover:bg-black/[.04] hover:text-foreground dark:hover:bg-white/[.08]",
+      ? "bg-[#e6e6e6] text-zinc-900"
+      : "text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900",
   ].join(" ");
 }
 
@@ -24,9 +24,12 @@ export function MenuBar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="border-b border-black/[.08] bg-background dark:border-white/[.145]">
+    <header className="border-b border-[#e6e6e6] bg-white">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
+        <Link
+          href="/"
+          className="text-lg font-semibold tracking-tight text-zinc-900"
+        >
           Zemi-Match
         </Link>
 
@@ -51,7 +54,7 @@ export function MenuBar() {
           disabled
           aria-label="設定(準備中)"
           title="準備中"
-          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full text-foreground/30"
+          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full text-zinc-300"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -74,7 +77,7 @@ export function MenuBar() {
           onClick={() => setIsMobileMenuOpen((open) => !open)}
           aria-expanded={isMobileMenuOpen}
           aria-label="メニューを開閉する"
-          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/[.04] dark:hover:bg-white/[.08] sm:hidden"
+          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-zinc-700 hover:bg-[#e6e6e6]/60 sm:hidden"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -97,7 +100,7 @@ export function MenuBar() {
       </div>
 
       {isMobileMenuOpen && (
-        <nav className="flex flex-col gap-1 border-t border-black/[.08] px-4 py-2 dark:border-white/[.145] sm:hidden">
+        <nav className="flex flex-col gap-1 border-t border-[#e6e6e6] px-4 py-2 sm:hidden">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
