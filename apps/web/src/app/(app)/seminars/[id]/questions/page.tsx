@@ -20,7 +20,10 @@ async function getQuestions(
       session,
       { cache: "no-store" },
     );
-    if (res.status === 404) {
+    // 404(ゼミが存在しない)に加え、422(seminar_idがUUID形式でない=不正な
+    // URL)も「見つからない」として扱う。どちらもこのURLに対応する有効な
+    // ゼミが無いという意味では同じであり、一時的な失敗ではないため。
+    if (res.status === 404 || res.status === 422) {
       return { status: "not_found" };
     }
     if (!res.ok) {
