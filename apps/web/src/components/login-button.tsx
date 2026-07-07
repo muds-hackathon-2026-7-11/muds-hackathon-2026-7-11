@@ -6,7 +6,7 @@ export function LoginButton() {
   return (
     <div className="flex flex-col items-center gap-10">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="font-brand text-7xl font-bold tracking-tight text-zinc-900 drop-shadow-sm sm:text-8xl dark:text-zinc-50">
+        <h1 className="text-7xl font-bold tracking-tight text-zinc-900 drop-shadow-sm sm:text-8xl dark:text-zinc-50">
           Zemi-Match
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
