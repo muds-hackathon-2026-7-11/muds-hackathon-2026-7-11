@@ -1,13 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import type { Session } from "next-auth";
-import { useSession } from "next-auth/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { SeminarDetailView, type SeminarDetail } from "./seminar-detail";
-
-vi.mock("next-auth/react", () => ({
-  useSession: vi.fn(),
-}));
 
 const seminar: SeminarDetail = {
   id: "seminar-1",
@@ -49,21 +42,9 @@ const seminar: SeminarDetail = {
   ],
 };
 
-beforeEach(() => {
-  vi.mocked(useSession).mockReturnValue({
-    data: { accessToken: "test-token" } as Session,
-    status: "authenticated",
-    update: vi.fn(),
-  } as ReturnType<typeof useSession>);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
 describe("SeminarDetailView", () => {
   it("renders seminar info, teachers, materials, and current members", () => {
-    render(<SeminarDetailView seminar={seminar} slackUserId="U123" />);
+    render(<SeminarDetailView seminar={seminar} />);
 
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("機械学習の研究をします。")).toBeInTheDocument();
@@ -71,78 +52,66 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("PDF")).toBeInTheDocument();
     expect(screen.getByText("学生A")).toBeInTheDocument();
     expect(screen.getByText("学生B")).toBeInTheDocument();
-    expect(screen.getByText("2人")).toBeInTheDocument();
   });
 
-  it("shows the teacher's initial when no photo_url is set", () => {
-    render(<SeminarDetailView seminar={seminar} slackUserId="U123" />);
+  it("shows the teacher's initial when neither teacher nor seminar photo is set", () => {
+    render(<SeminarDetailView seminar={seminar} />);
 
     expect(screen.getByText("山")).toBeInTheDocument();
     expect(screen.queryByAltText("山田教授")).not.toBeInTheDocument();
   });
 
-  it("shows the teacher's photo when photo_url is set", () => {
+  it("shows the teacher's own photo when set and the seminar has no photo", () => {
     const withPhoto: SeminarDetail = {
       ...seminar,
       teachers: [
-        { ...seminar.teachers[0], photo_url: "https://example.com/p.jpg" },
+        {
+          ...seminar.teachers[0],
+          photo_url: "https://example.com/teacher.jpg",
+        },
       ],
     };
-    render(<SeminarDetailView seminar={withPhoto} slackUserId="U123" />);
+    render(<SeminarDetailView seminar={withPhoto} />);
 
     expect(screen.getByAltText("山田教授")).toHaveAttribute(
       "src",
-      "https://example.com/p.jpg",
+      "https://example.com/teacher.jpg",
+    );
+  });
+
+  it("prefers the seminar's own photo over the teacher's photo", () => {
+    const withBothPhotos: SeminarDetail = {
+      ...seminar,
+      photo_url: "https://example.com/seminar.jpg",
+      teachers: [
+        {
+          ...seminar.teachers[0],
+          photo_url: "https://example.com/teacher.jpg",
+        },
+      ],
+    };
+    render(<SeminarDetailView seminar={withBothPhotos} />);
+
+    expect(screen.getByAltText("山田教授")).toHaveAttribute(
+      "src",
+      "https://example.com/seminar.jpg",
     );
   });
 
   it("aggregates member interest tags into a chart with counts", () => {
-    render(<SeminarDetailView seminar={seminar} slackUserId="U123" />);
+    render(<SeminarDetailView seminar={seminar} />);
 
     // 画像認識タグは学生A・学生Bの両方が持つため、研究概要・タグ表示・
     // グラフの軸ラベルなど複数箇所に現れる。
     expect(screen.getAllByText("画像認識").length).toBeGreaterThan(0);
   });
 
-  it("shows a Slack-link message instead of the ask button when slackUserId is null", () => {
-    render(<SeminarDetailView seminar={seminar} slackUserId={null} />);
+  it("always links to the seminar's question page", () => {
+    render(<SeminarDetailView seminar={seminar} />);
 
-    expect(
-      screen.getByText("質問するにはSlack連携が必要です。"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "質問する" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("submits a question and shows a confirmation message", async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
-
-    render(<SeminarDetailView seminar={seminar} slackUserId="U123" />);
-
-    await user.click(screen.getByRole("button", { name: "質問する" }));
-    await user.type(
-      screen.getByPlaceholderText("質問内容を入力してください"),
-      "質問です",
+    expect(screen.getByRole("link", { name: "FAQ" })).toHaveAttribute(
+      "href",
+      "/seminars/seminar-1/questions",
     );
-    await user.click(screen.getByRole("button", { name: "送信" }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("質問を投稿しました。回答があるとSlackに届きます。"),
-      ).toBeInTheDocument();
-    });
-
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/questions");
-    const body = JSON.parse(init.body as string);
-    expect(body).toEqual({
-      seminar_id: "seminar-1",
-      slack_user_id: "U123",
-      content: "質問です",
-    });
   });
 });

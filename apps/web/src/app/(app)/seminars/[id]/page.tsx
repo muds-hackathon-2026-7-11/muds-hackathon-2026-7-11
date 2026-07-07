@@ -32,19 +32,6 @@ async function getSeminar(
   }
 }
 
-async function getSlackUserId(session: Session | null): Promise<string | null> {
-  try {
-    const res = await serverApiFetch("/me", session, { cache: "no-store" });
-    if (!res.ok) {
-      return null;
-    }
-    const body = (await res.json()) as { slack_user_id: string | null };
-    return body.slack_user_id;
-  } catch {
-    return null;
-  }
-}
-
 export default async function SeminarDetailPage({
   params,
 }: {
@@ -56,10 +43,7 @@ export default async function SeminarDetailPage({
   }
 
   const { id } = await params;
-  const [result, slackUserId] = await Promise.all([
-    getSeminar(session, id),
-    getSlackUserId(session),
-  ]);
+  const result = await getSeminar(session, id);
 
   if (result.status === "not_found") {
     notFound();
@@ -72,7 +56,7 @@ export default async function SeminarDetailPage({
           ゼミ情報を取得できませんでした。時間をおいて再度お試しください。
         </p>
       ) : (
-        <SeminarDetailView seminar={result.seminar} slackUserId={slackUserId} />
+        <SeminarDetailView seminar={result.seminar} />
       )}
     </main>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { apiFetch } from "@/lib/api-client";
 
 type ResearchTag = {
   id: string;
@@ -60,15 +59,20 @@ const MATERIAL_TYPE_LABEL: Record<Material["type"], string> = {
 function TeacherAvatar({
   name,
   photoUrl,
+  seminarPhotoUrl,
 }: {
   name: string;
   photoUrl: string | null;
+  seminarPhotoUrl: string | null;
 }) {
-  if (photoUrl) {
+  // ゼミの研究室写真があればそちらを優先し、無ければ教員本人の写真、
+  // それも無ければ頭文字にフォールバックする。
+  const src = seminarPhotoUrl ?? photoUrl;
+  if (src) {
     return (
       // biome-ignore lint/performance/noImgElement: photo_urlは任意の外部ドメインのため next/image のドメイン許可設定が不要なimgタグを使う
       <img
-        src={photoUrl}
+        src={src}
         alt={name}
         className="h-16 w-16 shrink-0 rounded-full object-cover"
       />
@@ -76,7 +80,7 @@ function TeacherAvatar({
   }
   return (
     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-black/[.06] text-lg font-medium text-foreground/60 dark:bg-white/[.08]">
-      {name.charAt(0)}
+      {Array.from(name)[0] ?? "?"}
     </div>
   );
 }
@@ -95,54 +99,13 @@ function tagChartData(members: Member[]): { name: string; count: number }[] {
 
 type SeminarDetailViewProps = {
   seminar: SeminarDetail;
-  slackUserId: string | null;
 };
 
-export function SeminarDetailView({
-  seminar,
-  slackUserId,
-}: SeminarDetailViewProps) {
-  const { data: session } = useSession();
-  const [isAsking, setIsAsking] = useState(false);
-  const [content, setContent] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-
+export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
   const chartData = useMemo(
     () => tagChartData(seminar.current_members),
     [seminar.current_members],
   );
-
-  async function handleSubmit(): Promise<void> {
-    if (!slackUserId) {
-      return;
-    }
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    try {
-      const res = await apiFetch("/questions", session, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          seminar_id: seminar.id,
-          slack_user_id: slackUserId,
-          content,
-        }),
-      });
-      if (!res.ok) {
-        setErrorMessage("質問の投稿に失敗しました。");
-        return;
-      }
-      setSubmitted(true);
-      setIsAsking(false);
-      setContent("");
-    } catch {
-      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -154,8 +117,6 @@ export function SeminarDetailView({
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-foreground/70 sm:w-64">
           <dt>募集人数</dt>
           <dd>{seminar.capacity ?? "未設定"}</dd>
-          <dt>継続人数</dt>
-          <dd>{seminar.current_members.length}人</dd>
         </dl>
       </section>
 
@@ -170,6 +131,7 @@ export function SeminarDetailView({
                 <TeacherAvatar
                   name={teacher.name}
                   photoUrl={teacher.photo_url}
+                  seminarPhotoUrl={seminar.photo_url}
                 />
                 <div className="min-w-0">
                   <p className="font-medium">{teacher.name}</p>
@@ -292,67 +254,12 @@ export function SeminarDetailView({
         )}
       </section>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h2 className="font-semibold">質問する</h2>
-        {submitted && (
-          <p className="mt-2 text-sm text-foreground/60">
-            質問を投稿しました。回答があるとSlackに届きます。
-          </p>
-        )}
-        {!slackUserId ? (
-          <p className="mt-2 text-sm text-foreground/60">
-            質問するにはSlack連携が必要です。
-          </p>
-        ) : isAsking ? (
-          <div className="mt-2 flex flex-col gap-2">
-            {errorMessage && (
-              <p className="rounded-lg border border-black/[.08] p-3 text-sm dark:border-white/[.145]">
-                {errorMessage}
-              </p>
-            )}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              disabled={isSubmitting}
-              rows={3}
-              placeholder="質問内容を入力してください"
-              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting || content.trim() === ""}
-                className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmitting ? "送信中..." : "送信"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAsking(false);
-                  setErrorMessage(null);
-                }}
-                disabled={isSubmitting}
-                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-              >
-                キャンセル
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              setIsAsking(true);
-              setSubmitted(false);
-            }}
-            className="mt-2 rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
-          >
-            質問する
-          </button>
-        )}
-      </section>
+      <Link
+        href={`/seminars/${seminar.id}/questions`}
+        className="self-start rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+      >
+        FAQ
+      </Link>
     </div>
   );
 }
