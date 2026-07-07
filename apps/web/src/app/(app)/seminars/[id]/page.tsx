@@ -50,14 +50,16 @@ export default async function SeminarDetailPage({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4">
-      {result.status === "error" ? (
-        <p className="text-foreground/60">
-          ゼミ情報を取得できませんでした。時間をおいて再度お試しください。
-        </p>
-      ) : (
-        <SeminarDetailView seminar={result.seminar} />
-      )}
+    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        {result.status === "error" ? (
+          <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+            ゼミ情報を取得できませんでした。時間をおいて再度お試しください。
+          </section>
+        ) : (
+          <SeminarDetailView seminar={result.seminar} />
+        )}
+      </div>
     </main>
   );
 }
