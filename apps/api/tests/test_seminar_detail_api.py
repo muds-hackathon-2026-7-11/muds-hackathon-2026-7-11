@@ -137,6 +137,39 @@ async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(
     assert body["current_members"] == []
 
 
+async def test_get_seminar_detail_shows_current_members_without_an_active_term(
+    client, db_session
+) -> None:
+    # 募集期間が(open/日付内という意味で)アクティブでなくても、現在のゼミ生は
+    # 直近に作成された募集期間の年度を基準に表示できる(#77)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id, student_id=student.id, academic_year=academic_year
+        )
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # 募集期間がアクティブでないため定員は未設定のままだが、現在のゼミ生は見える。
+    assert body["capacity"] is None
+    assert {m["name"] for m in body["current_members"]} == {student.name}
+
+
 async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(
     client, db_session
 ) -> None:

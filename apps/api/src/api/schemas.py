@@ -4,11 +4,20 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.models import (
+    ApplicationStatus,
     MaterialType,
     QuestionStatus,
     RecruitmentTermStatus,
     UserRole,
 )
+
+
+class ResearchTagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    category: str
 
 
 class MeOut(BaseModel):
@@ -23,7 +32,15 @@ class MeOut(BaseModel):
     student_id: str | None
     grade: str | None
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
+
+
+class MeUpdateIn(BaseModel):
+    """本人の研究概要・興味分野タグの更新(PATCH /me)。"""
+
+    research_theme: str | None = Field(default=None, max_length=2000)
+    interest_tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
 
 class UserExistsOut(BaseModel):
@@ -48,6 +65,7 @@ class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarMaterialOut(BaseModel):
@@ -62,6 +80,7 @@ class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarDetailOut(SeminarOut):
@@ -119,6 +138,36 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+class ApplicationChoiceIn(BaseModel):
+    seminar_id: uuid.UUID
+    priority: int = Field(ge=1, le=3)
+    reason: str
+
+
+class ApplicationUpsertIn(BaseModel):
+    choices: list[ApplicationChoiceIn] = Field(max_length=3)
+
+
+class ApplicationChoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    seminar_id: uuid.UUID
+    priority: int
+    reason: str
+    match_score: int | None
+    match_feedback: dict | None
+
+
+class ApplicationFormOut(BaseModel):
+    id: uuid.UUID | None
+    status: ApplicationStatus
+    submitted_at: datetime | None
+    choices: list[ApplicationChoiceOut]
+    # 現在アクティブな募集期間の内容ならtrue。falseは過去期間の閲覧専用表示
+    # (提出期間外でも直近の提出内容は見えるが、編集・再提出はできない)。
+    is_editable: bool
 
 
 # --- 運営: 募集ラウンド・定員設定 (#57) ---

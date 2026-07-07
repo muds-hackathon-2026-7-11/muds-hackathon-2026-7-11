@@ -195,13 +195,15 @@ async def require_internal_secret(request: Request) -> None:
 def require_role(
     *roles: UserRole,
 ) -> Callable[[User], Awaitable[User]]:
-    """指定ロールのみ許可する依存を生成する(teacher/admin用の下地)。
+    """指定ロールかつis_active=trueのユーザーのみ許可する依存を生成する。
 
-    各エンドポイントへの適用は各機能Issueで行う。ここでは仕組みだけ提供する。
+    卒業・退学・退職等でis_active=falseになったユーザーは、ログイン前の
+    /users/existsだけでなく、ログイン済みでもrole限定のエンドポイントを
+    使えないようにする(トークン有効期限内に非アクティブ化された場合の対策)。
     """
 
     async def _dependency(user: User = Depends(get_current_user)) -> User:
-        if user.role not in roles:
+        if user.role not in roles or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="この操作を行う権限がありません。",
