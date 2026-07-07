@@ -178,6 +178,13 @@ export function ApplicationForm({
   // マウント直後(まだ何も編集していない状態)に自動保存が走らないようにする
   // ためのガード。
   const isFirstRender = useRef(true);
+  // persistChoicesの呼び出し(自動保存・提出・戻る)を直列化するキュー。
+  // ネットワークが遅い状態で入力を続けると自動保存同士が、あるいは
+  // 自動保存の途中で「提出する」を押すと自動保存と提出が、それぞれ
+  // 並行にPUTを送ってしまい、後から解決した方が新しい入力を古い内容で
+  // 上書きしかねない。呼び出しを1本のPromiseチェーンに繋ぎ、常に前の
+  // PUTが完了してから次のPUTを送るようにする。
+  const persistQueue = useRef<Promise<void>>(Promise.resolve());
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -226,44 +233,57 @@ export function ApplicationForm({
   // 承知の上で許容する(提出済みの内容を編集し始めた時点で、いずれ
   // match_score等は再計算が必要になるため)。
   const persistChoices = useCallback(
-    async (slotsToSave: [Slot, Slot, Slot]): Promise<boolean> => {
-      try {
-        const res = await apiFetch("/applications/me", session, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            choices: slotsToSave
-              .map((slot, index) => ({ slot, priority: index + 1 }))
-              .filter(({ slot }) => slot.seminarId !== "")
-              .map(({ slot, priority }) => ({
-                seminar_id: slot.seminarId,
-                priority,
-                reason: slot.reason,
-              })),
-          }),
-        });
-        if (!res.ok) {
-          setErrorMessage(await extractErrorDetail(res));
+    (slotsToSave: [Slot, Slot, Slot]): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        try {
+          const res = await apiFetch("/applications/me", session, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              choices: slotsToSave
+                .map((slot, index) => ({ slot, priority: index + 1 }))
+                .filter(({ slot }) => slot.seminarId !== "")
+                .map(({ slot, priority }) => ({
+                  seminar_id: slot.seminarId,
+                  priority,
+                  reason: slot.reason,
+                })),
+            }),
+          });
+          if (!res.ok) {
+            setErrorMessage(await extractErrorDetail(res));
+            return false;
+          }
+          const data = (await res.json()) as ApplicationFormData;
+          setSubmittedAt(data.submitted_at);
+          // ゼミ未選択("選択してください")のスロットはリクエストから除外して
+          // おり、サーバーの応答にも含まれない。そのスロットまで応答で
+          // 上書きすると、ゼミ未選択のまま書きかけの志望理由が消えてしまう
+          // ため、送っていないスロットは現在のローカル状態をそのまま残す。
+          const saved = toSlots(data.choices);
+          setSlots(
+            (prev) =>
+              prev.map((slot, index) =>
+                slotsToSave[index].seminarId === "" ? slot : saved[index],
+              ) as [Slot, Slot, Slot],
+          );
+          return true;
+        } catch {
+          setErrorMessage(
+            "通信に失敗しました。時間をおいて再度お試しください。",
+          );
           return false;
         }
-        const data = (await res.json()) as ApplicationFormData;
-        setSubmittedAt(data.submitted_at);
-        // ゼミ未選択("選択してください")のスロットはリクエストから除外して
-        // おり、サーバーの応答にも含まれない。そのスロットまで応答で
-        // 上書きすると、ゼミ未選択のまま書きかけの志望理由が消えてしまう
-        // ため、送っていないスロットは現在のローカル状態をそのまま残す。
-        const saved = toSlots(data.choices);
-        setSlots(
-          (prev) =>
-            prev.map((slot, index) =>
-              slotsToSave[index].seminarId === "" ? slot : saved[index],
-            ) as [Slot, Slot, Slot],
-        );
-        return true;
-      } catch {
-        setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
-        return false;
-      }
+      };
+
+      // 前のPUT(自動保存・提出・戻るのいずれか)が完了してから実行する。
+      // 前の呼び出しが失敗していてもチェーン自体は止めない。
+      const result = persistQueue.current.then(run);
+      persistQueue.current = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
     },
     [session],
   );

@@ -203,6 +203,91 @@ describe("ApplicationForm", () => {
     await screen.findByText("保存済み");
   }, 10000);
 
+  it("waits for an in-flight autosave PUT before sending the submit PUT", async () => {
+    const user = userEvent.setup();
+    let resolveAutosavePut: (value: Response) => void = () => {};
+    const autosavePutPromise = new Promise<Response>((resolve) => {
+      resolveAutosavePut = resolve;
+    });
+
+    const putResponse: ApplicationFormData = {
+      id: "form-1",
+      status: "draft",
+      submitted_at: null,
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+      is_editable: true,
+    };
+    const postResponse: ApplicationFormData = {
+      ...putResponse,
+      status: "submitted",
+      submitted_at: "2026-07-07T00:00:00Z",
+    };
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementationOnce(() => autosavePutPromise) // 自動保存のPUT(まだ解決しない)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(putResponse), { status: 200 }),
+      ) // 提出するボタンのPUT
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(postResponse), { status: 200 }),
+      ); // 提出するボタンのPOST
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+
+    // 自動保存のPUTが発火する(まだ解決していないin-flight状態)まで待つ。
+    await waitFor(
+      () => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 2000 },
+    );
+
+    // 自動保存がin-flightのうちに提出するを押す。
+    await user.click(screen.getByRole("button", { name: "提出する" }));
+
+    // 自動保存が完了するまでは、提出のPUTは送られない
+    // (同時に2本のPUTが飛ばないことの確認)。
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    resolveAutosavePut(
+      new Response(JSON.stringify(putResponse), { status: 200 }),
+    );
+
+    // 自動保存の完了後にようやく提出のPUT→POSTが直列に走る。
+    await waitFor(
+      () => {
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
+      },
+      { timeout: 2000 },
+    );
+    expect((fetchSpy.mock.calls[1] as [string, RequestInit])[1].method).toBe(
+      "PUT",
+    );
+    expect((fetchSpy.mock.calls[2] as [string, RequestInit])[1].method).toBe(
+      "POST",
+    );
+  }, 10000);
+
   it("keeps an in-progress reason for a slot with no seminar selected after autosave", async () => {
     const user = userEvent.setup();
     const putResponse: ApplicationFormData = {
