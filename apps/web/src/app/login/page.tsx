@@ -9,7 +9,7 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4">
+    <main className="relative flex flex-1 items-center justify-center overflow-hidden bg-[#e6e6e6] px-4">
       <LoginButton />
     </main>
   );

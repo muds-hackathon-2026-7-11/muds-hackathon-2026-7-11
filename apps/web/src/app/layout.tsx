@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ゼミナビ",
+  title: "Zemi-Match",
   description: "ゼミ選択・配属支援プラットフォーム",
 };
 
