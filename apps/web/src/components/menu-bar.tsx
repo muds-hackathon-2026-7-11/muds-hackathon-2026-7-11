@@ -4,11 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-const navItems = [
+const baseNavItems = [
   { label: "マイページ", href: "/" },
   { label: "志望理由提出", href: "/apply" },
   { label: "志望状況一覧", href: "/assignment" },
 ] as const;
+
+const adminNavItem = { label: "管理者", href: "/admin" } as const;
+
+function isNavItemActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
 
 function navLinkClassName(isActive: boolean): string {
   return [
@@ -19,9 +25,14 @@ function navLinkClassName(isActive: boolean): string {
   ].join(" ");
 }
 
-export function MenuBar() {
+type MenuBarProps = {
+  isAdmin: boolean;
+};
+
+export function MenuBar({ isAdmin }: MenuBarProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
 
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
@@ -35,7 +46,7 @@ export function MenuBar() {
 
         <nav className="ml-auto hidden items-center gap-1 sm:flex">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = isNavItemActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
@@ -102,7 +113,7 @@ export function MenuBar() {
       {isMobileMenuOpen && (
         <nav className="absolute inset-x-0 top-full flex flex-col gap-1 border-b border-[#e6e6e6] bg-white px-4 py-2 shadow-lg shadow-black/[.05] sm:hidden">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = isNavItemActive(pathname, item.href);
             return (
               <Link
                 key={item.href}

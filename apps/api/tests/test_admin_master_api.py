@@ -6,7 +6,14 @@ from sqlalchemy import func, select
 from api import auth
 from api.auth import get_current_user
 from api.main import app
-from api.models import Seminar, SeminarTeacher, User, UserRole
+from api.models import (
+    MaterialType,
+    Seminar,
+    SeminarMaterial,
+    SeminarTeacher,
+    User,
+    UserRole,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -48,6 +55,17 @@ async def _link(db_session, seminar: Seminar, teacher: User) -> None:
     await db_session.flush()
 
 
+async def _add_material(db_session, seminar: Seminar, **kwargs) -> SeminarMaterial:
+    material = SeminarMaterial(
+        seminar_id=seminar.id,
+        url=kwargs.get("url", "https://example.com/slide.pdf"),
+        type=kwargs.get("type", MaterialType.slide),
+    )
+    db_session.add(material)
+    await db_session.flush()
+    return material
+
+
 async def _teacher_link_count(db_session, seminar_id, teacher_id) -> int:
     result = await db_session.execute(
         select(func.count())
@@ -74,6 +92,8 @@ async def test_create_seminar(client, db_session) -> None:
     body = resp.json()
     assert body["name"] == "新ゼミ"
     assert body["description"] == "説明"
+    assert body["teachers"] == []
+    assert body["materials"] == []
 
     created = await db_session.get(Seminar, uuid.UUID(body["id"]))
     assert created is not None and created.name == "新ゼミ"
@@ -99,6 +119,18 @@ async def test_update_seminar_unknown_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     resp = await client.patch(f"/admin/seminars/{uuid.uuid4()}", json={"name": "x"})
     assert resp.status_code == 404
+
+
+async def test_list_seminars_includes_assigned_teachers(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _link(db_session, seminar, teacher)
+
+    resp = await client.get("/admin/seminars")
+    assert resp.status_code == 200
+    body = next(s for s in resp.json() if s["id"] == str(seminar.id))
+    assert body["teachers"] == [{"id": str(teacher.id), "name": teacher.name}]
 
 
 async def test_delete_seminar_cascades_teacher_links(client, db_session) -> None:
@@ -169,6 +201,80 @@ async def test_unassign_unknown_link_returns_404(client, db_session) -> None:
     teacher = await _make_user(db_session, UserRole.teacher)
     resp = await client.delete(f"/admin/seminars/{seminar.id}/teachers/{teacher.id}")
     assert resp.status_code == 404
+
+
+# --- 紹介資料 ---
+
+
+async def test_create_seminar_material(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+
+    resp = await client.post(
+        f"/admin/seminars/{seminar.id}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "slide"},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["url"] == "https://example.com/slide.pdf"
+    assert body["type"] == "slide"
+
+    created = await db_session.get(SeminarMaterial, uuid.UUID(body["id"]))
+    assert created is not None and created.seminar_id == seminar.id
+
+
+async def test_create_material_unknown_seminar_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.post(
+        f"/admin/seminars/{uuid.uuid4()}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "slide"},
+    )
+    assert resp.status_code == 404
+
+
+async def test_list_seminars_includes_materials(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+    material = await _add_material(db_session, seminar)
+
+    resp = await client.get("/admin/seminars")
+    assert resp.status_code == 200
+    body = next(s for s in resp.json() if s["id"] == str(seminar.id))
+    assert body["materials"] == [
+        {"id": str(material.id), "url": material.url, "type": "slide"}
+    ]
+
+
+async def test_delete_seminar_material(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+    material = await _add_material(db_session, seminar)
+
+    resp = await client.delete(f"/admin/seminars/{seminar.id}/materials/{material.id}")
+    assert resp.status_code == 204
+    assert await db_session.get(SeminarMaterial, material.id) is None
+
+
+async def test_delete_material_unknown_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+    resp = await client.delete(f"/admin/seminars/{seminar.id}/materials/{uuid.uuid4()}")
+    assert resp.status_code == 404
+
+
+async def test_delete_material_belonging_to_other_seminar_returns_404(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    material = await _add_material(db_session, seminar_a)
+
+    resp = await client.delete(
+        f"/admin/seminars/{seminar_b.id}/materials/{material.id}"
+    )
+    assert resp.status_code == 404
+    assert await db_session.get(SeminarMaterial, material.id) is not None
 
 
 # --- 教員 ---
