@@ -496,9 +496,7 @@ export function AdminRecruitmentTermsView({
             )}
             {allSeminars.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-sm text-foreground/60">
-                  対象学年
-                </p>
+                <p className="text-sm text-foreground/60">対象学年</p>
                 <div className="flex flex-wrap gap-3">
                   {GRADE_OPTIONS.map((grade) => (
                     <label

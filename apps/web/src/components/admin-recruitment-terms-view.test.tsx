@@ -333,9 +333,7 @@ describe("AdminRecruitmentTermsView", () => {
       screen.getByRole("button", { name: "+ 新規募集ラウンドを作成" }),
     );
 
-    expect(
-      screen.queryByText("対象学年"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("対象学年")).not.toBeInTheDocument();
   });
 
   it("bulk-applies the selected target grades to all seminars after creating a term", async () => {
