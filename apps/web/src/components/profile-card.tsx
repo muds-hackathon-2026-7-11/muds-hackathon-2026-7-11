@@ -213,12 +213,12 @@ export function ProfileCard({
             role="dialog"
             aria-modal="true"
             aria-label="プロフィールを編集"
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-lg bg-background p-6 shadow-lg"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
-            <p className="font-semibold">プロフィールを編集</p>
+            <p className="font-semibold text-zinc-800">プロフィールを編集</p>
 
             {errorMessage && (
-              <p className="mt-4 rounded-lg border border-black/[.08] p-3 text-sm dark:border-white/[.145]">
+              <p className="mt-4 rounded-lg border-2 border-red-300 p-3 text-sm text-red-600">
                 {errorMessage}
               </p>
             )}
@@ -227,7 +227,7 @@ export function ProfileCard({
               <div className="flex min-h-0 flex-col">
                 <label
                   htmlFor="research-theme-input"
-                  className="text-sm text-foreground/60"
+                  className="text-sm text-zinc-500"
                 >
                   研究概要
                 </label>
@@ -237,16 +237,16 @@ export function ProfileCard({
                   onChange={(e) => setTheme(e.target.value)}
                   disabled={isSaving}
                   placeholder="研究概要を入力してください"
-                  className="mt-1 min-h-64 w-full flex-1 rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  className="mt-1 min-h-64 w-full flex-1 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                 />
               </div>
 
               <div className="flex min-h-0 flex-col">
-                <p className="text-sm text-foreground/60">タグ</p>
-                <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-black/[.08] bg-black/[.02] p-3 dark:border-white/[.145] dark:bg-white/[.03]">
+                <p className="text-sm text-zinc-500">タグ</p>
+                <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3">
                   {groupTagsByCategory(allTags).map(([category, tags]) => (
                     <div key={category}>
-                      <p className="text-xs font-medium text-foreground/50">
+                      <p className="text-xs font-medium text-zinc-400">
                         {category}
                       </p>
                       <div className="mt-1 flex flex-wrap gap-2">
@@ -256,10 +256,10 @@ export function ProfileCard({
                             <label
                               key={tag.id}
                               className={[
-                                "cursor-pointer rounded-full border px-3 py-1 text-sm",
+                                "cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors",
                                 checked
-                                  ? "border-foreground bg-foreground text-background"
-                                  : "border-black/[.08] bg-background dark:border-white/[.145]",
+                                  ? "border-[#add8e6] bg-[#add8e6] text-sky-950"
+                                  : "border-[#add8e6]/50 bg-white text-zinc-600 hover:bg-[#add8e6]/10",
                               ].join(" ")}
                             >
                               <input
@@ -285,7 +285,7 @@ export function ProfileCard({
                 type="button"
                 onClick={handleSaveClick}
                 disabled={isSaving}
-                className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
               >
                 {isSaving ? "保存中..." : "保存"}
               </button>
@@ -293,7 +293,7 @@ export function ProfileCard({
                 type="button"
                 onClick={handleCancelClick}
                 disabled={isSaving}
-                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                className="rounded-full border border-[#e6e6e6] bg-white px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-[#e6e6e6]/50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 キャンセル
               </button>
