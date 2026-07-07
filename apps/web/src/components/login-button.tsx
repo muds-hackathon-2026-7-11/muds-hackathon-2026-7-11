@@ -4,12 +4,12 @@ import { signIn } from "next-auth/react";
 
 export function LoginButton() {
   return (
-    <div className="flex flex-col items-center gap-10">
+    <section className="flex w-full max-w-sm flex-col items-center gap-10 rounded-lg border border-black/[.08] bg-background/80 p-6 backdrop-blur dark:border-white/[.145]">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-7xl font-bold tracking-tight text-zinc-900 drop-shadow-sm sm:text-8xl dark:text-zinc-50">
+        <h1 className="text-5xl font-bold tracking-tight text-zinc-900 drop-shadow-sm sm:text-6xl dark:text-zinc-50">
           Zemi-Match
         </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-foreground/60">
           ゼミ選択・配属支援プラットフォーム
         </p>
       </div>
@@ -21,6 +21,6 @@ export function LoginButton() {
       >
         Googleでログイン
       </button>
-    </div>
+    </section>
   );
 }
