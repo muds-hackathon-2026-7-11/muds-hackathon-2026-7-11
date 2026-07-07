@@ -112,7 +112,7 @@ describe("ApplicationForm", () => {
     expect(screen.getByDisplayValue("興味があるため")).toBeInTheDocument();
   });
 
-  it("reverts to the read-only view without calling the API when nothing was ever sent to the server", async () => {
+  it("reverts to the read-only view locally when the autosave debounce hasn't fired yet", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const submitted = emptyDraft({
@@ -137,15 +137,88 @@ describe("ApplicationForm", () => {
     await user.clear(textarea);
     await user.type(textarea, "書き換え中");
 
+    // 自動保存のデバウンス(1秒)が発火する前に戻るを押した場合、
+    // サーバーには何も送られていないため、戻るはクライアント側だけで完結する。
     await user.click(screen.getByRole("button", { name: "戻る" }));
 
     expect(screen.getByText("興味があるため")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "編集する" }),
     ).toBeInTheDocument();
-    // 編集中は自動保存しないため、通常の戻るはクライアント側だけで完結し、
-    // APIを呼ばない(毎回PUTすると提出日時が更新される副作用があるため)。
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("autosaves the input 1 second after typing stops", async () => {
+    const user = userEvent.setup();
+    const putResponse: ApplicationFormData = {
+      id: "form-1",
+      status: "draft",
+      submitted_at: null,
+      choices: [
+        {
+          seminar_id: "sem-1",
+          priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+      is_editable: true,
+    };
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify(putResponse), { status: 200 }),
+      );
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+
+    // デバウンス中はまだ何も送られていない。
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    await waitFor(
+      () => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 2000 },
+    );
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/applications/me");
+    expect(init.method).toBe("PUT");
+    await screen.findByText("保存済み");
+  }, 10000);
+
+  it("does not autosave immediately on mount", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  }, 10000);
+
+  it("limits the reason textarea to 400 characters and shows the counter", () => {
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    const textarea = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
+    )[0];
+    expect(textarea).toHaveAttribute("maxLength", "400");
+    expect(screen.getAllByText("0/400文字")[0]).toBeInTheDocument();
   });
 
   it("re-persists the snapshot to the server when reverting after a submit's PUT succeeded but POST failed", async () => {

@@ -428,6 +428,52 @@ async def test_put_rejects_duplicate_seminar(client, db_session) -> None:
     assert resp.status_code == 400
 
 
+async def test_put_rejects_reason_over_400_chars(client, db_session) -> None:
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [
+                {
+                    "seminar_id": str(seminar.id),
+                    "priority": 1,
+                    "reason": "あ" * 401,
+                }
+            ]
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_put_accepts_reason_at_400_chars(client, db_session) -> None:
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [
+                {
+                    "seminar_id": str(seminar.id),
+                    "priority": 1,
+                    "reason": "あ" * 400,
+                }
+            ]
+        },
+    )
+
+    assert resp.status_code == 200
+
+
 async def test_put_rejects_non_recruiting_seminar(client, db_session) -> None:
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)

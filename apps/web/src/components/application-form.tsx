@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 
 // バックエンドは画面を開いた後に募集期間が終了した場合、保存・提出時に
@@ -9,6 +9,10 @@ import { apiFetch } from "@/lib/api-client";
 // 何をすればいいか伝わりにくいので、ページ更新を促す文言に置き換える。
 const TERM_CLOSED_DETAIL = "現在募集中の期間がありません。";
 const TERM_CLOSED_MESSAGE = "締切が過ぎました。ページを更新してください。";
+
+const REASON_MAX_LENGTH = 400;
+// 入力が止まってから自動保存するまでの待ち時間。
+const AUTOSAVE_DELAY_MS = 1000;
 
 async function extractErrorDetail(res: Response): Promise<string> {
   try {
@@ -106,14 +110,18 @@ export function ApplicationForm({
   const [snapshotSlots, setSnapshotSlots] = useState<[Slot, Slot, Slot] | null>(
     null,
   );
-  // 編集中は自動保存しないため、通常は「戻る」時にサーバーへ送るものは何もない
-  // (何もPUTしていない)。ただし「提出する」を押した際にPUTだけ成功し、直後の
-  // POST(/submit)が失敗するケースがあり、その場合はサーバー側が編集後の内容
-  // で上書きされたまま残ってしまう。このrefはその「サーバー側が編集前と
-  // 食い違っている」状態だけを追跡し、戻る時に本当に必要な場合だけサーバーへ
-  // 書き戻す(毎回PUTすると提出日時が更新されたりマッチ度が消えたりするため、
-  // 不要な時は絶対に呼ばない)。
+  // 編集中に自動保存が一度でも成功すると、サーバー側は「編集する」を
+  // 押した時点のスナップショットとは食い違った状態になる。このrefは
+  // その状態だけを追跡し、「戻る」を押した時に本当に必要な場合だけ
+  // サーバーへスナップショットを書き戻す(毎回PUTすると提出日時が
+  // 更新されたりマッチ度が消えたりするため、不要な時は絶対に呼ばない)。
   const serverDirtySinceEdit = useRef(false);
+  const [autosaveState, setAutosaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  // マウント直後(まだ何も編集していない状態)に自動保存が走らないようにする
+  // ためのガード。
+  const isFirstRender = useRef(true);
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -151,15 +159,16 @@ export function ApplicationForm({
   }
 
   // 保存(PUT)本体。バリデーションはせず、渡された内容をそのまま保存する。
-  // 呼び出し元は「提出する」と、提出失敗後の「戻る」(サーバー側が編集後の
-  // 内容のまま残っている場合のみ)の2箇所。編集中の入力そのものからは
-  // 呼ばれない(自動保存はしない)。保存対象を引数で明示的に受け取るのは、
-  // 「戻る」の時は現在のslots stateではなくスナップショットを送りたいため。
+  // 呼び出し元は「提出する」、提出失敗後の「戻る」(サーバー側が編集後の
+  // 内容のまま残っている場合のみ)、そして自動保存の3箇所。保存対象を
+  // 引数で明示的に受け取るのは、「戻る」の時は現在のslots stateではなく
+  // スナップショットを送りたいため。
   //
   // 注意: バックエンドのPUTは、既に提出済み(status=submitted)のフォームに
   // 対しては内容が変わっていなくても提出日時(submitted_at)を更新し、
-  // match_score/match_feedbackを常にクリアする。呼ぶたびにこの副作用が
-  // 起きるため、本当に必要な時(=serverDirtySinceEdit)以外は呼ばないこと。
+  // match_score/match_feedbackを常にクリアする。自動保存はこの副作用を
+  // 承知の上で許容する(提出済みの内容を編集し始めた時点で、いずれ
+  // match_score等は再計算が必要になるため)。
   const persistChoices = useCallback(
     async (slotsToSave: [Slot, Slot, Slot]): Promise<boolean> => {
       try {
@@ -192,6 +201,31 @@ export function ApplicationForm({
     },
     [session],
   );
+
+  // 「編集する」で入力可能になっている間、入力が止まって
+  // AUTOSAVE_DELAY_MS 経過したら自動でサーバーへ保存する。
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (isLocked || isSubmitting || isReverting) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setAutosaveState("saving");
+      const ok = await persistChoices(slots);
+      if (ok) {
+        serverDirtySinceEdit.current = true;
+        setAutosaveState("saved");
+      } else {
+        setAutosaveState("error");
+      }
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [slots, isLocked, isSubmitting, isReverting, persistChoices]);
 
   async function handleSubmitClick(): Promise<void> {
     setErrorMessage(null);
@@ -399,7 +433,7 @@ export function ApplicationForm({
                       志望理由
                     </label>
                     <span className="text-xs text-foreground/40">
-                      {slot.reason.length}文字
+                      {slot.reason.length}/{REASON_MAX_LENGTH}文字
                     </span>
                   </div>
                   <textarea
@@ -410,6 +444,7 @@ export function ApplicationForm({
                     }
                     disabled={isBusy}
                     rows={4}
+                    maxLength={REASON_MAX_LENGTH}
                     placeholder="このゼミを志望する理由を入力してください"
                     className="mt-1 w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
                   />
@@ -418,7 +453,7 @@ export function ApplicationForm({
             );
           })}
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleSubmitClick}
@@ -437,6 +472,11 @@ export function ApplicationForm({
                 {isReverting ? "戻しています..." : "戻る"}
               </button>
             )}
+            <span className="text-xs text-foreground/40" aria-live="polite">
+              {autosaveState === "saving" && "保存中..."}
+              {autosaveState === "saved" && "保存済み"}
+              {autosaveState === "error" && "自動保存に失敗しました"}
+            </span>
           </div>
         </>
       )}
