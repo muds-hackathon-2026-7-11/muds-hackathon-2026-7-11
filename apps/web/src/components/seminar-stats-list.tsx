@@ -22,7 +22,24 @@ export type SeminarStats = {
     third: number;
   };
   ratio: number | null;
+  // 対象学年(#99/#103)。募集ラウンドの設定が無ければnull。
+  target_grades: string[] | null;
 };
+
+const ALL_GRADES_COUNT = 4;
+
+function targetGradesLabel(targetGrades: string[] | null): string {
+  if (targetGrades === null) {
+    return "未設定(募集していません)";
+  }
+  if (targetGrades.length === 0) {
+    return "募集していません";
+  }
+  if (targetGrades.length >= ALL_GRADES_COUNT) {
+    return "全学年";
+  }
+  return targetGrades.join("・");
+}
 
 type SeminarStatsListProps = {
   stats: SeminarStats[];
@@ -70,6 +87,8 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
       </div>
 
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-600">
+        <dt>対象学年</dt>
+        <dd>{targetGradesLabel(seminar.target_grades)}</dd>
         <dt>上限人数</dt>
         <dd>{seminar.capacity ?? "未設定"}</dd>
         <dt>累計志望者数</dt>

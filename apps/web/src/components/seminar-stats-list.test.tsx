@@ -10,6 +10,7 @@ const stats: SeminarStats[] = [
     applicant_count: 5,
     priority_counts: { first: 2, second: 2, third: 1 },
     ratio: 0.5,
+    target_grades: ["B1", "B2", "B3", "B4"],
   },
   {
     id: "seminar-2",
@@ -18,6 +19,7 @@ const stats: SeminarStats[] = [
     applicant_count: 0,
     priority_counts: { first: 0, second: 0, third: 0 },
     ratio: null,
+    target_grades: null,
   },
 ];
 
@@ -57,5 +59,37 @@ describe("SeminarStatsList", () => {
     expect(
       screen.getByText("応募状況を取得できませんでした。"),
     ).toBeInTheDocument();
+  });
+
+  it("shows 全学年 when all four grades are targeted", () => {
+    render(<SeminarStatsList stats={stats} />);
+
+    expect(screen.getByText("全学年")).toBeInTheDocument();
+  });
+
+  it("shows a not-configured hint when target_grades is null", () => {
+    render(<SeminarStatsList stats={stats} />);
+
+    expect(screen.getByText("未設定(募集していません)")).toBeInTheDocument();
+  });
+
+  it("shows the specific grades when only some are targeted", () => {
+    render(
+      <SeminarStatsList
+        stats={[{ ...stats[0], id: "seminar-3", target_grades: ["B1", "B2"] }]}
+      />,
+    );
+
+    expect(screen.getByText("B1・B2")).toBeInTheDocument();
+  });
+
+  it("shows a closed hint when target_grades is an empty array", () => {
+    render(
+      <SeminarStatsList
+        stats={[{ ...stats[0], id: "seminar-4", target_grades: [] }]}
+      />,
+    );
+
+    expect(screen.getByText("募集していません")).toBeInTheDocument();
   });
 });

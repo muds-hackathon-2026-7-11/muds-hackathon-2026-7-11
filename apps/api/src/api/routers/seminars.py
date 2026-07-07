@@ -19,6 +19,7 @@ from api.models import (
     SeminarTeacher,
     User,
     UserInterestTag,
+    UserRole,
 )
 from api.schemas import (
     PriorityCounts,
@@ -30,7 +31,7 @@ from api.schemas import (
     SeminarStatsOut,
     TeacherOut,
 )
-from api.services import current_academic_year, get_current_term
+from api.services import current_academic_year, get_current_term, normalize_grade
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
 
@@ -55,7 +56,17 @@ async def _interest_tags_by_user(
 
 
 @router.get("", response_model=list[SeminarOut])
-async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
+async def list_seminars(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[SeminarOut]:
+    """ゼミ一覧を返す。
+
+    学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
+    ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
+    そもそも選べないようにするため #103)。教員・admin等、学生以外には
+    絞り込みをかけない。
+    """
     term = await get_current_term(db)
 
     if term is None:
@@ -74,7 +85,7 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
         ]
 
     result = await db.execute(
-        select(Seminar, SeminarRecruitment.capacity)
+        select(Seminar, SeminarRecruitment.capacity, SeminarRecruitment.target_grades)
         .outerjoin(
             SeminarRecruitment,
             (SeminarRecruitment.seminar_id == Seminar.id)
@@ -82,18 +93,28 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
         )
         .order_by(Seminar.name)
     )
-    return [
-        SeminarOut(
-            id=seminar.id,
-            name=seminar.name,
-            description=seminar.description,
-            photo_url=seminar.photo_url,
-            capacity=capacity,
-            recruitment_start=term.starts_at,
-            recruitment_end=term.ends_at,
+    student_grade = (
+        normalize_grade(user.grade) if user.role == UserRole.student else None
+    )
+
+    seminars: list[SeminarOut] = []
+    for seminar, capacity, target_grades in result.all():
+        if user.role == UserRole.student and (
+            target_grades is None or student_grade not in target_grades
+        ):
+            continue
+        seminars.append(
+            SeminarOut(
+                id=seminar.id,
+                name=seminar.name,
+                description=seminar.description,
+                photo_url=seminar.photo_url,
+                capacity=capacity,
+                recruitment_start=term.starts_at,
+                recruitment_end=term.ends_at,
+            )
         )
-        for seminar, capacity in result.all()
-    ]
+    return seminars
 
 
 @router.get("/stats", response_model=list[SeminarStatsOut])
@@ -140,19 +161,24 @@ async def seminar_stats(
                 grade_counts={},
                 ratio=None,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                target_grades=None,
             )
             for s in seminars
         ]
 
-    # ゼミごとの定員
+    # ゼミごとの定員・対象学年
     capacity_rows = await db.execute(
-        select(SeminarRecruitment.seminar_id, SeminarRecruitment.capacity).where(
-            SeminarRecruitment.term_id == term.id
-        )
+        select(
+            SeminarRecruitment.seminar_id,
+            SeminarRecruitment.capacity,
+            SeminarRecruitment.target_grades,
+        ).where(SeminarRecruitment.term_id == term.id)
     )
-    capacity_by_seminar: dict[uuid.UUID, int] = {
-        sid: cap for sid, cap in capacity_rows.all()
-    }
+    capacity_by_seminar: dict[uuid.UUID, int] = {}
+    target_grades_by_seminar: dict[uuid.UUID, list[str]] = {}
+    for sid, cap, target_grades in capacity_rows.all():
+        capacity_by_seminar[sid] = cap
+        target_grades_by_seminar[sid] = target_grades
 
     # 志望内容（当該ラウンドの提出済み・在籍学生のみ）
     choice_rows = await db.execute(
@@ -202,6 +228,7 @@ async def seminar_stats(
                 grade_counts=grade_by_seminar.get(s.id, {}),
                 ratio=ratio,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                target_grades=target_grades_by_seminar.get(s.id),
             )
         )
     return stats
