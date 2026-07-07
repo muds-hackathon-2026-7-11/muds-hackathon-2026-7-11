@@ -3,6 +3,11 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* マイページのカラーパレット: 白 / 淡いグレー / ライトブルー */
+  --color-white: #ffffff;
+  --color-mist: #e6e6e6;
+  --color-sky: #add8e6;
 }
 
 @theme inline {
@@ -10,7 +15,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-brand: var(--font-brand);
+
+  /* Tailwindユーティリティ用(bg-mist, text-sky など) */
+  --color-mist: var(--color-mist);
+  --color-sky: var(--color-sky);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -26,13 +34,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* 画面外周のビネット。縁から内側に向かって黒くぼかし、中央を明るく見せる。 */
-.vignette {
-  box-shadow: inset 0 0 3rem 0 rgba(0, 0, 0, 0.3);
-}
-
-@media (prefers-color-scheme: dark) {
-  .vignette {
-    box-shadow: inset 0 0 3rem 0 rgba(0, 0, 0, 0.7);
-  }
+/* マイページの背景。ライトグレー主体+上部にほんのり水色を差してカードを引き立てる。 */
+.page-canvas {
+  background:
+    radial-gradient(
+      1000px 500px at 50% -5%,
+      rgba(173, 216, 230, 0.35),
+      transparent 65%
+    ),
+    var(--color-mist);
 }

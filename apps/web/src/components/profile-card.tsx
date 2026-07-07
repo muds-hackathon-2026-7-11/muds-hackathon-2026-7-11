@@ -12,28 +12,44 @@ export function ProfileCard({
   researchTheme,
 }: ProfileCardProps) {
   return (
-    <section className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-lg shadow-zinc-900/10 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
-      <div className="border-b border-black/[.08] pb-4 dark:border-white/[.145]">
-        <p className="text-xs uppercase tracking-wider text-foreground/50">
-          個人データ
+    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <div className="border-b border-[#add8e6]/40 pb-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Profile
         </p>
-        <p className="mt-2 text-xl font-semibold">{name}</p>
-        <p className="text-sm text-foreground/60">{email}</p>
-        <p className="text-sm text-foreground/60">{grade ?? "未設定"}</p>
+        <p className="mt-2 text-2xl font-bold text-zinc-800">{name}</p>
+        <p className="text-sm text-zinc-500">{email}</p>
+        <p className="text-sm text-zinc-500">{grade ?? "未設定"}</p>
       </div>
 
-      <div className="pt-4">
-        <p className="text-xs uppercase tracking-wider text-foreground/50">
-          研究概要
+      <div className="pt-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Research Summary
         </p>
-        <p className="mt-2 whitespace-pre-wrap">{researchTheme ?? "未設定"}</p>
+        <p className="mt-2 whitespace-pre-wrap text-zinc-700">
+          {researchTheme ?? "未設定"}
+        </p>
         <button
           type="button"
           disabled
           title="準備中"
-          className="mt-4 cursor-not-allowed rounded-md border border-black/[.08] px-4 py-2 text-sm font-medium text-foreground/40 dark:border-white/[.145]"
+          className="mt-4 inline-flex cursor-not-allowed items-center gap-1.5 rounded-full bg-[#add8e6]/50 px-4 py-1.5 text-sm font-medium text-sky-900/60"
         >
           編集
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5"
+            aria-hidden="true"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
         </button>
       </div>
     </section>
