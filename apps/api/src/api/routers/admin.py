@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import require_role
 from api.db import get_db
-from api.models import Seminar, SeminarTeacher, User, UserRole
+from api.models import Seminar, SeminarMaterial, SeminarTeacher, User, UserRole
 from api.schemas import (
     AdminSeminarCreate,
     AdminSeminarOut,
@@ -14,6 +14,8 @@ from api.schemas import (
     AdminSeminarUpdate,
     AdminTeacherOut,
     AdminTeacherUpdate,
+    SeminarMaterialCreate,
+    SeminarMaterialOut,
 )
 
 # 運営(admin)専用。新規の一括投入はCSV(#40/#45)が担うため、ここでは
@@ -49,8 +51,28 @@ async def _teachers_by_seminar(
     return teachers_by_seminar
 
 
+async def _materials_by_seminar(
+    db: AsyncSession, *, seminar_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[SeminarMaterialOut]]:
+    """複数ゼミ分の紹介資料を1クエリでまとめて取得する(N+1回避)。"""
+    if not seminar_ids:
+        return {}
+
+    result = await db.execute(
+        select(SeminarMaterial).where(SeminarMaterial.seminar_id.in_(seminar_ids))
+    )
+    materials_by_seminar: dict[uuid.UUID, list[SeminarMaterialOut]] = {}
+    for material in result.scalars().all():
+        materials_by_seminar.setdefault(material.seminar_id, []).append(
+            SeminarMaterialOut.model_validate(material)
+        )
+    return materials_by_seminar
+
+
 def _to_seminar_out(
-    seminar: Seminar, teachers: list[AdminSeminarTeacherOut]
+    seminar: Seminar,
+    teachers: list[AdminSeminarTeacherOut],
+    materials: list[SeminarMaterialOut],
 ) -> AdminSeminarOut:
     return AdminSeminarOut(
         id=seminar.id,
@@ -58,6 +80,7 @@ def _to_seminar_out(
         description=seminar.description,
         photo_url=seminar.photo_url,
         teachers=teachers,
+        materials=materials,
     )
 
 
@@ -73,18 +96,21 @@ async def create_seminar(
     )
     db.add(seminar)
     await db.flush()
-    return _to_seminar_out(seminar, [])
+    return _to_seminar_out(seminar, [], [])
 
 
 @router.get("/seminars", response_model=list[AdminSeminarOut])
 async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[AdminSeminarOut]:
     result = await db.execute(select(Seminar).order_by(Seminar.name))
     seminars = list(result.scalars().all())
-    teachers_by_seminar = await _teachers_by_seminar(
-        db, seminar_ids=[s.id for s in seminars]
-    )
+    seminar_ids = [s.id for s in seminars]
+    teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=seminar_ids)
+    materials_by_seminar = await _materials_by_seminar(db, seminar_ids=seminar_ids)
     return [
-        _to_seminar_out(s, teachers_by_seminar.get(s.id, [])) for s in seminars
+        _to_seminar_out(
+            s, teachers_by_seminar.get(s.id, []), materials_by_seminar.get(s.id, [])
+        )
+        for s in seminars
     ]
 
 
@@ -101,7 +127,12 @@ async def update_seminar(
         setattr(seminar, field, value)
     await db.flush()
     teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=[seminar.id])
-    return _to_seminar_out(seminar, teachers_by_seminar.get(seminar.id, []))
+    materials_by_seminar = await _materials_by_seminar(db, seminar_ids=[seminar.id])
+    return _to_seminar_out(
+        seminar,
+        teachers_by_seminar.get(seminar.id, []),
+        materials_by_seminar.get(seminar.id, []),
+    )
 
 
 @router.delete("/seminars/{seminar_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -172,6 +203,47 @@ async def unassign_teacher(
     if link is None:
         raise HTTPException(status_code=404, detail="担当割当が見つかりません。")
     await db.delete(link)
+    await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- 紹介資料 (seminar_materials) ---
+
+
+@router.post(
+    "/seminars/{seminar_id}/materials",
+    response_model=SeminarMaterialOut,
+    status_code=201,
+)
+async def create_seminar_material(
+    seminar_id: uuid.UUID,
+    payload: SeminarMaterialCreate,
+    db: AsyncSession = Depends(get_db),
+) -> SeminarMaterial:
+    seminar = await db.get(Seminar, seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+    material = SeminarMaterial(
+        seminar_id=seminar_id, url=payload.url, type=payload.type
+    )
+    db.add(material)
+    await db.flush()
+    return material
+
+
+@router.delete(
+    "/seminars/{seminar_id}/materials/{material_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_seminar_material(
+    seminar_id: uuid.UUID,
+    material_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    material = await db.get(SeminarMaterial, material_id)
+    if material is None or material.seminar_id != seminar_id:
+        raise HTTPException(status_code=404, detail="資料が見つかりません。")
+    await db.delete(material)
     await db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -291,6 +291,11 @@ class AdminSeminarTeacherOut(BaseModel):
     name: str
 
 
+class SeminarMaterialCreate(BaseModel):
+    url: str = Field(min_length=1)
+    type: MaterialType
+
+
 class AdminSeminarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -299,6 +304,7 @@ class AdminSeminarOut(BaseModel):
     description: str | None
     photo_url: str | None
     teachers: list[AdminSeminarTeacherOut]
+    materials: list[SeminarMaterialOut]
 
 
 class AdminTeacherUpdate(BaseModel):

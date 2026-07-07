@@ -13,12 +13,40 @@ export type AdminTeacherOption = {
   is_active: boolean;
 };
 
+export type AdminSeminarMaterial = {
+  id: string;
+  url: string;
+  type: "slide" | "pdf" | "video";
+};
+
 export type AdminSeminar = {
   id: string;
   name: string;
   description: string | null;
   photo_url: string | null;
   teachers: { id: string; name: string }[];
+  materials: AdminSeminarMaterial[];
+};
+
+export type AdminRecruitmentTerm = {
+  id: string;
+  academic_year: number;
+  starts_at: string;
+  ends_at: string;
+  status: "preparing" | "open" | "closed";
+};
+
+export type AdminSeminarRecruitment = {
+  seminar_id: string;
+  seminar_name: string;
+  capacity: number | null;
+  is_recruiting: boolean | null;
+};
+
+const MATERIAL_TYPE_LABEL: Record<AdminSeminarMaterial["type"], string> = {
+  slide: "スライド",
+  pdf: "PDF",
+  video: "動画",
 };
 
 async function extractErrorDetail(res: Response): Promise<string> {
@@ -30,14 +58,36 @@ async function extractErrorDetail(res: Response): Promise<string> {
   }
 }
 
+type RecruitmentInput = {
+  capacity: string;
+  isRecruiting: boolean;
+};
+
+function buildInitialRecruitmentInputs(
+  recruitments: AdminSeminarRecruitment[],
+): Record<string, RecruitmentInput> {
+  const map: Record<string, RecruitmentInput> = {};
+  for (const r of recruitments) {
+    map[r.seminar_id] = {
+      capacity: r.capacity === null ? "" : String(r.capacity),
+      isRecruiting: r.is_recruiting ?? false,
+    };
+  }
+  return map;
+}
+
 type AdminSeminarsViewProps = {
   initialSeminars: AdminSeminar[];
   teacherOptions: AdminTeacherOption[];
+  latestTerm: AdminRecruitmentTerm | null;
+  recruitments: AdminSeminarRecruitment[];
 };
 
 export function AdminSeminarsView({
   initialSeminars,
   teacherOptions,
+  latestTerm,
+  recruitments,
 }: AdminSeminarsViewProps) {
   const { data: session } = useSession();
   const [seminars, setSeminars] = useState(initialSeminars);
@@ -53,6 +103,24 @@ export function AdminSeminarsView({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingTeacherKey, setPendingTeacherKey] = useState<string | null>(
+    null,
+  );
+
+  const [recruitmentInputs, setRecruitmentInputs] = useState<
+    Record<string, RecruitmentInput>
+  >(() => buildInitialRecruitmentInputs(recruitments));
+  const [savingRecruitmentId, setSavingRecruitmentId] = useState<string | null>(
+    null,
+  );
+
+  const [materialUrlInputs, setMaterialUrlInputs] = useState<
+    Record<string, string>
+  >({});
+  const [materialTypeInputs, setMaterialTypeInputs] = useState<
+    Record<string, AdminSeminarMaterial["type"]>
+  >({});
+  const [addingMaterialId, setAddingMaterialId] = useState<string | null>(null);
+  const [deletingMaterialKey, setDeletingMaterialKey] = useState<string | null>(
     null,
   );
 
@@ -189,6 +257,143 @@ export function AdminSeminarsView({
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setPendingTeacherKey(null);
+    }
+  }
+
+  function updateRecruitmentInput(
+    seminarId: string,
+    patch: Partial<RecruitmentInput>,
+  ): void {
+    setRecruitmentInputs((prev) => ({
+      ...prev,
+      [seminarId]: {
+        ...(prev[seminarId] ?? { capacity: "", isRecruiting: false }),
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleSaveRecruitment(seminarId: string): Promise<void> {
+    if (!latestTerm) {
+      return;
+    }
+    const input = recruitmentInputs[seminarId] ?? {
+      capacity: "",
+      isRecruiting: false,
+    };
+    setErrorMessage(null);
+    if (input.capacity.trim() === "") {
+      setErrorMessage("募集人数を入力してください。");
+      return;
+    }
+    const capacity = Number(input.capacity);
+    if (!Number.isInteger(capacity) || capacity < 0) {
+      setErrorMessage("募集人数は0以上の整数で入力してください。");
+      return;
+    }
+    setSavingRecruitmentId(seminarId);
+    try {
+      const res = await apiFetch(
+        `/admin/recruitment-terms/${latestTerm.id}/seminars/${seminarId}`,
+        session,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            capacity,
+            is_recruiting: input.isRecruiting,
+          }),
+        },
+      );
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      const updated = (await res.json()) as AdminSeminarRecruitment;
+      setRecruitmentInputs((prev) => ({
+        ...prev,
+        [seminarId]: {
+          capacity: updated.capacity === null ? "" : String(updated.capacity),
+          isRecruiting: updated.is_recruiting ?? false,
+        },
+      }));
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setSavingRecruitmentId(null);
+    }
+  }
+
+  async function handleAddMaterial(seminarId: string): Promise<void> {
+    const url = (materialUrlInputs[seminarId] ?? "").trim();
+    setErrorMessage(null);
+    if (url === "") {
+      setErrorMessage("資料のURLを入力してください。");
+      return;
+    }
+    const type = materialTypeInputs[seminarId] ?? "slide";
+    setAddingMaterialId(seminarId);
+    try {
+      const res = await apiFetch(
+        `/admin/seminars/${seminarId}/materials`,
+        session,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, type }),
+        },
+      );
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      const created = (await res.json()) as AdminSeminarMaterial;
+      setSeminars((prev) =>
+        prev.map((s) =>
+          s.id === seminarId
+            ? { ...s, materials: [...s.materials, created] }
+            : s,
+        ),
+      );
+      setMaterialUrlInputs((prev) => ({ ...prev, [seminarId]: "" }));
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setAddingMaterialId(null);
+    }
+  }
+
+  async function handleDeleteMaterial(
+    seminarId: string,
+    materialId: string,
+  ): Promise<void> {
+    const key = `${seminarId}:${materialId}`;
+    setErrorMessage(null);
+    setDeletingMaterialKey(key);
+    try {
+      const res = await apiFetch(
+        `/admin/seminars/${seminarId}/materials/${materialId}`,
+        session,
+        { method: "DELETE" },
+      );
+      if (!res.ok && res.status !== 204) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      setSeminars((prev) =>
+        prev.map((s) =>
+          s.id === seminarId
+            ? {
+                ...s,
+                materials: s.materials.filter((m) => m.id !== materialId),
+              }
+            : s,
+        ),
+      );
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setDeletingMaterialKey(null);
     }
   }
 
@@ -334,6 +539,137 @@ export function AdminSeminarsView({
                     })}
                   </div>
                 )}
+              </div>
+
+              <div className="mt-3">
+                <p className="text-sm text-foreground/60">募集人数</p>
+                {latestTerm ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-foreground/40">
+                      {latestTerm.academic_year}年度分
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={recruitmentInputs[seminar.id]?.capacity ?? ""}
+                      onChange={(e) =>
+                        updateRecruitmentInput(seminar.id, {
+                          capacity: e.target.value,
+                        })
+                      }
+                      placeholder="人数"
+                      className="w-24 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
+                    />
+                    <label className="flex items-center gap-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={
+                          recruitmentInputs[seminar.id]?.isRecruiting ?? false
+                        }
+                        onChange={(e) =>
+                          updateRecruitmentInput(seminar.id, {
+                            isRecruiting: e.target.checked,
+                          })
+                        }
+                      />
+                      募集中
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveRecruitment(seminar.id)}
+                      disabled={savingRecruitmentId === seminar.id}
+                      className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                    >
+                      {savingRecruitmentId === seminar.id
+                        ? "保存中..."
+                        : "保存する"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-foreground/40">
+                    募集ラウンドがまだ作成されていません。
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <p className="text-sm text-foreground/60">紹介資料</p>
+                {seminar.materials.length === 0 ? (
+                  <p className="mt-1 text-sm text-foreground/40">
+                    資料はまだありません。
+                  </p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {seminar.materials.map((material) => {
+                      const materialKey = `${seminar.id}:${material.id}`;
+                      return (
+                        <li
+                          key={material.id}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <span className="shrink-0 text-xs text-foreground/40">
+                            {MATERIAL_TYPE_LABEL[material.type]}
+                          </span>
+                          <a
+                            href={material.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate underline hover:opacity-70"
+                          >
+                            {material.url}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteMaterial(seminar.id, material.id)
+                            }
+                            disabled={deletingMaterialKey === materialKey}
+                            className="shrink-0 text-xs text-red-600 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+                          >
+                            削除
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <select
+                    value={materialTypeInputs[seminar.id] ?? "slide"}
+                    onChange={(e) =>
+                      setMaterialTypeInputs((prev) => ({
+                        ...prev,
+                        [seminar.id]: e.target
+                          .value as AdminSeminarMaterial["type"],
+                      }))
+                    }
+                    className="rounded-lg border border-black/[.08] bg-background px-2 py-1.5 text-sm dark:border-white/[.145]"
+                  >
+                    <option value="slide">スライド</option>
+                    <option value="pdf">PDF</option>
+                    <option value="video">動画</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={materialUrlInputs[seminar.id] ?? ""}
+                    onChange={(e) =>
+                      setMaterialUrlInputs((prev) => ({
+                        ...prev,
+                        [seminar.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="資料のURL"
+                    className="min-w-0 flex-1 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddMaterial(seminar.id)}
+                    disabled={addingMaterialId === seminar.id}
+                    className="shrink-0 rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                  >
+                    {addingMaterialId === seminar.id ? "追加中..." : "追加"}
+                  </button>
+                </div>
               </div>
             </section>
           );
