@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
 from api.routers import (
-    assignments,
     applications,
+    assignments,
     match,
     me,
     questions,
