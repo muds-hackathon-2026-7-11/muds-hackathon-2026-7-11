@@ -12,6 +12,7 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    RecruitmentTerm,
     Seminar,
     SeminarMember,
     SeminarRecruitment,
@@ -93,11 +94,12 @@ async def _gather_applicants(
                     select(
                         SeminarMember.student_id,
                         Seminar.name,
-                        SeminarMember.academic_year,
+                        RecruitmentTerm.academic_year,
                     )
                     .join(Seminar, SeminarMember.seminar_id == Seminar.id)
+                    .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
                     .where(SeminarMember.student_id.in_(applicant_ids))
-                    .order_by(SeminarMember.academic_year.desc())
+                    .order_by(RecruitmentTerm.academic_year.desc())
                 )
             ).all()
             for member_student_id, seminar_name, academic_year in member_rows:

@@ -13,6 +13,7 @@ from api.models import (
     ApplicationStatus,
     MaterialType,
     Question,
+    RecruitmentTerm,
     Seminar,
     SeminarMaterial,
     SeminarMember,
@@ -364,6 +365,13 @@ async def seed_all() -> None:
         term, term_created = await get_or_create_recruitment_term(
             session, CURRENT_ACADEMIC_YEAR
         )
+        # 所属ゼミ生は term_id で持つ。過年度の「過去の所属」も表現できるよう、
+        # STUDENTS に登場する年度分の募集ラウンドを用意しておく。
+        terms_by_year: dict[int, RecruitmentTerm] = {CURRENT_ACADEMIC_YEAR: term}
+        for year in {s["academic_year"] for s in STUDENTS}:
+            if year not in terms_by_year:
+                past_term, _ = await get_or_create_recruitment_term(session, year)
+                terms_by_year[year] = past_term
 
         seminars_by_name: dict[str, Seminar] = {}
         seminar_created = 0
@@ -427,11 +435,12 @@ async def seed_all() -> None:
             student_created += created
 
             seminar = seminars_by_name[student_data["seminar"]]
+            member_term = terms_by_year[student_data["academic_year"]]
             member_result = await session.execute(
                 select(SeminarMember).where(
                     SeminarMember.seminar_id == seminar.id,
                     SeminarMember.student_id == student.id,
-                    SeminarMember.academic_year == student_data["academic_year"],
+                    SeminarMember.term_id == member_term.id,
                 )
             )
             if member_result.scalar_one_or_none() is None:
@@ -439,7 +448,7 @@ async def seed_all() -> None:
                     SeminarMember(
                         seminar_id=seminar.id,
                         student_id=student.id,
-                        academic_year=student_data["academic_year"],
+                        term_id=member_term.id,
                     )
                 )
                 member_created += 1

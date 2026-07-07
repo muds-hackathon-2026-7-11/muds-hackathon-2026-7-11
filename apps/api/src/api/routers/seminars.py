@@ -10,15 +10,19 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    RecruitmentTerm,
+    ResearchTag,
     Seminar,
     SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
     User,
+    UserInterestTag,
 )
 from api.schemas import (
     PriorityCounts,
+    ResearchTagOut,
     SeminarDetailOut,
     SeminarMaterialOut,
     SeminarMemberOut,
@@ -26,9 +30,28 @@ from api.schemas import (
     SeminarStatsOut,
     TeacherOut,
 )
-from api.services import get_current_term
+from api.services import current_academic_year, get_current_term
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
+
+
+async def _interest_tags_by_user(
+    db: AsyncSession, *, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[ResearchTagOut]]:
+    """複数ユーザー分の興味分野タグを1クエリでまとめて取得する(N+1回避)。"""
+    if not user_ids:
+        return {}
+
+    result = await db.execute(
+        select(UserInterestTag.user_id, ResearchTag)
+        .join(ResearchTag, UserInterestTag.tag_id == ResearchTag.id)
+        .where(UserInterestTag.user_id.in_(user_ids))
+        .order_by(ResearchTag.sort_order)
+    )
+    tags_by_user: dict[uuid.UUID, list[ResearchTagOut]] = {}
+    for user_id, tag in result.all():
+        tags_by_user.setdefault(user_id, []).append(ResearchTagOut.model_validate(tag))
+    return tags_by_user
 
 
 @router.get("", response_model=list[SeminarOut])
@@ -88,6 +111,24 @@ async def seminar_stats(
     )
     term = await get_current_term(db)
 
+    # 継続ゼミ生数は募集期間の有無に関わらず「現在の年度」で数える
+    # (現在のゼミ生は年間通して見える必要があるため)。
+    academic_year = await current_academic_year(db)
+    continuing_by_seminar: dict[uuid.UUID, int] = {}
+    if academic_year is not None:
+        # 所属は term 単位で持つため、term経由で現在年度の所属を数える。
+        # 前期/後期など同年度に複数termがある場合の二重計上を避けて学生で重複排除する。
+        member_rows = await db.execute(
+            select(
+                SeminarMember.seminar_id,
+                func.count(SeminarMember.student_id.distinct()),
+            )
+            .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
+            .where(RecruitmentTerm.academic_year == academic_year)
+            .group_by(SeminarMember.seminar_id)
+        )
+        continuing_by_seminar = {sid: cnt for sid, cnt in member_rows.all()}
+
     if term is None:
         return [
             SeminarStatsOut(
@@ -98,7 +139,7 @@ async def seminar_stats(
                 priority_counts=PriorityCounts(first=0, second=0, third=0),
                 grade_counts={},
                 ratio=None,
-                continuing_count=0,
+                continuing_count=continuing_by_seminar.get(s.id, 0),
             )
             for s in seminars
         ]
@@ -138,15 +179,8 @@ async def seminar_stats(
         grade_key = grade or "不明"
         grades[grade_key] = grades.get(grade_key, 0) + 1
 
-    # 継続者（現年度の所属ゼミ生数）
-    member_rows = await db.execute(
-        select(SeminarMember.seminar_id, func.count())
-        .where(SeminarMember.academic_year == term.academic_year)
-        .group_by(SeminarMember.seminar_id)
-    )
-    continuing_by_seminar: dict[uuid.UUID, int] = {
-        sid: cnt for sid, cnt in member_rows.all()
-    }
+    # 継続者数は term is None の分岐前(現在の年度ベース)で算出済みの
+    # continuing_by_seminar をそのまま使う。
 
     stats: list[SeminarStatsOut] = []
     for s in seminars:
@@ -198,9 +232,19 @@ async def get_seminar(
         .where(SeminarTeacher.seminar_id == seminar_id)
         .order_by(User.name)
     )
+    teacher_users = list(teachers_result.scalars().all())
+    teacher_tags = await _interest_tags_by_user(
+        db, user_ids=[u.id for u in teacher_users]
+    )
     teachers = [
-        TeacherOut(id=u.id, name=u.name, research_theme=u.research_theme)
-        for u in teachers_result.scalars().all()
+        TeacherOut(
+            id=u.id,
+            name=u.name,
+            photo_url=u.photo_url,
+            research_theme=u.research_theme,
+            interest_tags=teacher_tags.get(u.id, []),
+        )
+        for u in teacher_users
     ]
 
     materials_result = await db.execute(
@@ -211,19 +255,31 @@ async def get_seminar(
     ]
 
     current_members: list[SeminarMemberOut] = []
-    if term is not None:
+    academic_year = await current_academic_year(db)
+    if academic_year is not None:
         members_result = await db.execute(
             select(User)
             .join(SeminarMember, SeminarMember.student_id == User.id)
+            .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
             .where(
                 SeminarMember.seminar_id == seminar_id,
-                SeminarMember.academic_year == term.academic_year,
+                RecruitmentTerm.academic_year == academic_year,
             )
             .order_by(User.name)
         )
+        # 前期/後期で同一学生が複数termに所属し得るため重複排除する。
+        member_users = list({u.id: u for u in members_result.scalars().all()}.values())
+        member_tags = await _interest_tags_by_user(
+            db, user_ids=[u.id for u in member_users]
+        )
         current_members = [
-            SeminarMemberOut(id=u.id, name=u.name, research_theme=u.research_theme)
-            for u in members_result.scalars().all()
+            SeminarMemberOut(
+                id=u.id,
+                name=u.name,
+                research_theme=u.research_theme,
+                interest_tags=member_tags.get(u.id, []),
+            )
+            for u in member_users
         ]
 
     return SeminarDetailOut(

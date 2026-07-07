@@ -186,6 +186,18 @@ async def test_require_role_forbids_and_allows(db_session) -> None:
     assert await dependency(admin) is admin
 
 
+async def test_require_role_forbids_inactive_user(db_session) -> None:
+    dependency = require_role(UserRole.student)
+
+    student = await _make_user(db_session, UserRole.student)
+    student.is_active = False
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await dependency(student)
+    assert exc_info.value.status_code == 403
+
+
 async def test_require_role_allows_any_listed_role(db_session) -> None:
     dependency = require_role(UserRole.teacher, UserRole.admin)
 

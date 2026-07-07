@@ -24,7 +24,7 @@ describe("MenuBar", () => {
       "href",
       "/",
     );
-    expect(screen.getByRole("link", { name: "配属状況" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
       "href",
       "/assignment",
     );
@@ -34,7 +34,7 @@ describe("MenuBar", () => {
     vi.mocked(usePathname).mockReturnValue("/assignment");
     render(<MenuBar />);
 
-    expect(screen.getByRole("link", { name: "配属状況" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -70,7 +70,7 @@ describe("MenuBar", () => {
     const toggle = screen.getByRole("button", { name: "メニューを開閉する" });
     await user.click(toggle);
 
-    const mobileLinks = screen.getAllByRole("link", { name: "配属状況" });
+    const mobileLinks = screen.getAllByRole("link", { name: "応募状況" });
     await user.click(mobileLinks[mobileLinks.length - 1]);
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
