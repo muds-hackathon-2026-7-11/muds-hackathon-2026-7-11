@@ -6,7 +6,14 @@ from sqlalchemy import func, select
 from api import auth
 from api.auth import get_current_user
 from api.main import app
-from api.models import MaterialType, Seminar, SeminarMaterial, SeminarTeacher, User, UserRole
+from api.models import (
+    MaterialType,
+    Seminar,
+    SeminarMaterial,
+    SeminarTeacher,
+    User,
+    UserRole,
+)
 
 pytestmark = pytest.mark.asyncio
 
