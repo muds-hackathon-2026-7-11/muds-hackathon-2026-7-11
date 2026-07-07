@@ -265,6 +265,26 @@ async def test_update_teacher_on_non_teacher_returns_404(client, db_session) -> 
     assert resp.status_code == 404
 
 
+async def test_delete_teacher_soft_deletes(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.delete(f"/admin/teachers/{teacher.id}")
+
+    assert resp.status_code == 204
+    await db_session.refresh(teacher)
+    # 物理削除ではなく is_active=false(レコードは残る)
+    assert teacher.is_active is False
+    assert await db_session.get(User, teacher.id) is not None
+
+
+async def test_delete_teacher_on_non_teacher_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    student = await _make_user(db_session, UserRole.student)
+    resp = await client.delete(f"/admin/teachers/{student.id}")
+    assert resp.status_code == 404
+
+
 # --- 認可 ---
 
 

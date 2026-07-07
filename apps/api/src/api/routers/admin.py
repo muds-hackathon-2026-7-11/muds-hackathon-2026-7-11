@@ -190,3 +190,18 @@ async def update_teacher(
         setattr(teacher, field, value)
     await db.flush()
     return teacher
+
+
+@router.delete("/teachers/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_teacher(
+    teacher_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Response:
+    """教員を「削除」する。answers 等がFK参照するため物理削除はせず、
+    is_active=false にするソフトdelete(requirements.md)。無効化済みでも 204。
+    """
+    teacher = await db.get(User, teacher_id)
+    if teacher is None or teacher.role != UserRole.teacher:
+        raise HTTPException(status_code=404, detail="教員が見つかりません。")
+    teacher.is_active = False
+    await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
