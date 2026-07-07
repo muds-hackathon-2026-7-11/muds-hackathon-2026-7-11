@@ -31,7 +31,9 @@ type SeminarStatsListProps = {
 export function SeminarStatsList({ stats }: SeminarStatsListProps) {
   if (stats.length === 0) {
     return (
-      <p className="text-foreground/60">応募状況を取得できませんでした。</p>
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+        応募状況を取得できませんでした。
+      </section>
     );
   }
 
@@ -53,15 +55,21 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
   ];
 
   return (
-    <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-      <Link
-        href={`/seminars/${seminar.id}`}
-        className="font-semibold underline hover:opacity-70"
-      >
-        {seminar.name}
-      </Link>
+    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
+      <div className="flex items-center gap-3">
+        {/* ゼミアイコン用のスペース。アイコン未設定時はゼミ名の頭文字を表示。 */}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#add8e6]/20 text-lg font-bold text-sky-900">
+          {seminar.name.charAt(0)}
+        </div>
+        <Link
+          href={`/seminars/${seminar.id}`}
+          className="font-semibold text-zinc-800 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+        >
+          {seminar.name}
+        </Link>
+      </div>
 
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-foreground/70">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-600">
         <dt>上限人数</dt>
         <dd>{seminar.capacity ?? "未設定"}</dd>
         <dt>累計志望者数</dt>
@@ -79,30 +87,28 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
       <div className="mt-4 h-40">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="currentColor"
-              opacity={0.15}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
             <XAxis
               dataKey="label"
-              tick={{ fill: "currentColor", fontSize: 12 }}
-              stroke="currentColor"
+              tick={{ fill: "#71717a", fontSize: 12 }}
+              stroke="#e6e6e6"
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fill: "currentColor", fontSize: 12 }}
-              stroke="currentColor"
+              tick={{ fill: "#71717a", fontSize: 12 }}
+              stroke="#e6e6e6"
             />
             <Tooltip
+              cursor={{ fill: "#add8e6", opacity: 0.15 }}
               contentStyle={{
-                background: "var(--background)",
-                color: "var(--foreground)",
-                border: "1px solid currentColor",
+                background: "#ffffff",
+                color: "#3f3f46",
+                border: "1px solid #add8e6",
+                borderRadius: 8,
                 fontSize: 12,
               }}
             />
-            <Bar dataKey="count" fill="currentColor" />
+            <Bar dataKey="count" fill="#add8e6" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
