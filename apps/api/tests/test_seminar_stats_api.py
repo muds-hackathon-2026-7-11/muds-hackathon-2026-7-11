@@ -235,6 +235,40 @@ async def test_seminar_stats_ratio_null_when_no_capacity(client, db_session) -> 
     assert stats["ratio"] is None
 
 
+async def test_seminar_stats_continuing_count_without_an_active_term(
+    client, db_session
+) -> None:
+    # 募集期間が(open/日付内という意味で)アクティブでなくても、継続ゼミ生数は
+    # 直近に作成された募集期間の年度を基準に数えられる(#77)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    student = await _make_student(db_session)
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id, student_id=student.id, academic_year=academic_year
+        )
+    )
+    await db_session.flush()
+
+    _authenticate_as(student)
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["continuing_count"] == 1
+    # 募集期間がアクティブでないため、志望集計自体は0のまま。
+    assert stats["applicant_count"] == 0
+
+
 async def test_seminar_stats_requires_auth(client) -> None:
     # get_current_user を override しない=未認証 → 401
     resp = await client.get("/seminars/stats")
