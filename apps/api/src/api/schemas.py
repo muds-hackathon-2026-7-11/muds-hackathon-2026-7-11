@@ -284,6 +284,13 @@ class AdminSeminarUpdate(BaseModel):
     photo_url: str | None = None
 
 
+class AdminSeminarTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
 class AdminSeminarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -291,6 +298,7 @@ class AdminSeminarOut(BaseModel):
     name: str
     description: str | None
     photo_url: str | None
+    teachers: list[AdminSeminarTeacherOut]
 
 
 class AdminTeacherUpdate(BaseModel):

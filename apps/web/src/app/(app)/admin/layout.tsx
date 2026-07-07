@@ -1,19 +1,20 @@
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { MenuBar } from "@/components/menu-bar";
 import { getSessionRole } from "@/lib/session-role";
 
-export default async function AppLayout({
+export default async function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const session = await auth();
+  if (!session) {
+    redirect("/login");
+  }
   const role = await getSessionRole(session);
+  if (role !== "admin") {
+    redirect("/");
+  }
 
-  return (
-    <>
-      <MenuBar isAdmin={role === "admin"} />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

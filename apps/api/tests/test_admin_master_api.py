@@ -74,6 +74,7 @@ async def test_create_seminar(client, db_session) -> None:
     body = resp.json()
     assert body["name"] == "新ゼミ"
     assert body["description"] == "説明"
+    assert body["teachers"] == []
 
     created = await db_session.get(Seminar, uuid.UUID(body["id"]))
     assert created is not None and created.name == "新ゼミ"
@@ -99,6 +100,18 @@ async def test_update_seminar_unknown_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     resp = await client.patch(f"/admin/seminars/{uuid.uuid4()}", json={"name": "x"})
     assert resp.status_code == 404
+
+
+async def test_list_seminars_includes_assigned_teachers(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _link(db_session, seminar, teacher)
+
+    resp = await client.get("/admin/seminars")
+    assert resp.status_code == 200
+    body = next(s for s in resp.json() if s["id"] == str(seminar.id))
+    assert body["teachers"] == [{"id": str(teacher.id), "name": teacher.name}]
 
 
 async def test_delete_seminar_cascades_teacher_links(client, db_session) -> None:

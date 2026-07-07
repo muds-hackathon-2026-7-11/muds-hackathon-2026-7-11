@@ -14,7 +14,7 @@ describe("MenuBar", () => {
   });
 
   it("renders the logo and nav items with correct links", () => {
-    render(<MenuBar />);
+    render(<MenuBar isAdmin={false} />);
 
     expect(screen.getByRole("link", { name: "Zemi-Match" })).toHaveAttribute(
       "href",
@@ -32,7 +32,7 @@ describe("MenuBar", () => {
 
   it("marks the current page as active", () => {
     vi.mocked(usePathname).mockReturnValue("/assignment");
-    render(<MenuBar />);
+    render(<MenuBar isAdmin={false} />);
 
     expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
       "aria-current",
@@ -43,15 +43,32 @@ describe("MenuBar", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
+  it("does not show the admin nav item for non-admins", () => {
+    render(<MenuBar isAdmin={false} />);
+
+    expect(
+      screen.queryByRole("link", { name: "管理者" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the admin nav item for admins", () => {
+    render(<MenuBar isAdmin={true} />);
+
+    expect(screen.getByRole("link", { name: "管理者" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+  });
+
   it("renders the settings button as disabled", () => {
-    render(<MenuBar />);
+    render(<MenuBar isAdmin={false} />);
 
     expect(screen.getByRole("button", { name: "設定(準備中)" })).toBeDisabled();
   });
 
   it("toggles the mobile menu open and closed", async () => {
     const user = userEvent.setup();
-    render(<MenuBar />);
+    render(<MenuBar isAdmin={false} />);
 
     const toggle = screen.getByRole("button", { name: "メニューを開閉する" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -65,7 +82,7 @@ describe("MenuBar", () => {
 
   it("closes the mobile menu after selecting a nav item", async () => {
     const user = userEvent.setup();
-    render(<MenuBar />);
+    render(<MenuBar isAdmin={false} />);
 
     const toggle = screen.getByRole("button", { name: "メニューを開閉する" });
     await user.click(toggle);

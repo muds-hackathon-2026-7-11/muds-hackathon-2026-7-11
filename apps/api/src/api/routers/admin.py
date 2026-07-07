@@ -10,6 +10,7 @@ from api.models import Seminar, SeminarTeacher, User, UserRole
 from api.schemas import (
     AdminSeminarCreate,
     AdminSeminarOut,
+    AdminSeminarTeacherOut,
     AdminSeminarUpdate,
     AdminTeacherOut,
     AdminTeacherUpdate,
@@ -27,10 +28,43 @@ router = APIRouter(
 # --- ゼミ ---
 
 
+async def _teachers_by_seminar(
+    db: AsyncSession, *, seminar_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[AdminSeminarTeacherOut]]:
+    """複数ゼミ分の担当教員を1クエリでまとめて取得する(N+1回避)。"""
+    if not seminar_ids:
+        return {}
+
+    result = await db.execute(
+        select(SeminarTeacher.seminar_id, User)
+        .join(User, SeminarTeacher.teacher_id == User.id)
+        .where(SeminarTeacher.seminar_id.in_(seminar_ids))
+        .order_by(User.name)
+    )
+    teachers_by_seminar: dict[uuid.UUID, list[AdminSeminarTeacherOut]] = {}
+    for seminar_id, teacher in result.all():
+        teachers_by_seminar.setdefault(seminar_id, []).append(
+            AdminSeminarTeacherOut.model_validate(teacher)
+        )
+    return teachers_by_seminar
+
+
+def _to_seminar_out(
+    seminar: Seminar, teachers: list[AdminSeminarTeacherOut]
+) -> AdminSeminarOut:
+    return AdminSeminarOut(
+        id=seminar.id,
+        name=seminar.name,
+        description=seminar.description,
+        photo_url=seminar.photo_url,
+        teachers=teachers,
+    )
+
+
 @router.post("/seminars", response_model=AdminSeminarOut, status_code=201)
 async def create_seminar(
     payload: AdminSeminarCreate, db: AsyncSession = Depends(get_db)
-) -> Seminar:
+) -> AdminSeminarOut:
     """ゼミを1件作成する(一括投入はCSV #40)。"""
     seminar = Seminar(
         name=payload.name,
@@ -39,13 +73,19 @@ async def create_seminar(
     )
     db.add(seminar)
     await db.flush()
-    return seminar
+    return _to_seminar_out(seminar, [])
 
 
 @router.get("/seminars", response_model=list[AdminSeminarOut])
-async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[Seminar]:
+async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[AdminSeminarOut]:
     result = await db.execute(select(Seminar).order_by(Seminar.name))
-    return list(result.scalars().all())
+    seminars = list(result.scalars().all())
+    teachers_by_seminar = await _teachers_by_seminar(
+        db, seminar_ids=[s.id for s in seminars]
+    )
+    return [
+        _to_seminar_out(s, teachers_by_seminar.get(s.id, [])) for s in seminars
+    ]
 
 
 @router.patch("/seminars/{seminar_id}", response_model=AdminSeminarOut)
@@ -53,14 +93,15 @@ async def update_seminar(
     seminar_id: uuid.UUID,
     payload: AdminSeminarUpdate,
     db: AsyncSession = Depends(get_db),
-) -> Seminar:
+) -> AdminSeminarOut:
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
         raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(seminar, field, value)
     await db.flush()
-    return seminar
+    teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=[seminar.id])
+    return _to_seminar_out(seminar, teachers_by_seminar.get(seminar.id, []))
 
 
 @router.delete("/seminars/{seminar_id}", status_code=status.HTTP_204_NO_CONTENT)
