@@ -58,10 +58,24 @@ async function extractErrorDetail(res: Response): Promise<string> {
   }
 }
 
+// 学年ごとの募集可否はバックエンド未対応(#イシュー: 学年表記の正規化が
+// 前提のため)。UIだけ先行して用意し、保存時はtarget_gradesを送るが、
+// バックエンドは未知のフィールドとして無視するため今は反映されない。
+const GRADE_OPTIONS = ["B1", "B2", "B3", "B4"] as const;
+
 type RecruitmentInput = {
   capacity: string;
   isRecruiting: boolean;
+  targetGrades: string[];
 };
+
+function defaultRecruitmentInput(): RecruitmentInput {
+  return {
+    capacity: "",
+    isRecruiting: false,
+    targetGrades: [...GRADE_OPTIONS],
+  };
+}
 
 function buildInitialRecruitmentInputs(
   recruitments: AdminSeminarRecruitment[],
@@ -71,6 +85,7 @@ function buildInitialRecruitmentInputs(
     map[r.seminar_id] = {
       capacity: r.capacity === null ? "" : String(r.capacity),
       isRecruiting: r.is_recruiting ?? false,
+      targetGrades: [...GRADE_OPTIONS],
     };
   }
   return map;
@@ -287,20 +302,27 @@ export function AdminSeminarsView({
     setRecruitmentInputs((prev) => ({
       ...prev,
       [seminarId]: {
-        ...(prev[seminarId] ?? { capacity: "", isRecruiting: false }),
+        ...(prev[seminarId] ?? defaultRecruitmentInput()),
         ...patch,
       },
     }));
+  }
+
+  function toggleTargetGrade(seminarId: string, grade: string): void {
+    const current = recruitmentInputs[seminarId]?.targetGrades ?? [
+      ...GRADE_OPTIONS,
+    ];
+    const targetGrades = current.includes(grade)
+      ? current.filter((g) => g !== grade)
+      : [...current, grade];
+    updateRecruitmentInput(seminarId, { targetGrades });
   }
 
   async function handleSaveRecruitment(seminarId: string): Promise<void> {
     if (!latestTerm) {
       return;
     }
-    const input = recruitmentInputs[seminarId] ?? {
-      capacity: "",
-      isRecruiting: false,
-    };
+    const input = recruitmentInputs[seminarId] ?? defaultRecruitmentInput();
     setErrorMessage(null);
     if (input.capacity.trim() === "") {
       setErrorMessage("募集人数を入力してください。");
@@ -322,6 +344,8 @@ export function AdminSeminarsView({
           body: JSON.stringify({
             capacity,
             is_recruiting: input.isRecruiting,
+            // バックエンド未対応のため現時点では無視される(#学年別募集設定)。
+            target_grades: input.targetGrades,
           }),
         },
       );
@@ -335,6 +359,7 @@ export function AdminSeminarsView({
         [seminarId]: {
           capacity: updated.capacity === null ? "" : String(updated.capacity),
           isRecruiting: updated.is_recruiting ?? false,
+          targetGrades: prev[seminarId]?.targetGrades ?? [...GRADE_OPTIONS],
         },
       }));
     } catch {
@@ -609,9 +634,6 @@ export function AdminSeminarsView({
                 <p className="text-sm text-foreground/60">募集人数</p>
                 {latestTerm ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-foreground/40">
-                      {latestTerm.academic_year}年度分
-                    </span>
                     <input
                       type="number"
                       min={0}
@@ -653,6 +675,34 @@ export function AdminSeminarsView({
                   <p className="mt-1 text-sm text-foreground/40">
                     募集ラウンドがまだ作成されていません。
                   </p>
+                )}
+                {latestTerm && (
+                  <div className="mt-2">
+                    <div className="flex flex-wrap gap-3">
+                      {GRADE_OPTIONS.map((grade) => (
+                        <label
+                          key={grade}
+                          className="flex items-center gap-1.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={(
+                              recruitmentInputs[seminar.id]?.targetGrades ?? [
+                                ...GRADE_OPTIONS,
+                              ]
+                            ).includes(grade)}
+                            onChange={() =>
+                              toggleTargetGrade(seminar.id, grade)
+                            }
+                          />
+                          {grade}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-foreground/40">
+                      ※ 対象学年の絞り込みはまだ反映されません(今後対応予定)。
+                    </p>
+                  </div>
                 )}
               </div>
 

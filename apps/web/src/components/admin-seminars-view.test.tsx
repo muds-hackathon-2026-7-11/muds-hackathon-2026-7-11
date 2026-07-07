@@ -342,10 +342,60 @@ describe("AdminSeminarsView", () => {
         ),
         expect.objectContaining({
           method: "PUT",
-          body: JSON.stringify({ capacity: 5, is_recruiting: true }),
+          body: JSON.stringify({
+            capacity: 5,
+            is_recruiting: true,
+            target_grades: ["B1", "B2", "B3", "B4"],
+          }),
         }),
       );
     });
+  });
+
+  it("excludes an unchecked grade from target_grades on save", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          is_recruiting: true,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    await user.click(screen.getByRole("checkbox", { name: "B1" }));
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify(["B2", "B3", "B4"])),
+        }),
+      );
+    });
+  });
+
+  it("shows a not-yet-effective note next to the grade checkboxes", () => {
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    expect(
+      screen.getByText(
+        "※ 対象学年の絞り込みはまだ反映されません(今後対応予定)。",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows an error and does not call the API when capacity is empty", async () => {
