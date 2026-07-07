@@ -83,7 +83,7 @@ async def test_notifies_current_members_and_teachers(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=term.academic_year,
+            term_id=term.id,
         )
     )
     teacher = await _make_user(db_session, UserRole.teacher, _unique("U-teacher"))
@@ -121,7 +121,7 @@ async def test_does_not_notify_users_without_slack_link(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=unlinked_member.id,
-            academic_year=term.academic_year,
+            term_id=term.id,
         )
     )
     await db_session.flush()
@@ -146,7 +146,7 @@ async def test_does_not_notify_the_asker_even_if_current_member(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=asker.id,
-            academic_year=term.academic_year,
+            term_id=term.id,
         )
     )
     await db_session.flush()
@@ -168,12 +168,20 @@ async def test_does_not_notify_past_members(
     asker_slack_id = _unique("U-asker")
     await _make_user(db_session, UserRole.student, asker_slack_id)
 
+    past_term = RecruitmentTerm(
+        academic_year=term.academic_year - 1,
+        starts_at=date(term.academic_year - 1, 4, 1),
+        ends_at=date(term.academic_year - 1, 9, 30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(past_term)
+    await db_session.flush()
     past_member = await _make_user(db_session, UserRole.student, _unique("U-past"))
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=past_member.id,
-            academic_year=term.academic_year - 1,
+            term_id=past_term.id,
         )
     )
     await db_session.flush()
@@ -210,7 +218,7 @@ async def test_notifies_current_members_without_an_active_term(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=academic_year,
+            term_id=closed_term.id,
         )
     )
     await db_session.flush()
@@ -238,7 +246,7 @@ async def test_notification_failure_does_not_block_question_creation(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=term.academic_year,
+            term_id=term.id,
         )
     )
     await db_session.flush()

@@ -10,6 +10,7 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    RecruitmentTerm,
     ResearchTag,
     Seminar,
     SeminarMaterial,
@@ -115,9 +116,15 @@ async def seminar_stats(
     academic_year = await current_academic_year(db)
     continuing_by_seminar: dict[uuid.UUID, int] = {}
     if academic_year is not None:
+        # 所属は term 単位で持つため、term経由で現在年度の所属を数える。
+        # 前期/後期など同年度に複数termがある場合の二重計上を避けて学生で重複排除する。
         member_rows = await db.execute(
-            select(SeminarMember.seminar_id, func.count())
-            .where(SeminarMember.academic_year == academic_year)
+            select(
+                SeminarMember.seminar_id,
+                func.count(SeminarMember.student_id.distinct()),
+            )
+            .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
+            .where(RecruitmentTerm.academic_year == academic_year)
             .group_by(SeminarMember.seminar_id)
         )
         continuing_by_seminar = {sid: cnt for sid, cnt in member_rows.all()}
@@ -171,6 +178,9 @@ async def seminar_stats(
         grades = grade_by_seminar.setdefault(seminar_id, {})
         grade_key = grade or "不明"
         grades[grade_key] = grades.get(grade_key, 0) + 1
+
+    # 継続者数は term is None の分岐前(現在の年度ベース)で算出済みの
+    # continuing_by_seminar をそのまま使う。
 
     stats: list[SeminarStatsOut] = []
     for s in seminars:
@@ -250,13 +260,15 @@ async def get_seminar(
         members_result = await db.execute(
             select(User)
             .join(SeminarMember, SeminarMember.student_id == User.id)
+            .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
             .where(
                 SeminarMember.seminar_id == seminar_id,
-                SeminarMember.academic_year == academic_year,
+                RecruitmentTerm.academic_year == academic_year,
             )
             .order_by(User.name)
         )
-        member_users = list(members_result.scalars().all())
+        # 前期/後期で同一学生が複数termに所属し得るため重複排除する。
+        member_users = list({u.id: u for u in members_result.scalars().all()}.values())
         member_tags = await _interest_tags_by_user(
             db, user_ids=[u.id for u in member_users]
         )

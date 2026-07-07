@@ -74,9 +74,10 @@ async def find_answer_candidates(
     members_result = await db.execute(
         select(User)
         .join(SeminarMember, SeminarMember.student_id == User.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
         .where(
             SeminarMember.seminar_id == seminar_id,
-            SeminarMember.academic_year == academic_year,
+            RecruitmentTerm.academic_year == academic_year,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
         )

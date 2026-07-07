@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.routers import (
     applications,
+    assignments,
     match,
     me,
     questions,
@@ -40,6 +41,7 @@ app.include_router(applications.router)
 app.include_router(recruitment.router)
 app.include_router(teacher.router)
 app.include_router(match.router)
+app.include_router(assignments.router)
 app.include_router(research_tags.router)
 
 

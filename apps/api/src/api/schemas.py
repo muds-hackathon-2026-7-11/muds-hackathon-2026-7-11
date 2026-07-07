@@ -255,3 +255,18 @@ class MatchOut(BaseModel):
     feedback: dict | None
     # score を出せない場合(研究テーマ/ゼミ紹介が未設定など)の説明。
     message: str | None = None
+
+
+# --- 配属結果CSVインポート (#61) ---
+
+
+class AssignmentImportError(BaseModel):
+    # CSVの行番号(ヘッダを除いた1始まり)と理由。
+    row: int
+    reason: str
+
+
+class AssignmentImportResult(BaseModel):
+    created: int  # 新規に作成した配属レコード数
+    existing: int  # 既に存在していた(スキップした)数
+    errors: list[AssignmentImportError]
