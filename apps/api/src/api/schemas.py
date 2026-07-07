@@ -257,6 +257,51 @@ class MatchOut(BaseModel):
     message: str | None = None
 
 
+# --- 運営: 教員・ゼミ管理 (#62) ---
+# 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
+
+
+class AdminSeminarCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarUpdate(BaseModel):
+    # 送られたフィールドのみ更新する(未指定は据え置き)。ルーター側で
+    # model_dump(exclude_unset=True) を使うため、既定値は「未指定」を表す。
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    photo_url: str | None
+
+
+class AdminTeacherUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    research_theme: str | None = None
+    photo_url: str | None = None
+    is_active: bool | None = None
+
+
+class AdminTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    research_theme: str | None
+    photo_url: str | None
+    is_active: bool
+
+
 # --- 配属結果CSVインポート (#61) ---
 
 
