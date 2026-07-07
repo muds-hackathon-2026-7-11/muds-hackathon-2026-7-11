@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { LogoutButton } from "@/components/logout-button";
 import { ProfileCard, type ResearchTag } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
 import type { Session } from "next-auth";
@@ -61,10 +60,6 @@ export default async function Home() {
   return (
     <main className="page-canvas relative flex flex-1 flex-col">
       <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 sm:p-6">
-        <div className="flex justify-end">
-          <LogoutButton />
-        </div>
-
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="sm:flex-1">
             {me ? (

@@ -101,6 +101,13 @@ type Slot = {
 
 const PRIORITY_LABELS = ["第1志望", "第2志望", "第3志望"] as const;
 
+// 動画撮影用の仮画面(#106)。マッチ度診断自体はまだ実装しない。
+const MOCK_MATCH_RESULTS = [
+  { score: 88, feedback: "研究テーマや興味分野との親和性が高いです。" },
+  { score: 74, feedback: "重なる関心テーマがいくつかあります。" },
+  { score: 61, feedback: "分野は異なりますが、学べることは多そうです。" },
+] as const;
+
 function toSlots(choices: ApplicationChoice[]): [Slot, Slot, Slot] {
   const slots: [Slot, Slot, Slot] = [
     { seminarId: "", reason: "" },
@@ -185,6 +192,9 @@ export function ApplicationForm({
   // 上書きしかねない。呼び出しを1本のPromiseチェーンに繋ぎ、常に前の
   // PUTが完了してから次のPUTを送るようにする。
   const persistQueue = useRef<Promise<void>>(Promise.resolve());
+  // 動画撮影用の仮画面(#106)。診断結果自体はダミーで、内容を編集したら
+  // 古い診断結果が残らないよう非表示に戻す。
+  const [showMatchResults, setShowMatchResults] = useState(false);
 
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
@@ -201,6 +211,7 @@ export function ApplicationForm({
       next[index] = { ...next[index], ...patch };
       return next;
     });
+    setShowMatchResults(false);
   }
 
   function buildPayloadChoices() {
@@ -219,6 +230,21 @@ export function ApplicationForm({
       .map((slot, index) => ({ slot, index }))
       .filter(({ slot }) => slot.seminarId !== "" && slot.reason.trim() === "")
       .map(({ index }) => PRIORITY_LABELS[index]);
+  }
+
+  // 動画撮影用の仮画面(#106)。実際の診断ロジックは別イシューで対応する。
+  function handleMatchCheckClick(): void {
+    setErrorMessage(null);
+    if (buildPayloadChoices().length === 0) {
+      setErrorMessage("志望を1件以上入力してください。");
+      return;
+    }
+    const missing = missingReasonLabels();
+    if (missing.length > 0) {
+      setErrorMessage(`${missing.join("・")}の志望理由が未入力です。`);
+      return;
+    }
+    setShowMatchResults(true);
   }
 
   // 保存(PUT)本体。バリデーションはせず、渡された内容をそのまま保存する。
@@ -591,12 +617,53 @@ export function ApplicationForm({
                 {isReverting ? "戻しています..." : "戻る"}
               </button>
             )}
+            <button
+              type="button"
+              onClick={handleMatchCheckClick}
+              disabled={isBusy}
+              className="rounded-full border border-[#add8e6] bg-white px-5 py-2 text-sm font-medium text-sky-900 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              マッチ度診断
+            </button>
             <span className="text-xs text-foreground/40" aria-live="polite">
               {autosaveState === "saving" && "保存中..."}
               {autosaveState === "saved" && "保存済み"}
               {autosaveState === "error" && "自動保存に失敗しました"}
             </span>
           </div>
+
+          {showMatchResults && (
+            <div className="flex flex-col gap-3">
+              {slots
+                .map((slot, index) => ({ slot, index }))
+                .filter(({ slot }) => slot.seminarId !== "")
+                .map(({ slot, index }) => {
+                  const seminarName =
+                    seminars.find((s) => s.id === slot.seminarId)?.name ?? "";
+                  const mock =
+                    MOCK_MATCH_RESULTS[index] ??
+                    MOCK_MATCH_RESULTS[MOCK_MATCH_RESULTS.length - 1];
+                  return (
+                    <section
+                      key={PRIORITY_LABELS[index]}
+                      className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-zinc-500">
+                          {PRIORITY_LABELS[index]}・{seminarName}
+                        </p>
+                        <p className="text-lg font-bold text-sky-900">
+                          マッチ度 {mock.score}%
+                        </p>
+                      </div>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        {mock.feedback}
+                      </p>
+                    </section>
+                  );
+                })}
+            </div>
+          )}
         </>
       )}
     </div>

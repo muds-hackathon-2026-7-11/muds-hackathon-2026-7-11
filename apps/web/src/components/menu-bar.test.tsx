@@ -1,11 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MenuBar } from "./menu-bar";
 
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(),
+}));
+
+vi.mock("next-auth/react", () => ({
+  signOut: vi.fn(),
 }));
 
 describe("MenuBar", () => {
@@ -43,27 +48,58 @@ describe("MenuBar", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
-  it("does not show the admin nav item for non-admins", () => {
+  it("links the chat button to the AI seminar chat page", () => {
     render(<MenuBar isAdmin={false} />);
 
-    expect(
-      screen.queryByRole("link", { name: "管理者" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "AIゼミ相談" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
   });
 
-  it("shows the admin nav item for admins", () => {
+  it("opens the settings dropdown and shows ログアウト but not 管理者画面 for non-admins", async () => {
+    const user = userEvent.setup();
+    render(<MenuBar isAdmin={false} />);
+
+    expect(screen.queryByText("ログアウト")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+
+    expect(screen.getByText("ログアウト")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "管理者画面" })).not.toBeInTheDocument();
+  });
+
+  it("shows 管理者画面 in the settings dropdown for admins", async () => {
+    const user = userEvent.setup();
     render(<MenuBar isAdmin={true} />);
 
-    expect(screen.getByRole("link", { name: "管理者" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "設定" }));
+
+    expect(screen.getByRole("link", { name: "管理者画面" })).toHaveAttribute(
       "href",
       "/admin",
     );
   });
 
-  it("renders the settings button as disabled", () => {
+  it("calls signOut when ログアウト is clicked", async () => {
+    const user = userEvent.setup();
     render(<MenuBar isAdmin={false} />);
 
-    expect(screen.getByRole("button", { name: "設定(準備中)" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("button", { name: "ログアウト" }));
+
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  it("closes the settings dropdown when clicking outside", async () => {
+    const user = userEvent.setup();
+    render(<MenuBar isAdmin={false} />);
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    expect(screen.getByText("ログアウト")).toBeInTheDocument();
+
+    await user.click(document.body);
+    expect(screen.queryByText("ログアウト")).not.toBeInTheDocument();
   });
 
   it("toggles the mobile menu open and closed", async () => {

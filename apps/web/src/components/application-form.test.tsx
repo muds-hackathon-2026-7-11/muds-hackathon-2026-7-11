@@ -641,4 +641,85 @@ describe("ApplicationForm", () => {
       secondSelectOptions.map((option) => (option as HTMLOptionElement).value),
     ).not.toContain("sem-1");
   });
+
+  it("shows an error and no match results when no seminar is selected for マッチ度診断", async () => {
+    const user = userEvent.setup();
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "マッチ度診断" }));
+
+    expect(
+      await screen.findByText("志望を1件以上入力してください。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/マッチ度 \d+%/)).not.toBeInTheDocument();
+  });
+
+  it("shows an error when a selected seminar has no reason for マッチ度診断", async () => {
+    const user = userEvent.setup();
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.click(screen.getByRole("button", { name: "マッチ度診断" }));
+
+    expect(
+      await screen.findByText("第1志望の志望理由が未入力です。"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a match result per filled slot when マッチ度診断 is clicked", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(emptyDraft()), { status: 200 }),
+    );
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+    await user.click(screen.getByRole("button", { name: "マッチ度診断" }));
+
+    expect(await screen.findByText(/マッチ度 \d+%/)).toBeInTheDocument();
+    expect(screen.getByText(/第1志望・福原ゼミ/)).toBeInTheDocument();
+  });
+
+  it("hides the match results again after the slots are edited further", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(emptyDraft()), { status: 200 }),
+    );
+
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+    await user.click(screen.getByRole("button", { name: "マッチ度診断" }));
+    await screen.findByText(/マッチ度 \d+%/);
+
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "さらに追記",
+    );
+
+    expect(screen.queryByText(/マッチ度 \d+%/)).not.toBeInTheDocument();
+  });
 });
