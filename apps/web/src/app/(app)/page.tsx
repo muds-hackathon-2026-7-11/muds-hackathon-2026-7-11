@@ -6,12 +6,18 @@ import { ProfileCard, type ResearchTag } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
 import type { Session } from "next-auth";
 
+type CurrentSeminar = {
+  id: string;
+  name: string;
+};
+
 type Me = {
   name: string;
   email: string;
   grade: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
+  current_seminar: CurrentSeminar | null;
 };
 
 async function getMe(session: Session | null): Promise<Me | null> {
@@ -84,7 +90,7 @@ export default async function Home() {
               </p>
               <p className="mt-2 text-xs text-zinc-400">所属ゼミ</p>
               <p className="mt-0.5 text-lg font-semibold text-zinc-800">
-                準備中
+                {me?.current_seminar?.name ?? "未配属"}
               </p>
             </section>
 
