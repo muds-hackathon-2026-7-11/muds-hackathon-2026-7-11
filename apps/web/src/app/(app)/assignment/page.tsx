@@ -32,9 +32,11 @@ export default async function AssignmentPage() {
   const stats = await getSeminarStats(session);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">応募状況</h1>
-      <SeminarStatsList stats={stats} />
+    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+      <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        <h1 className="text-2xl font-bold text-zinc-800">応募状況</h1>
+        <SeminarStatsList stats={stats} />
+      </div>
     </main>
   );
 }

@@ -20,6 +20,13 @@ class ResearchTagOut(BaseModel):
     category: str
 
 
+class CurrentSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
 class MeOut(BaseModel):
     """認証済みユーザー自身の情報(GET /me)。"""
 
@@ -34,6 +41,8 @@ class MeOut(BaseModel):
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
+    # 現在の年度に所属しているゼミ(学生のみ。無ければNone)。
+    current_seminar: CurrentSeminarOut | None
 
 
 class MeUpdateIn(BaseModel):
@@ -144,7 +153,7 @@ class QuestionWithAnswersOut(QuestionOut):
 class ApplicationChoiceIn(BaseModel):
     seminar_id: uuid.UUID
     priority: int = Field(ge=1, le=3)
-    reason: str
+    reason: str = Field(max_length=400)
 
 
 class ApplicationUpsertIn(BaseModel):
@@ -255,6 +264,51 @@ class MatchOut(BaseModel):
     feedback: dict | None
     # score を出せない場合(研究テーマ/ゼミ紹介が未設定など)の説明。
     message: str | None = None
+
+
+# --- 運営: 教員・ゼミ管理 (#62) ---
+# 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
+
+
+class AdminSeminarCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarUpdate(BaseModel):
+    # 送られたフィールドのみ更新する(未指定は据え置き)。ルーター側で
+    # model_dump(exclude_unset=True) を使うため、既定値は「未指定」を表す。
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    photo_url: str | None
+
+
+class AdminTeacherUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    research_theme: str | None = None
+    photo_url: str | None = None
+    is_active: bool | None = None
+
+
+class AdminTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    research_theme: str | None
+    photo_url: str | None
+    is_active: bool
 
 
 # --- 配属結果CSVインポート (#61) ---

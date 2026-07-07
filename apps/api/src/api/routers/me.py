@@ -6,8 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user, require_role
 from api.db import get_db
-from api.models import ResearchTag, User, UserInterestTag, UserRole
-from api.schemas import MeOut, MeUpdateIn, ResearchTagOut
+from api.models import (
+    RecruitmentTerm,
+    ResearchTag,
+    Seminar,
+    SeminarMember,
+    User,
+    UserInterestTag,
+    UserRole,
+)
+from api.schemas import CurrentSeminarOut, MeOut, MeUpdateIn, ResearchTagOut
+from api.services import current_academic_year
 
 router = APIRouter(tags=["auth"])
 
@@ -24,7 +33,30 @@ async def _get_interest_tags(
     return list(result.scalars().all())
 
 
-def _me_out(user: User, tags: list[ResearchTag]) -> MeOut:
+async def _get_current_seminar(
+    db: AsyncSession, *, user_id: uuid.UUID
+) -> Seminar | None:
+    """現在の年度に所属しているゼミを返す(無ければNone)。"""
+    academic_year = await current_academic_year(db)
+    if academic_year is None:
+        return None
+
+    result = await db.execute(
+        select(Seminar)
+        .join(SeminarMember, SeminarMember.seminar_id == Seminar.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
+        .where(
+            SeminarMember.student_id == user_id,
+            RecruitmentTerm.academic_year == academic_year,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _me_out(
+    user: User, tags: list[ResearchTag], current_seminar: Seminar | None
+) -> MeOut:
     return MeOut(
         id=user.id,
         email=user.email,
@@ -35,6 +67,11 @@ def _me_out(user: User, tags: list[ResearchTag]) -> MeOut:
         research_theme=user.research_theme,
         interest_tags=[ResearchTagOut.model_validate(tag) for tag in tags],
         slack_user_id=user.slack_user_id,
+        current_seminar=(
+            CurrentSeminarOut.model_validate(current_seminar)
+            if current_seminar is not None
+            else None
+        ),
     )
 
 
@@ -45,7 +82,8 @@ async def read_me(
 ) -> MeOut:
     """認証済みユーザー自身の情報を返す。"""
     tags = await _get_interest_tags(db, user_id=user.id)
-    return _me_out(user, tags)
+    current_seminar = await _get_current_seminar(db, user_id=user.id)
+    return _me_out(user, tags, current_seminar)
 
 
 @router.patch("/me", response_model=MeOut)
@@ -80,4 +118,5 @@ async def update_me(
     await db.flush()
 
     tags = await _get_interest_tags(db, user_id=user.id)
-    return _me_out(user, tags)
+    current_seminar = await _get_current_seminar(db, user_id=user.id)
+    return _me_out(user, tags, current_seminar)
