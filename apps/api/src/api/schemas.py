@@ -300,6 +300,8 @@ class AdminTeacherOut(BaseModel):
     research_theme: str | None
     photo_url: str | None
     is_active: bool
+
+
 # --- 配属結果CSVインポート (#61) ---
 
 
