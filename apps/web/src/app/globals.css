@@ -3,6 +3,11 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* マイページのカラーパレット: 白 / 淡いグレー / ライトブルー */
+  --color-white: #ffffff;
+  --color-mist: #e6e6e6;
+  --color-sky: #add8e6;
 }
 
 @theme inline {
@@ -10,6 +15,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Tailwindユーティリティ用(bg-mist, text-sky など) */
+  --color-mist: var(--color-mist);
+  --color-sky: var(--color-sky);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +32,15 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* マイページの背景。ライトグレー主体+上部にほんのり水色を差してカードを引き立てる。 */
+.page-canvas {
+  background:
+    radial-gradient(
+      1000px 500px at 50% -5%,
+      rgba(173, 216, 230, 0.35),
+      transparent 65%
+    ),
+    var(--color-mist);
 }

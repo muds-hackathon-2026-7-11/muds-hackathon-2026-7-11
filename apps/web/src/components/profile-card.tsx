@@ -148,23 +148,30 @@ export function ProfileCard({
   const displayedTags = allTags.filter((tag) => savedTagIds.has(tag.id));
 
   return (
-    <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-      <div className="border-b border-black/[.08] pb-4 dark:border-white/[.145]">
-        <p className="font-semibold">{name}</p>
-        <p className="text-sm text-foreground/60">{email}</p>
-        <p className="text-sm text-foreground/60">{grade ?? "未設定"}</p>
+    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <div className="border-b border-[#add8e6]/40 pb-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Profile
+        </p>
+        <p className="mt-2 text-2xl font-bold text-zinc-800">{name}</p>
+        <p className="text-sm text-zinc-500">{email}</p>
+        <p className="text-sm text-zinc-500">{grade ?? "未設定"}</p>
       </div>
 
-      <div className="pt-4">
-        <p className="text-sm text-foreground/60">研究概要</p>
-        <p className="mt-1 whitespace-pre-wrap">{savedTheme ?? "未設定"}</p>
+      <div className="pt-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          Research Summary
+        </p>
+        <p className="mt-2 whitespace-pre-wrap text-zinc-700">
+          {savedTheme ?? "未設定"}
+        </p>
 
         {displayedTags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {displayedTags.map((tag) => (
               <span
                 key={tag.id}
-                className="rounded-full border border-black/[.08] px-3 py-1 text-xs text-foreground/70 dark:border-white/[.145]"
+                className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-sky-900/70"
               >
                 {tag.name}
               </span>
@@ -175,9 +182,23 @@ export function ProfileCard({
         <button
           type="button"
           onClick={handleEditClick}
-          className="mt-4 rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#add8e6]/50 px-4 py-1.5 text-sm font-medium text-sky-900/80 transition-colors hover:bg-[#add8e6]/80"
         >
           編集
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5"
+            aria-hidden="true"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
         </button>
       </div>
 
