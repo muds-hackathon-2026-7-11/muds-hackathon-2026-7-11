@@ -24,7 +24,7 @@ export function MenuBar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="border-b border-[#e6e6e6] bg-white">
+    <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
         <Link
           href="/"
@@ -100,7 +100,7 @@ export function MenuBar() {
       </div>
 
       {isMobileMenuOpen && (
-        <nav className="flex flex-col gap-1 border-t border-[#e6e6e6] px-4 py-2 sm:hidden">
+        <nav className="absolute inset-x-0 top-full flex flex-col gap-1 border-b border-[#e6e6e6] bg-white px-4 py-2 shadow-lg shadow-black/[.05] sm:hidden">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
