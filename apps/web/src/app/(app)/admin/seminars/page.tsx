@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@/auth";
 import {
   AdminSeminarsView,
@@ -95,6 +96,12 @@ export default async function AdminSeminarsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4">
+      <Link
+        href="/admin"
+        className="self-start text-sm underline hover:opacity-70"
+      >
+        ← 管理者メニューに戻る
+      </Link>
       <h1 className="text-xl font-semibold">ゼミ管理</h1>
       <AdminSeminarsView
         initialSeminars={seminars}
