@@ -1,7 +1,7 @@
 """seminar_member by recruitment term
 
 Revision ID: 171bf2f71d97
-Revises: 55ad85bff0a6
+Revises: 7dc6130962c8
 Create Date: 2026-07-06 17:34:34.248134
 
 """
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "171bf2f71d97"
-down_revision: Union[str, Sequence[str], None] = "55ad85bff0a6"
+down_revision: Union[str, Sequence[str], None] = "7dc6130962c8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

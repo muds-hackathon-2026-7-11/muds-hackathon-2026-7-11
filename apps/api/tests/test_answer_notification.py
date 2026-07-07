@@ -218,7 +218,7 @@ async def test_notifies_current_members_without_an_active_term(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=member.id,
-            academic_year=academic_year,
+            term_id=closed_term.id,
         )
     )
     await db_session.flush()

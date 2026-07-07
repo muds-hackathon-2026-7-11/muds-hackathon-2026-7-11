@@ -252,7 +252,7 @@ async def test_seminar_stats_continuing_count_without_an_active_term(
     student = await _make_student(db_session)
     db_session.add(
         SeminarMember(
-            seminar_id=seminar.id, student_id=student.id, academic_year=academic_year
+            seminar_id=seminar.id, student_id=student.id, term_id=closed_term.id
         )
     )
     await db_session.flush()

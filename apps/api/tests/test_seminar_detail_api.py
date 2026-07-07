@@ -156,7 +156,7 @@ async def test_get_seminar_detail_shows_current_members_without_an_active_term(
     student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
     db_session.add(
         SeminarMember(
-            seminar_id=seminar.id, student_id=student.id, academic_year=academic_year
+            seminar_id=seminar.id, student_id=student.id, term_id=closed_term.id
         )
     )
     await db_session.flush()
