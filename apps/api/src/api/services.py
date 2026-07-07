@@ -1,6 +1,7 @@
 import logging
 import uuid
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 # 学年別募集(#99)の対象学年。学部生のみを対象とし、大学院生・guest等は
 # 対象外(常に学年別募集ゼミには応募できない)。
 GRADE_OPTIONS: tuple[str, ...] = ("B1", "B2", "B3", "B4")
+
+JST = ZoneInfo("Asia/Tokyo")
 
 
 def normalize_grade(raw: str | None) -> str | None:
@@ -49,8 +52,11 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     status=open なだけでなく、starts_at <= today <= ends_at も満たす必要がある。
     運営が翌年度分を準備目的で早めに open にしても、開始日前は「募集中」として
     扱わないようにするため。
+
+    todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
+    だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
     """
-    today = date.today()
+    today = datetime.now(JST).date()
     result = await db.execute(
         select(RecruitmentTerm)
         .where(
