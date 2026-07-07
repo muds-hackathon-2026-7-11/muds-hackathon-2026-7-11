@@ -51,15 +51,13 @@ export function FaqList({ questions }: FaqListProps) {
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
         placeholder="質問を検索"
-        className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+        className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
       />
 
       {questions.length === 0 ? (
-        <p className="text-sm text-foreground/60">
-          まだ質問が投稿されていません。
-        </p>
+        <p className="text-sm text-zinc-500">まだ質問が投稿されていません。</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-foreground/60">
+        <p className="text-sm text-zinc-500">
           該当する質問が見つかりませんでした。
         </p>
       ) : (
@@ -67,27 +65,27 @@ export function FaqList({ questions }: FaqListProps) {
           {filtered.map((question) => (
             <section
               key={question.id}
-              className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+              className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
             >
-              <p className="whitespace-pre-wrap font-medium">
+              <p className="whitespace-pre-wrap font-semibold text-zinc-800">
                 {question.content}
               </p>
-              <p className="mt-1 text-xs text-foreground/60">
+              <p className="mt-1 text-xs text-zinc-400">
                 {formatDate(question.created_at)}
               </p>
 
               {question.answers.length === 0 ? (
-                <p className="mt-3 text-sm text-foreground/60">
+                <p className="mt-3 text-sm text-zinc-500">
                   まだ回答がありません。
                 </p>
               ) : (
-                <div className="mt-3 flex flex-col gap-3 border-t border-black/[.08] pt-3 dark:border-white/[.145]">
+                <div className="mt-3 flex flex-col gap-3 border-t border-[#add8e6]/40 pt-3">
                   {question.answers.map((answer) => (
                     <div key={answer.id}>
-                      <p className="whitespace-pre-wrap text-sm text-foreground/80">
+                      <p className="whitespace-pre-wrap text-sm text-zinc-700">
                         {answer.content}
                       </p>
-                      <p className="mt-1 text-xs text-foreground/60">
+                      <p className="mt-1 text-xs text-zinc-400">
                         {answer.answerer_name} ・{" "}
                         {formatDate(answer.created_at)}
                       </p>
