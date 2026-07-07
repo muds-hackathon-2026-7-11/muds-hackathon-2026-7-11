@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -184,6 +184,44 @@ async def test_does_not_notify_past_members(
 
     assert resp.status_code == 201
     assert fake_slack_client.sent == []
+
+
+async def test_notifies_current_members_without_an_active_term(
+    client, db_session, fake_slack_client
+) -> None:
+    # 募集期間が(open/日付内という意味で)アクティブでなくても、現在のゼミ生への
+    # 質問通知は直近に作成された募集期間の年度を基準に届く(#77)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    member = await _make_user(db_session, UserRole.student, _unique("U-member"))
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id,
+            student_id=member.id,
+            academic_year=academic_year,
+        )
+    )
+    await db_session.flush()
+
+    resp = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+
+    assert resp.status_code == 201
+    notified_slack_ids = {sent.slack_user_id for sent in fake_slack_client.sent}
+    assert notified_slack_ids == {member.slack_user_id}
 
 
 async def test_notification_failure_does_not_block_question_creation(
