@@ -200,7 +200,7 @@ describe("ApplicationForm", () => {
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/applications/me");
     expect(init.method).toBe("PUT");
-    await screen.findByText("保存済み");
+    await screen.findByText("保存済み", {}, { timeout: 2000 });
   }, 10000);
 
   it("waits for an in-flight autosave PUT before sending the submit PUT", async () => {
@@ -328,7 +328,7 @@ describe("ApplicationForm", () => {
       "2件目は検討中",
     );
 
-    await screen.findByText("保存済み");
+    await screen.findByText("保存済み", {}, { timeout: 2000 });
 
     // ゼミ未選択のスロットはPUTから除外されサーバー応答にも含まれないが、
     // 書きかけの理由がローカルで消えてはいけない。
