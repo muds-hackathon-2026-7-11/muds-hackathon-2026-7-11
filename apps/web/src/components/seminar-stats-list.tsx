@@ -26,7 +26,16 @@ export type SeminarStats = {
   target_grades: string[] | null;
 };
 
-const ALL_GRADES_COUNT = 4;
+// 保存順のままだと"B2・B3・B1"のような並びになりうるため、表示前に
+// 学年順へ揃える(admin-seminars-view.tsx側でも保存時に揃えているが、
+// 過去に保存された順序のままのデータもあるためここでも念のため揃える)。
+const GRADE_ORDER = ["B1", "B2", "B3", "B4"];
+
+function sortByGradeOrder(targetGrades: string[]): string[] {
+  return [...targetGrades].sort(
+    (a, b) => GRADE_ORDER.indexOf(a) - GRADE_ORDER.indexOf(b),
+  );
+}
 
 function targetGradesLabel(targetGrades: string[] | null): string {
   if (targetGrades === null) {
@@ -35,10 +44,10 @@ function targetGradesLabel(targetGrades: string[] | null): string {
   if (targetGrades.length === 0) {
     return "募集していません";
   }
-  if (targetGrades.length >= ALL_GRADES_COUNT) {
+  if (targetGrades.length >= GRADE_ORDER.length) {
     return "全学年";
   }
-  return targetGrades.join("・");
+  return sortByGradeOrder(targetGrades).join("・");
 }
 
 type SeminarStatsListProps = {

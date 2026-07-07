@@ -92,4 +92,16 @@ describe("SeminarStatsList", () => {
 
     expect(screen.getByText("募集していません")).toBeInTheDocument();
   });
+
+  it("sorts target_grades into B1〜B4 order regardless of stored order", () => {
+    render(
+      <SeminarStatsList
+        stats={[
+          { ...stats[0], id: "seminar-5", target_grades: ["B2", "B3", "B1"] },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("B1・B2・B3")).toBeInTheDocument();
+  });
 });

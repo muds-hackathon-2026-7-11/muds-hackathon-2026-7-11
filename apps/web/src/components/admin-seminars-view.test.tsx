@@ -384,6 +384,52 @@ describe("AdminSeminarsView", () => {
     });
   });
 
+  it("keeps target_grades in B1〜B4 order regardless of check order", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B1", "B4"],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    // 先にB4だけをチェックした状態から始め、後からB1をチェックする
+    // (チェックした順ではなくB1〜B4順で保存されることを確認する)。
+    renderView({
+      seminars: [seminar],
+      latestTerm: term,
+      recruitments: [
+        {
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B4"],
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("checkbox", { name: "B1" }));
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify(["B1", "B4"])),
+        }),
+      );
+    });
+  });
+
   it("asks for confirmation before saving with no grades selected", async () => {
     const user = userEvent.setup();
     const seminar = makeSeminar({
