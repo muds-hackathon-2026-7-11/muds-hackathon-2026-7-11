@@ -236,7 +236,7 @@ export function AdminSeminarsView({
 
   async function handleDelete(seminar: AdminSeminar): Promise<void> {
     const confirmed = window.confirm(
-      `「${seminar.name}」を削除します。担当割当・募集設定・所属ゼミ生の記録もすべて削除されます。よろしいですか?`,
+      `「${seminar.name}」を削除します。担当割当・募集設定・所属ゼミ生の記録・紹介資料もすべて削除されます。よろしいですか?`,
     );
     if (!confirmed) {
       return;

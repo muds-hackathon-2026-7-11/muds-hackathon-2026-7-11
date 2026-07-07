@@ -1,4 +1,3 @@
-import { auth } from "@/auth";
 import { MenuBar } from "@/components/menu-bar";
 import { getSessionRole } from "@/lib/session-role";
 
@@ -7,8 +6,7 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
-  const role = await getSessionRole(session);
+  const role = await getSessionRole();
 
   return (
     <>

@@ -139,7 +139,7 @@ async def update_seminar(
 async def delete_seminar(
     seminar_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> Response:
-    """ゼミを削除する。担当割当・募集設定・所属(seminar_members)もCASCADEで消える。"""
+    """ゼミを削除する。担当割当・募集設定・所属(seminar_members)・紹介資料もCASCADEで消える。"""
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
         raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
