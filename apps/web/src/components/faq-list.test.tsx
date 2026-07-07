@@ -58,6 +58,27 @@ describe("FaqList", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("filters case-insensitively", async () => {
+    const user = userEvent.setup();
+    render(<FaqList questions={questions} />);
+
+    await user.type(screen.getByPlaceholderText("質問を検索"), "python");
+
+    expect(screen.getByText("Pythonは必須ですか？")).toBeInTheDocument();
+  });
+
+  it("matches keywords that only appear in an answer", async () => {
+    const user = userEvent.setup();
+    render(<FaqList questions={questions} />);
+
+    await user.type(screen.getByPlaceholderText("質問を検索"), "経験");
+
+    expect(screen.getByText("Pythonは必須ですか？")).toBeInTheDocument();
+    expect(
+      screen.queryByText("研究室に配属される時期はいつですか？"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a message when no question matches the keyword", async () => {
     const user = userEvent.setup();
     render(<FaqList questions={questions} />);

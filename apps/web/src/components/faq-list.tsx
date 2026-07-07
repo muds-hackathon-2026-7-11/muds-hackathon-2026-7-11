@@ -33,11 +33,15 @@ export function FaqList({ questions }: FaqListProps) {
   const [keyword, setKeyword] = useState("");
 
   const filtered = useMemo(() => {
-    const trimmed = keyword.trim();
+    const trimmed = keyword.trim().toLowerCase();
     if (trimmed === "") {
       return questions;
     }
-    return questions.filter((q) => q.content.includes(trimmed));
+    return questions.filter(
+      (q) =>
+        q.content.toLowerCase().includes(trimmed) ||
+        q.answers.some((a) => a.content.toLowerCase().includes(trimmed)),
+    );
   }, [questions, keyword]);
 
   return (
