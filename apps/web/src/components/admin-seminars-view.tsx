@@ -93,13 +93,16 @@ export function AdminSeminarsView({
   const [seminars, setSeminars] = useState(initialSeminars);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newPhotoUrl, setNewPhotoUrl] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editPhotoUrl, setEditPhotoUrl] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingTeacherKey, setPendingTeacherKey] = useState<string | null>(
@@ -124,6 +127,19 @@ export function AdminSeminarsView({
     null,
   );
 
+  function openCreateForm(): void {
+    setIsCreateFormOpen(true);
+    setErrorMessage(null);
+  }
+
+  function cancelCreate(): void {
+    setIsCreateFormOpen(false);
+    setNewName("");
+    setNewDescription("");
+    setNewPhotoUrl("");
+    setErrorMessage(null);
+  }
+
   async function handleCreate(): Promise<void> {
     setErrorMessage(null);
     if (newName.trim() === "") {
@@ -138,7 +154,7 @@ export function AdminSeminarsView({
         body: JSON.stringify({
           name: newName,
           description: newDescription === "" ? null : newDescription,
-          photo_url: null,
+          photo_url: newPhotoUrl === "" ? null : newPhotoUrl,
         }),
       });
       if (!res.ok) {
@@ -149,6 +165,8 @@ export function AdminSeminarsView({
       setSeminars((prev) => [...prev, created]);
       setNewName("");
       setNewDescription("");
+      setNewPhotoUrl("");
+      setIsCreateFormOpen(false);
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
@@ -160,6 +178,7 @@ export function AdminSeminarsView({
     setEditingId(seminar.id);
     setEditName(seminar.name);
     setEditDescription(seminar.description ?? "");
+    setEditPhotoUrl(seminar.photo_url ?? "");
     setErrorMessage(null);
   }
 
@@ -181,6 +200,7 @@ export function AdminSeminarsView({
         body: JSON.stringify({
           name: editName,
           description: editDescription === "" ? null : editDescription,
+          photo_url: editPhotoUrl === "" ? null : editPhotoUrl,
         }),
       });
       if (!res.ok) {
@@ -405,33 +425,60 @@ export function AdminSeminarsView({
         </p>
       )}
 
-      <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-        <h2 className="font-semibold">新規ゼミ作成</h2>
-        <div className="mt-3 flex flex-col gap-2">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="ゼミ名"
-            className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-          />
-          <textarea
-            value={newDescription}
-            onChange={(e) => setNewDescription(e.target.value)}
-            placeholder="説明(任意)"
-            rows={2}
-            className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-          />
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={isCreating}
-            className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isCreating ? "作成中..." : "作成する"}
-          </button>
-        </div>
-      </section>
+      {isCreateFormOpen ? (
+        <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
+          <h2 className="font-semibold">新規ゼミ作成</h2>
+          <div className="mt-3 flex flex-col gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="ゼミ名"
+              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+            />
+            <textarea
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              placeholder="説明(任意)"
+              rows={2}
+              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+            />
+            <input
+              type="text"
+              value={newPhotoUrl}
+              onChange={(e) => setNewPhotoUrl(e.target.value)}
+              placeholder="アイコン画像のURL(任意)"
+              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={isCreating}
+                className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isCreating ? "作成中..." : "作成する"}
+              </button>
+              <button
+                type="button"
+                onClick={cancelCreate}
+                disabled={isCreating}
+                className="self-start rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <button
+          type="button"
+          onClick={openCreateForm}
+          className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+        >
+          + 新規ゼミを作成
+        </button>
+      )}
 
       <div className="flex flex-col gap-4">
         {seminars.map((seminar) => {
@@ -457,6 +504,13 @@ export function AdminSeminarsView({
                     rows={2}
                     className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
                   />
+                  <input
+                    type="text"
+                    value={editPhotoUrl}
+                    onChange={(e) => setEditPhotoUrl(e.target.value)}
+                    placeholder="アイコン画像のURL(任意)"
+                    className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  />
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -478,11 +532,21 @@ export function AdminSeminarsView({
                 </div>
               ) : (
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold">{seminar.name}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
-                      {seminar.description ?? "説明は未設定です。"}
-                    </p>
+                  <div className="flex gap-3">
+                    {seminar.photo_url && (
+                      // biome-ignore lint/performance/noImgElement: photo_urlは任意の外部ドメインのため next/image のドメイン許可設定が不要なimgタグを使う
+                      <img
+                        src={seminar.photo_url}
+                        alt={seminar.name}
+                        className="h-12 w-12 shrink-0 rounded-full object-cover"
+                      />
+                    )}
+                    <div>
+                      <p className="font-semibold">{seminar.name}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
+                        {seminar.description ?? "説明は未設定です。"}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <button

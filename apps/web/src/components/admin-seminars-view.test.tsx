@@ -94,15 +94,39 @@ describe("AdminSeminarsView", () => {
     expect(checkbox).toBeChecked();
   });
 
-  it("creates a new seminar and shows it in the list", async () => {
+  it("does not show the create form until the toggle button is clicked", async () => {
     const user = userEvent.setup();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    renderView();
+
+    expect(screen.queryByPlaceholderText("ゼミ名")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "+ 新規ゼミを作成" }));
+    expect(screen.getByPlaceholderText("ゼミ名")).toBeInTheDocument();
+  });
+
+  it("hides the create form again when cancelled", async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(screen.getByRole("button", { name: "+ 新規ゼミを作成" }));
+    await user.type(screen.getByPlaceholderText("ゼミ名"), "途中まで入力");
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    expect(screen.queryByPlaceholderText("ゼミ名")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "+ 新規ゼミを作成" }),
+    ).toBeInTheDocument();
+  });
+
+  it("creates a new seminar (including its icon) and shows it in the list", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
           id: "seminar-2",
           name: "新ゼミ",
           description: null,
-          photo_url: null,
+          photo_url: "https://example.com/icon.png",
           teachers: [],
           materials: [],
         }),
@@ -112,10 +136,30 @@ describe("AdminSeminarsView", () => {
 
     renderView();
 
+    await user.click(screen.getByRole("button", { name: "+ 新規ゼミを作成" }));
     await user.type(screen.getByPlaceholderText("ゼミ名"), "新ゼミ");
+    await user.type(
+      screen.getByPlaceholderText("アイコン画像のURL(任意)"),
+      "https://example.com/icon.png",
+    );
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     expect(await screen.findByText("新ゼミ")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/seminars"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "新ゼミ",
+          description: null,
+          photo_url: "https://example.com/icon.png",
+        }),
+      }),
+    );
+    // 作成成功後はフォームが閉じ、トグルボタンに戻る
+    expect(
+      screen.getByRole("button", { name: "+ 新規ゼミを作成" }),
+    ).toBeInTheDocument();
   });
 
   it("shows an error and does not add a seminar when the name is empty", async () => {
@@ -123,6 +167,7 @@ describe("AdminSeminarsView", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     renderView();
+    await user.click(screen.getByRole("button", { name: "+ 新規ゼミを作成" }));
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     expect(
@@ -149,6 +194,62 @@ describe("AdminSeminarsView", () => {
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
     expect(await screen.findByText("改名後")).toBeInTheDocument();
+  });
+
+  it("shows an icon preview when photo_url is set", () => {
+    const seminar = makeSeminar({ photo_url: "https://example.com/icon.png" });
+    renderView({ seminars: [seminar] });
+
+    const icon = screen.getByRole("img");
+    expect(icon).toHaveAttribute("src", "https://example.com/icon.png");
+  });
+
+  it("does not show an icon when photo_url is not set", () => {
+    const seminar = makeSeminar({ photo_url: null });
+    renderView({ seminars: [seminar] });
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("edits a seminar's icon URL", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar({ photo_url: null });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...seminar,
+          photo_url: "https://example.com/new-icon.png",
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar] });
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    await user.type(
+      screen.getByPlaceholderText("アイコン画像のURL(任意)"),
+      "https://example.com/new-icon.png",
+    );
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`/admin/seminars/${seminar.id}`),
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            name: seminar.name,
+            description: seminar.description,
+            photo_url: "https://example.com/new-icon.png",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.com/new-icon.png",
+    );
   });
 
   it("removes a seminar after confirming deletion", async () => {
