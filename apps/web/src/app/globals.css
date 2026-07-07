@@ -34,13 +34,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* マイページの背景。ライトグレー主体+上部にほんのり水色を差してカードを引き立てる。 */
+/* マイページの背景。ライトグレー単色。 */
 .page-canvas {
-  background:
-    radial-gradient(
-      1000px 500px at 50% -5%,
-      rgba(173, 216, 230, 0.35),
-      transparent 65%
-    ),
-    var(--color-mist);
+  background: var(--color-mist);
 }
