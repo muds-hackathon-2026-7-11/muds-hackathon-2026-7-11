@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api.models import (
     ApplicationStatus,
@@ -291,6 +291,23 @@ class AdminSeminarOut(BaseModel):
     name: str
     description: str | None
     photo_url: str | None
+
+
+class AdminTeacherCreate(BaseModel):
+    # 教員ユーザーを1名追加する(作成はここ、一括はCSV #40)。
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=3, max_length=255)
+    research_theme: str | None = None
+    photo_url: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        # import系と揃えて小文字正規化し、最低限の形式チェックを行う。
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
 
 
 class AdminTeacherUpdate(BaseModel):

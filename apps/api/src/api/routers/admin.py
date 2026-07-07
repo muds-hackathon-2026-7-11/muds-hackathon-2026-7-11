@@ -11,6 +11,7 @@ from api.schemas import (
     AdminSeminarCreate,
     AdminSeminarOut,
     AdminSeminarUpdate,
+    AdminTeacherCreate,
     AdminTeacherOut,
     AdminTeacherUpdate,
 )
@@ -136,6 +137,34 @@ async def unassign_teacher(
 
 
 # --- 教員 ---
+
+
+@router.post("/teachers", response_model=AdminTeacherOut, status_code=201)
+async def create_teacher(
+    payload: AdminTeacherCreate, db: AsyncSession = Depends(get_db)
+) -> User:
+    """教員ユーザーを1名追加する(一括投入はCSV #40)。
+
+    Google OAuth 発行前なので google_id はプレースホルダ(manual|<email>)を入れる。
+    本人の初回Googleログイン時に email 一致で自動的に紐付く(auth.py)。
+    """
+    existing = await db.execute(select(User).where(User.email == payload.email))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="このメールアドレスのユーザーは既に存在します。",
+        )
+    teacher = User(
+        google_id=f"manual|{payload.email}",
+        email=payload.email,
+        name=payload.name,
+        role=UserRole.teacher,
+        research_theme=payload.research_theme,
+        photo_url=payload.photo_url,
+    )
+    db.add(teacher)
+    await db.flush()
+    return teacher
 
 
 @router.get("/teachers", response_model=list[AdminTeacherOut])
