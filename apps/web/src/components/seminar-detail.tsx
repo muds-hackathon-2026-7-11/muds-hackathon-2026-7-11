@@ -112,6 +112,13 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <Link
+        href="/assignment"
+        className="self-start text-sm underline hover:opacity-70"
+      >
+        ← 応募状況に戻る
+      </Link>
+
       <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
         <h1 className="text-xl font-semibold">{seminar.name}</h1>
         <p className="mt-2 whitespace-pre-wrap text-foreground/70">

@@ -43,6 +43,14 @@ const seminar: SeminarDetail = {
 };
 
 describe("SeminarDetailView", () => {
+  it("links back to the 応募状況 page", () => {
+    render(<SeminarDetailView seminar={seminar} />);
+
+    expect(
+      screen.getByRole("link", { name: "← 応募状況に戻る" }),
+    ).toHaveAttribute("href", "/assignment");
+  });
+
   it("renders seminar info, teachers, materials, and current members", () => {
     render(<SeminarDetailView seminar={seminar} />);
 
