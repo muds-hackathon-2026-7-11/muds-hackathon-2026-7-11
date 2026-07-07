@@ -2,7 +2,7 @@ import uuid
 from datetime import date, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from api import auth
 from api.models import (
@@ -73,6 +73,23 @@ async def _make_closed_term(
     return term
 
 
+async def _close_all_open_terms(db_session) -> None:
+    """「現在アクティブな募集期間が無い」ことを前提にするテスト用。
+
+    db_sessionは共有の開発用DBに接続しており(tests/conftest.py参照)、
+    実データの募集期間が存在すると get_current_term() がそれを「現在の
+    募集期間」として返してしまい、テストの前提が崩れる。db_sessionは
+    テスト終了時にrollbackされ実データへは反映されないため、既存の
+    open な募集期間を一時的にclosedへ変更しても安全。
+    """
+    await db_session.execute(
+        update(RecruitmentTerm)
+        .where(RecruitmentTerm.status == RecruitmentTermStatus.open)
+        .values(status=RecruitmentTermStatus.closed)
+    )
+    await db_session.flush()
+
+
 async def _make_recruitment(
     db_session, *, term: RecruitmentTerm, seminar: Seminar, is_recruiting: bool = True
 ) -> SeminarRecruitment:
@@ -99,6 +116,7 @@ def _enable_dev_auth(monkeypatch):
 async def test_get_returns_empty_draft_when_no_term_and_no_history(
     client, db_session
 ) -> None:
+    await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
 
     resp = await client.get("/applications/me", headers=_auth_headers(student.email))
@@ -159,6 +177,7 @@ async def test_get_returns_existing_form_and_choices(client, db_session) -> None
 async def test_get_shows_past_submission_read_only_when_no_active_term(
     client, db_session
 ) -> None:
+    await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
     seminar = await _make_seminar(db_session)
     past_term = await _make_closed_term(
@@ -193,6 +212,7 @@ async def test_get_shows_past_submission_read_only_when_no_active_term(
 
 
 async def test_get_shows_form_from_the_most_recent_term(client, db_session) -> None:
+    await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
     seminar = await _make_seminar(db_session)
 
@@ -529,6 +549,7 @@ async def test_put_rejects_more_than_three_choices(client, db_session) -> None:
 
 
 async def test_put_requires_active_term(client, db_session) -> None:
+    await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
 
     resp = await client.put(
@@ -592,6 +613,7 @@ async def test_submit_without_choices_returns_400(client, db_session) -> None:
 
 
 async def test_submit_requires_active_term(client, db_session) -> None:
+    await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
 
     resp = await client.post(
