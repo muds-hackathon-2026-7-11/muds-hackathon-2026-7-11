@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -68,12 +68,15 @@ function TeacherAvatar({
   // ゼミの研究室写真があればそちらを優先し、無ければ教員本人の写真、
   // それも無ければ頭文字にフォールバックする。
   const src = seminarPhotoUrl ?? photoUrl;
-  if (src) {
+  const [erroredSrc, setErroredSrc] = useState<string | null>(null);
+
+  if (src && src !== erroredSrc) {
     return (
       // biome-ignore lint/performance/noImgElement: photo_urlは任意の外部ドメインのため next/image のドメイン許可設定が不要なimgタグを使う
       <img
         src={src}
         alt={name}
+        onError={() => setErroredSrc(src)}
         className="h-16 w-16 shrink-0 rounded-full object-cover"
       />
     );

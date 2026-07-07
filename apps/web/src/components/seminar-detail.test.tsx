@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SeminarDetailView, type SeminarDetail } from "./seminar-detail";
 
@@ -56,6 +56,24 @@ describe("SeminarDetailView", () => {
 
   it("shows the teacher's initial when neither teacher nor seminar photo is set", () => {
     render(<SeminarDetailView seminar={seminar} />);
+
+    expect(screen.getByText("山")).toBeInTheDocument();
+    expect(screen.queryByAltText("山田教授")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the initial when the photo fails to load", () => {
+    const withPhoto: SeminarDetail = {
+      ...seminar,
+      teachers: [
+        {
+          ...seminar.teachers[0],
+          photo_url: "https://example.com/broken.jpg",
+        },
+      ],
+    };
+    render(<SeminarDetailView seminar={withPhoto} />);
+
+    fireEvent.error(screen.getByAltText("山田教授"));
 
     expect(screen.getByText("山")).toBeInTheDocument();
     expect(screen.queryByAltText("山田教授")).not.toBeInTheDocument();
