@@ -11,6 +11,7 @@ from api.schemas import (
     AdminSeminarCreate,
     AdminSeminarOut,
     AdminSeminarUpdate,
+    AdminTeacherCreate,
     AdminTeacherOut,
     AdminTeacherUpdate,
 )
@@ -138,6 +139,34 @@ async def unassign_teacher(
 # --- 教員 ---
 
 
+@router.post("/teachers", response_model=AdminTeacherOut, status_code=201)
+async def create_teacher(
+    payload: AdminTeacherCreate, db: AsyncSession = Depends(get_db)
+) -> User:
+    """教員ユーザーを1名追加する(一括投入はCSV #40)。
+
+    Google OAuth 発行前なので google_id はプレースホルダ(manual|<email>)を入れる。
+    本人の初回Googleログイン時に email 一致で自動的に紐付く(auth.py)。
+    """
+    existing = await db.execute(select(User).where(User.email == payload.email))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="このメールアドレスのユーザーは既に存在します。",
+        )
+    teacher = User(
+        google_id=f"manual|{payload.email}",
+        email=payload.email,
+        name=payload.name,
+        role=UserRole.teacher,
+        research_theme=payload.research_theme,
+        photo_url=payload.photo_url,
+    )
+    db.add(teacher)
+    await db.flush()
+    return teacher
+
+
 @router.get("/teachers", response_model=list[AdminTeacherOut])
 async def list_teachers(db: AsyncSession = Depends(get_db)) -> list[User]:
     """担当割当の候補として教員ユーザー一覧を返す。"""
@@ -161,3 +190,18 @@ async def update_teacher(
         setattr(teacher, field, value)
     await db.flush()
     return teacher
+
+
+@router.delete("/teachers/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_teacher(
+    teacher_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Response:
+    """教員を「削除」する。answers 等がFK参照するため物理削除はせず、
+    is_active=false にするソフトdelete(requirements.md)。無効化済みでも 204。
+    """
+    teacher = await db.get(User, teacher_id)
+    if teacher is None or teacher.role != UserRole.teacher:
+        raise HTTPException(status_code=404, detail="教員が見つかりません。")
+    teacher.is_active = False
+    await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

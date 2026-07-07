@@ -174,6 +174,57 @@ async def test_unassign_unknown_link_returns_404(client, db_session) -> None:
 # --- 教員 ---
 
 
+async def test_create_teacher(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.post(
+        "/admin/teachers",
+        json={
+            "name": "新任教員",
+            "email": "Prof.New@Example.com",  # 大文字はサーバで小文字化される
+            "research_theme": "推薦システム",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["name"] == "新任教員"
+    assert body["email"] == "prof.new@example.com"
+    assert body["research_theme"] == "推薦システム"
+    assert body["is_active"] is True
+
+    created = await db_session.get(User, uuid.UUID(body["id"]))
+    assert created is not None
+    assert created.role == UserRole.teacher
+    # Google OAuth 発行前はプレースホルダ。ログイン時に email 一致で紐付く。
+    assert created.google_id == "manual|prof.new@example.com"
+
+
+async def test_create_teacher_conflict_on_duplicate_email(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    payload = {"name": "教員A", "email": "dup@example.com"}
+
+    first = await client.post("/admin/teachers", json=payload)
+    second = await client.post("/admin/teachers", json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 409
+
+
+async def test_create_teacher_rejects_invalid_email(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.post(
+        "/admin/teachers", json={"name": "教員", "email": "not-an-email"}
+    )
+    assert resp.status_code == 422
+
+
+async def test_create_teacher_requires_admin(client, db_session) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.teacher))
+    resp = await client.post(
+        "/admin/teachers", json={"name": "教員", "email": "x@example.com"}
+    )
+    assert resp.status_code == 403
+
+
 async def test_list_teachers_returns_only_teachers(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     teacher = await _make_user(db_session, UserRole.teacher)
@@ -211,6 +262,26 @@ async def test_update_teacher_on_non_teacher_returns_404(client, db_session) -> 
     _authenticate_as(await _make_admin(db_session))
     student = await _make_user(db_session, UserRole.student)
     resp = await client.patch(f"/admin/teachers/{student.id}", json={"name": "x"})
+    assert resp.status_code == 404
+
+
+async def test_delete_teacher_soft_deletes(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.delete(f"/admin/teachers/{teacher.id}")
+
+    assert resp.status_code == 204
+    await db_session.refresh(teacher)
+    # 物理削除ではなく is_active=false(レコードは残る)
+    assert teacher.is_active is False
+    assert await db_session.get(User, teacher.id) is not None
+
+
+async def test_delete_teacher_on_non_teacher_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    student = await _make_user(db_session, UserRole.student)
+    resp = await client.delete(f"/admin/teachers/{student.id}")
     assert resp.status_code == 404
 
 
