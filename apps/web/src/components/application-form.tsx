@@ -364,7 +364,7 @@ export function ApplicationForm({
       const data = (await res.json()) as ApplicationFormData;
       setSubmittedAt(data.submitted_at);
       setSlots(toSlots(data.choices));
-      setSubmittedMessage("志望を提出しました。");
+      setSubmittedMessage("提出が完了しました。");
       setIsLocked(true);
       setSnapshotSlots(null);
       serverDirtySinceEdit.current = false;
@@ -458,9 +458,7 @@ export function ApplicationForm({
         </p>
       )}
       {submittedMessage && !errorMessage && (
-        <p className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 text-sm text-zinc-600 shadow-sm shadow-[#add8e6]/30">
-          {submittedMessage}
-        </p>
+        <p className="text-xl text-zinc-700">{submittedMessage}</p>
       )}
 
       {isLocked ? (
@@ -478,10 +476,10 @@ export function ApplicationForm({
                     key={PRIORITY_LABELS[index]}
                     className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
                   >
-                    <p className="text-2xl font-bold text-zinc-700">
+                    <p className="text-lg font-bold text-zinc-700">
                       {PRIORITY_LABELS[index]}
                     </p>
-                    <p className="mt-1 font-semibold text-zinc-800">
+                    <p className="mt-1 text-lg font-bold text-zinc-800">
                       {seminarName}
                     </p>
                     <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
