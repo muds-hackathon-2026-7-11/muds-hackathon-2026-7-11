@@ -4,7 +4,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
-from api.routers import me, questions, seminars, users
+from api.routers import (
+    applications,
+    assignments,
+    match,
+    me,
+    questions,
+    recruitment,
+    research_tags,
+    seminars,
+    teacher,
+    users,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +37,12 @@ app.include_router(seminars.router)
 app.include_router(questions.router)
 app.include_router(me.router)
 app.include_router(users.router)
+app.include_router(applications.router)
+app.include_router(recruitment.router)
+app.include_router(teacher.router)
+app.include_router(match.router)
+app.include_router(assignments.router)
+app.include_router(research_tags.router)
 
 
 @app.get("/health")

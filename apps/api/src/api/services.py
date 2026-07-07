@@ -43,6 +43,22 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     return result.scalar_one_or_none()
 
 
+async def current_academic_year(db: AsyncSession) -> int | None:
+    """「現在の年度」を返す(募集期間が一度も作成されていなければNone)。
+
+    直近に作成された募集期間のacademic_yearを返す。get_current_termと違い、
+    status=openや日付範囲は問わない。募集期間が開いている間だけ「現在の
+    ゼミ生」等が見えるのは誤りで(1年のほとんどは募集期間外のため)、
+    志望提出画面同様「新しい募集期間が作成されたら切り替わる」形にする。
+    """
+    result = await db.execute(
+        select(RecruitmentTerm.academic_year)
+        .order_by(RecruitmentTerm.academic_year.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def find_answer_candidates(
     db: AsyncSession, *, seminar_id: uuid.UUID, exclude_user_id: uuid.UUID
 ) -> list[User]:
@@ -51,16 +67,17 @@ async def find_answer_candidates(
 
     質問者自身(exclude_user_id)は除く。
     """
-    term = await get_current_term(db)
-    if term is None:
+    academic_year = await current_academic_year(db)
+    if academic_year is None:
         return []
 
     members_result = await db.execute(
         select(User)
         .join(SeminarMember, SeminarMember.student_id == User.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
         .where(
             SeminarMember.seminar_id == seminar_id,
-            SeminarMember.academic_year == term.academic_year,
+            RecruitmentTerm.academic_year == academic_year,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
         )
