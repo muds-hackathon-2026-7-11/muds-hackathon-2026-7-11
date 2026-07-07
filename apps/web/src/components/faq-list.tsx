@@ -26,6 +26,9 @@ function formatDate(iso: string): string {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    // サーバー(コンテナ)とブラウザでデフォルトタイムゾーンが異なると
+    // SSRとハイドレーション時で表示がずれるため、明示的に固定する。
+    timeZone: "Asia/Tokyo",
   });
 }
 
