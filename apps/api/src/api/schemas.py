@@ -153,7 +153,7 @@ class QuestionWithAnswersOut(QuestionOut):
 class ApplicationChoiceIn(BaseModel):
     seminar_id: uuid.UUID
     priority: int = Field(ge=1, le=3)
-    reason: str
+    reason: str = Field(max_length=400)
 
 
 class ApplicationUpsertIn(BaseModel):
