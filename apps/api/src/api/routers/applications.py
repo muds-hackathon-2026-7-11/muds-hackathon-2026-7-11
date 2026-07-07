@@ -29,7 +29,7 @@ from api.schemas import (
     ApplicationFormOut,
     ApplicationUpsertIn,
 )
-from api.services import get_current_term
+from api.services import get_current_term, normalize_grade
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -117,19 +117,26 @@ def _validate_choice_shape(choices: list[ApplicationChoiceIn]) -> None:
 
 
 async def _validate_recruiting(
-    db: AsyncSession, *, term_id: uuid.UUID, seminar_ids: list[uuid.UUID]
+    db: AsyncSession,
+    *,
+    term_id: uuid.UUID,
+    seminar_ids: list[uuid.UUID],
+    student_grade: str | None,
 ) -> None:
     if not seminar_ids:
         return
 
     result = await db.execute(
-        select(SeminarRecruitment.seminar_id).where(
+        select(SeminarRecruitment.seminar_id, SeminarRecruitment.target_grades).where(
             SeminarRecruitment.term_id == term_id,
             SeminarRecruitment.seminar_id.in_(seminar_ids),
-            SeminarRecruitment.is_recruiting.is_(True),
         )
     )
-    recruiting_ids = {row[0] for row in result.all()}
+    recruiting_ids = {
+        seminar_id
+        for seminar_id, target_grades in result.all()
+        if student_grade is not None and student_grade in target_grades
+    }
     if not_recruiting := set(seminar_ids) - recruiting_ids:
         ids_label = ", ".join(str(seminar_id) for seminar_id in sorted(not_recruiting))
         raise HTTPException(
@@ -179,7 +186,10 @@ async def upsert_my_application(
     term = await _require_current_term(db)
     _validate_choice_shape(payload.choices)
     await _validate_recruiting(
-        db, term_id=term.id, seminar_ids=[c.seminar_id for c in payload.choices]
+        db,
+        term_id=term.id,
+        seminar_ids=[c.seminar_id for c in payload.choices],
+        student_grade=normalize_grade(user.grade),
     )
 
     form = await _get_form(db, term_id=term.id, student_id=user.id)
@@ -248,7 +258,10 @@ async def submit_my_application(
     # 下書き保存後に募集状況が変わっている可能性があるため、提出時にも
     # 募集中のゼミのみであることを再検証する。
     await _validate_recruiting(
-        db, term_id=term.id, seminar_ids=[c.seminar_id for c in choices]
+        db,
+        term_id=term.id,
+        seminar_ids=[c.seminar_id for c in choices],
+        student_grade=normalize_grade(user.grade),
     )
 
     form.status = ApplicationStatus.submitted

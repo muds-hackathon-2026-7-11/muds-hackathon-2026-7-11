@@ -112,19 +112,19 @@ async def upsert_seminar_recruitment(
             term_id=term_id,
             seminar_id=seminar_id,
             capacity=payload.capacity,
-            is_recruiting=payload.is_recruiting,
+            target_grades=payload.target_grades,
         )
         db.add(recruitment)
     else:
         recruitment.capacity = payload.capacity
-        recruitment.is_recruiting = payload.is_recruiting
+        recruitment.target_grades = payload.target_grades
     await db.flush()
 
     return SeminarRecruitmentOut(
         seminar_id=seminar_id,
         seminar_name=seminar.name,
         capacity=recruitment.capacity,
-        is_recruiting=recruitment.is_recruiting,
+        target_grades=recruitment.target_grades,
     )
 
 
@@ -151,8 +151,8 @@ async def list_seminar_recruitments(
             seminar_id=seminar.id,
             seminar_name=seminar.name,
             capacity=recruitment.capacity if recruitment is not None else None,
-            is_recruiting=(
-                recruitment.is_recruiting if recruitment is not None else None
+            target_grades=(
+                recruitment.target_grades if recruitment is not None else None
             ),
         )
         for seminar, recruitment in result.all()

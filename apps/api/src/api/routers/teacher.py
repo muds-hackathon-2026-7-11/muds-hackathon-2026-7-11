@@ -27,7 +27,7 @@ from api.schemas import (
     TeacherRecruitmentOut,
     TeacherRecruitmentUpdate,
 )
-from api.services import get_current_term
+from api.services import GRADE_OPTIONS, get_current_term
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
@@ -183,7 +183,7 @@ async def set_own_seminar_recruitment(
     teacher: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ) -> TeacherRecruitmentOut:
-    """自分の担当ゼミの定員・is_recruiting を現ラウンドに対して設定する。"""
+    """自分の担当ゼミの定員・募集対象学年を現ラウンドに対して設定する。"""
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
         raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
@@ -219,20 +219,22 @@ async def set_own_seminar_recruitment(
             term_id=term.id,
             seminar_id=seminar_id,
             capacity=payload.capacity,
-            is_recruiting=(
-                payload.is_recruiting if payload.is_recruiting is not None else True
+            target_grades=(
+                payload.target_grades
+                if payload.target_grades is not None
+                else list(GRADE_OPTIONS)
             ),
         )
         db.add(recruitment)
     else:
         recruitment.capacity = payload.capacity
-        if payload.is_recruiting is not None:
-            recruitment.is_recruiting = payload.is_recruiting
+        if payload.target_grades is not None:
+            recruitment.target_grades = payload.target_grades
     await db.flush()
 
     return TeacherRecruitmentOut(
         seminar_id=seminar_id,
         seminar_name=seminar.name,
         capacity=recruitment.capacity,
-        is_recruiting=recruitment.is_recruiting,
+        target_grades=recruitment.target_grades,
     )
