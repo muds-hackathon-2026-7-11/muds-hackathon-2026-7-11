@@ -230,6 +230,7 @@ async def get_seminar(
         TeacherOut(
             id=u.id,
             name=u.name,
+            photo_url=u.photo_url,
             research_theme=u.research_theme,
             interest_tags=teacher_tags.get(u.id, []),
         )

@@ -64,6 +64,7 @@ class SeminarOut(BaseModel):
 class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
+    photo_url: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 

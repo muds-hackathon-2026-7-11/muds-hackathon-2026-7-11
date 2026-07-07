@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -53,7 +54,12 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
 
   return (
     <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-      <p className="font-semibold">{seminar.name}</p>
+      <Link
+        href={`/seminars/${seminar.id}`}
+        className="font-semibold underline hover:opacity-70"
+      >
+        {seminar.name}
+      </Link>
 
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-foreground/70">
         <dt>上限人数</dt>

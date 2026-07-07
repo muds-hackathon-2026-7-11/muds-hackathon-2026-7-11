@@ -38,6 +38,19 @@ describe("SeminarStatsList", () => {
     expect(screen.getAllByText("-")).toHaveLength(1);
   });
 
+  it("links each seminar name to its detail page", () => {
+    render(<SeminarStatsList stats={stats} />);
+
+    expect(screen.getByRole("link", { name: "AIゼミ" })).toHaveAttribute(
+      "href",
+      "/seminars/seminar-1",
+    );
+    expect(screen.getByRole("link", { name: "Webゼミ" })).toHaveAttribute(
+      "href",
+      "/seminars/seminar-2",
+    );
+  });
+
   it("shows a message when there are no stats", () => {
     render(<SeminarStatsList stats={[]} />);
 
