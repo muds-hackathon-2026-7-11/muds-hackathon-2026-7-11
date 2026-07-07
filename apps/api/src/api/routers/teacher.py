@@ -229,7 +229,7 @@ async def set_own_seminar_recruitment(
     else:
         recruitment.capacity = payload.capacity
         if payload.target_grades is not None:
-            recruitment.target_grades = payload.target_grades
+            recruitment.target_grades = list(payload.target_grades)
     await db.flush()
 
     return TeacherRecruitmentOut(

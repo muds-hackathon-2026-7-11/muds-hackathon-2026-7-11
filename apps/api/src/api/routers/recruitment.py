@@ -117,7 +117,7 @@ async def upsert_seminar_recruitment(
         db.add(recruitment)
     else:
         recruitment.capacity = payload.capacity
-        recruitment.target_grades = payload.target_grades
+        recruitment.target_grades = list(payload.target_grades)
     await db.flush()
 
     return SeminarRecruitmentOut(
