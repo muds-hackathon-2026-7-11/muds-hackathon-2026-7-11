@@ -282,6 +282,25 @@ class MatchOut(BaseModel):
     message: str | None = None
 
 
+# --- 一括マッチ度診断 (#118) ---
+
+
+class SeminarMatchOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    score: int  # ルーブリック観点の加重総合(0-100)
+    # 観点別スコア {"field","method","interest","style"}(各0-100)。
+    rubric: dict
+    summary: str
+    reasons: list[str]
+
+
+class SeminarMatchesOut(BaseModel):
+    # score 降順。算出不可の場合は空リスト + message。
+    results: list[SeminarMatchOut]
+    message: str | None = None
+
+
 # --- 運営: 教員・ゼミ管理 (#62) ---
 # 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
 

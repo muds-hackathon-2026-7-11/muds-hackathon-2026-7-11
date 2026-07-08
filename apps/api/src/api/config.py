@@ -50,5 +50,13 @@ class Settings(BaseSettings):
     # Vision対応が必須(gpt-4o-mini はVision対応)。
     doc_summary_model: str = "gpt-4o-mini"
 
+    # --- マッチ度診断のルーブリック重み(#118) ---
+    # 観点別スコア(0-100)を総合スコアへ合成する重み。使用時に合計で正規化する
+    # ため、合計が1でなくてもよい。
+    match_weight_field: float = 0.35
+    match_weight_interest: float = 0.30
+    match_weight_method: float = 0.20
+    match_weight_style: float = 0.15
+
 
 settings = Settings()
