@@ -208,6 +208,40 @@ describe("ProfileCard", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("caps tag selection at 20 and disables further unselected tags", async () => {
+    const user = userEvent.setup();
+    const manyTags: ResearchTag[] = Array.from({ length: 21 }, (_, i) => ({
+      id: `tag-${i}`,
+      name: `タグ${i}`,
+      category: "カテゴリ",
+    }));
+
+    render(
+      <ProfileCard
+        name="山田 太郎"
+        email="s2300000@stu.musashino-u.ac.jp"
+        grade="B3"
+        researchTitle="音声認識モデルの研究"
+        researchTheme="音声処理の研究"
+        interestTags={manyTags.slice(0, 20)}
+        allTags={manyTags}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    const dialog = within(screen.getByRole("dialog"));
+
+    expect(dialog.getByText("タグ(20/20)")).toBeInTheDocument();
+
+    const unselectedCheckbox = dialog.getByRole("checkbox", {
+      name: "タグ20",
+    });
+    expect(unselectedCheckbox).toBeDisabled();
+
+    await user.click(dialog.getByText("タグ20"));
+    expect(dialog.getByText("タグ(20/20)")).toBeInTheDocument();
+  });
+
   it("closes when Escape is pressed", async () => {
     const user = userEvent.setup();
 

@@ -22,8 +22,6 @@ type Teacher = {
   id: string;
   name: string;
   photo_url: string | null;
-  research_title: string | null;
-  research_theme: string | null;
   interest_tags: ResearchTag[];
 };
 
@@ -47,7 +45,6 @@ export type SeminarDetail = {
   name: string;
   description: string | null;
   photo_url: string | null;
-  capacity: number | null;
   teachers: Teacher[];
   materials: Material[];
   current_members: Member[];
@@ -88,6 +85,27 @@ function TeacherAvatar({
     <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#add8e6]/20 text-2xl font-bold text-sky-900">
       {Array.from(name)[0] ?? "?"}
     </div>
+  );
+}
+
+// Y軸のタグ名が長いと省略されずにはみ出す/隣と重なるため、一定の文字数で
+// 省略記号を付けて切り、ホバー時はSVGのtitleで全文を見せる。
+function TruncatedYAxisTick({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}) {
+  const value = payload?.value ?? "";
+  const truncated = value.length > 10 ? `${value.slice(0, 9)}…` : value;
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fill="#71717a">
+      <title>{value}</title>
+      {truncated}
+    </text>
   );
 }
 
@@ -166,7 +184,10 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         ) : (
           <div className="mt-3 flex flex-wrap gap-6">
             {seminar.teachers.map((teacher) => (
-              <div key={teacher.id} className="flex min-w-[240px] flex-1 gap-4">
+              <div
+                key={teacher.id}
+                className="flex min-w-[240px] flex-1 items-center gap-4"
+              >
                 <TeacherAvatar
                   name={teacher.name}
                   photoUrl={teacher.photo_url}
@@ -174,12 +195,6 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 />
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-900">{teacher.name}</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">
-                    {teacher.research_title ?? "研究タイトル未設定"}
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-900">
-                    {teacher.research_theme ?? "未設定"}
-                  </p>
                   {teacher.interest_tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {teacher.interest_tags.map((tag) => (
@@ -201,30 +216,31 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
 
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
         <h2 className="text-lg font-bold text-zinc-900">研究内容</h2>
-        <p className="mt-2 whitespace-pre-wrap text-zinc-900">
-          {seminar.description ?? "研究内容は未設定です。"}
-        </p>
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-900 sm:w-64">
-          <dt>募集人数</dt>
-          <dd>{seminar.capacity ?? "未設定"}</dd>
-        </dl>
-      </section>
+        {seminar.description && (
+          <p className="mt-2 whitespace-pre-wrap text-zinc-900">
+            {seminar.description}
+          </p>
+        )}
 
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-900">紹介資料</h2>
         {seminar.materials.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-900">資料はまだありません。</p>
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
             {seminar.materials.map((material) => (
-              <li key={material.id}>
+              <li
+                key={material.id}
+                className="flex min-w-0 items-baseline gap-2"
+              >
+                <span className="shrink-0 text-xs text-zinc-400">
+                  {MATERIAL_TYPE_LABEL[material.type]}
+                </span>
                 <a
                   href={material.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+                  className="min-w-0 truncate text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
                 >
-                  {MATERIAL_TYPE_LABEL[material.type]}
+                  {material.url}
                 </a>
               </li>
             ))}
@@ -241,7 +257,10 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             集計できるデータがありません。
           </p>
         ) : (
-          <div className="mt-4 h-64">
+          <div
+            className="mt-4"
+            style={{ height: Math.max(256, chartData.length * 32) }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
@@ -255,7 +274,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   type="category"
                   dataKey="name"
                   width={100}
-                  tick={{ fill: "#71717a", fontSize: 12 }}
+                  tick={<TruncatedYAxisTick />}
                   stroke="#e6e6e6"
                 />
                 <Tooltip
