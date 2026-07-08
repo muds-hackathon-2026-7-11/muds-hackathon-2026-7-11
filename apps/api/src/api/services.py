@@ -73,20 +73,30 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
 async def current_academic_year(db: AsyncSession) -> int | None:
     """「現在の年度」を返す(該当する募集期間が無ければNone)。
 
-    直近に作成された募集期間のacademic_yearを返す。get_current_termと違い、
-    status=openや日付範囲は問わない。募集期間が開いている間だけ「現在の
-    ゼミ生」等が見えるのは誤りで(1年のほとんどは募集期間外のため)、
-    志望提出画面同様「新しい募集期間が作成されたら切り替わる」形にする。
+    直近に開始済みの募集期間のacademic_yearを返す。get_current_termと違い、
+    status=openやends_atは問わない。募集期間が(終了日を含めて)アクティブな
+    間だけ「現在のゼミ生」等が見えるのは誤りで(1年のほとんどは募集期間外の
+    ため)、志望提出画面同様「新しい募集期間が始まったら切り替わる」形にする。
 
-    ただしstatus=preparing(#93で追加された、開始前の準備段階)の
-    募集期間は除く。運営が来年度分のラウンドを配属作業より前倒しで
-    作成しただけで、まだ何の配属も行われていない段階なので、それを
-    「現在の年度」にしてしまうと今の在籍ゼミ生が誰も表示されなくなる
-    (実際に発生した不具合)。
+    ただし以下の2つは「まだ始まっていない」とみなして除外する。除外しないと、
+    運営が来年度分のラウンドを配属作業より前倒しで作成しただけで(まだ何の
+    配属も行われていない段階なのに)、それが「現在の年度」として扱われ、
+    今の在籍ゼミ生が誰も表示されなくなる(実際に発生した不具合)。
+    - status=preparing(#93で追加された、開始前の準備段階)
+    - starts_atが未来のもの(status=openであっても。運営が翌年度分を
+      準備目的で早めにopenにしても、開始日前は「現在」として扱わない。
+      get_current_termと同じ考え方)
+
+    todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
+    だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
     """
+    today = datetime.now(JST).date()
     result = await db.execute(
         select(RecruitmentTerm.academic_year)
-        .where(RecruitmentTerm.status != RecruitmentTermStatus.preparing)
+        .where(
+            RecruitmentTerm.status != RecruitmentTermStatus.preparing,
+            RecruitmentTerm.starts_at <= today,
+        )
         .order_by(RecruitmentTerm.academic_year.desc())
         .limit(1)
     )
