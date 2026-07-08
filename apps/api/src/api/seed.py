@@ -359,8 +359,7 @@ APPLICATIONS: list[ApplicationSeed] = [
         "name": "応募二葉",
         "grade": "B2",
         "research_theme": (
-            "文章や画像を作る生成AIやLLMを、"
-            "学習支援ツールに応用することに関心がある。"
+            "文章や画像を作る生成AIやLLMを、学習支援ツールに応用することに関心がある。"
         ),
         "interest_tags": ["生成AI", "LLM"],
         "choices": [
@@ -381,8 +380,7 @@ APPLICATIONS: list[ApplicationSeed] = [
         "name": "応募太郎",
         "grade": "B3",
         "research_theme": (
-            "気象や株価などの時系列データを、"
-            "深層学習で予測する研究に取り組みたい。"
+            "気象や株価などの時系列データを、深層学習で予測する研究に取り組みたい。"
         ),
         "interest_tags": ["深層学習", "時系列解析"],
         "choices": [
@@ -407,8 +405,7 @@ APPLICATIONS: list[ApplicationSeed] = [
         "name": "応募花子",
         "grade": "B3",
         "research_theme": (
-            "画像認識モデルの認識精度を、"
-            "データ拡張やモデル改良で高める研究をしたい。"
+            "画像認識モデルの認識精度を、データ拡張やモデル改良で高める研究をしたい。"
         ),
         "interest_tags": ["画像認識", "深層学習"],
         "choices": [
