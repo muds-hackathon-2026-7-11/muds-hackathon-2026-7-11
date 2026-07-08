@@ -71,6 +71,13 @@ describe("AdminRecruitmentTermsView", () => {
     expect(screen.getByText("募集中")).toBeInTheDocument();
   });
 
+  it("shows the term's id for use in the assignment import CSV's term_id column", () => {
+    const term = makeTerm({ id: "term-abc-123" });
+    renderView({ terms: [term] });
+
+    expect(screen.getByText("term-abc-123")).toBeInTheDocument();
+  });
+
   it("shows 終了 when status is open but the end date has passed", () => {
     const term = makeTerm({
       starts_at: "2020-01-01",

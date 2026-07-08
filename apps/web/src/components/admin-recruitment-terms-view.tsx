@@ -636,6 +636,10 @@ export function AdminRecruitmentTermsView({
                       <p className="mt-1 text-sm text-foreground/70">
                         {formatPeriod(term.starts_at, term.ends_at)}
                       </p>
+                      <p className="mt-1 text-xs text-foreground/40">
+                        ID(配属結果CSVのterm_id列に使用):{" "}
+                        <code className="select-all">{term.id}</code>
+                      </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <button

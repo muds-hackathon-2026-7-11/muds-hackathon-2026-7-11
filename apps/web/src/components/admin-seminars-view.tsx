@@ -450,6 +450,10 @@ export function AdminSeminarsView({
                       <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
                         {seminar.description ?? "説明は未設定です。"}
                       </p>
+                      <p className="mt-1 text-xs text-foreground/40">
+                        ID(配属結果CSVのseminar_id列に使用):{" "}
+                        <code className="select-all">{seminar.id}</code>
+                      </p>
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">

@@ -2,7 +2,7 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/admin/assignments", tags=["admin"])
 
 require_admin = require_role(UserRole.admin)
 
-_REQUIRED_COLUMNS = ("student_id", "seminar_id", "term_id")
+_REQUIRED_COLUMNS = ("student_id", "seminar_id")
 
 
 def _parse_uuid(value: str) -> uuid.UUID | None:
@@ -25,17 +25,59 @@ def _parse_uuid(value: str) -> uuid.UUID | None:
         return None
 
 
+async def _find_student(db: AsyncSession, *, value: str) -> User | None:
+    """student_idの完全一致を優先し、無ければ学籍番号(接頭辞なし)として
+    s/g両方の接頭辞を試す(api.import_seminar_membersと同じ運用。実際の
+    配属結果CSVは学籍番号の生数字(例: 2522091)で運用されているため)。
+    """
+    result = await db.execute(select(User).where(User.student_id == value))
+    student = result.scalar_one_or_none()
+    if student is not None:
+        return student
+
+    result = await db.execute(
+        select(User).where(User.student_id.in_([f"s{value}", f"g{value}"]))
+    )
+    return result.scalars().first()
+
+
+async def _find_seminar(db: AsyncSession, *, value: str) -> Seminar | None:
+    """値がUUID形式ならIDとして、そうでなければゼミ名の完全一致として照合する
+    (api.import_seminar_membersと同じ運用)。
+    """
+    seminar_uuid = _parse_uuid(value)
+    if seminar_uuid is not None:
+        return await db.get(Seminar, seminar_uuid)
+
+    result = await db.execute(select(Seminar).where(Seminar.name == value))
+    return result.scalar_one_or_none()
+
+
 @router.post("/import", response_model=AssignmentImportResult)
 async def import_assignments(
+    term_id: uuid.UUID = Form(...),
     file: UploadFile = File(...),
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AssignmentImportResult:
     """配属結果CSVを取り込み、所属ゼミ生(seminar_members)に反映する。
 
-    CSV列: student_id(学籍番号), seminar_id, term_id(募集ラウンド=前期/後期)。
+    term_id(募集ラウンド)は1回のアップロード全体で1つ選択し、CSV自体には
+    含めない(1回のアップロードは常に単一の募集ラウンドに対する配属結果
+    であるため。前期/後期で異なるラウンドに配属する場合は、ラウンドごとに
+    アップロードし直す)。
+
+    CSV列: student_id, seminar_id。どちらもID(DBの値)と人が読める文字列
+    (学籍番号の生数字/ゼミ名)のどちらでも受け付ける。実際の配属結果CSVは
+    学籍番号・ゼミ名で運用されているため(_find_student/_find_seminar参照)。
     (seminar, student, term) が既にあればスキップ、無ければ作成(べき等)。
     """
+    if await db.get(RecruitmentTerm, term_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="募集ラウンドが見つかりません。",
+        )
+
     raw = await file.read()
     text = raw.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
@@ -49,47 +91,27 @@ async def import_assignments(
         if not all(values.values()):
             errors.append(
                 AssignmentImportError(
-                    row=row_number, reason="必須列(student_id/seminar_id/term_id)が不足"
+                    row=row_number, reason="必須列(student_id/seminar_id)が不足"
                 )
             )
             continue
 
-        seminar_uuid = _parse_uuid(values["seminar_id"])
-        term_uuid = _parse_uuid(values["term_id"])
-        if seminar_uuid is None or term_uuid is None:
-            errors.append(
-                AssignmentImportError(
-                    row=row_number, reason="seminar_id/term_id がUUID形式ではありません"
-                )
-            )
-            continue
-
-        student = (
-            await db.execute(
-                select(User).where(User.student_id == values["student_id"]).limit(1)
-            )
-        ).scalar_one_or_none()
+        student = await _find_student(db, value=values["student_id"])
         if student is None:
             errors.append(
                 AssignmentImportError(
                     row=row_number,
-                    reason=f"学生が見つかりません: {values['student_id']}",
+                    reason=f"学生が見つかりません(学籍番号): {values['student_id']}",
                 )
             )
             continue
 
-        if await db.get(Seminar, seminar_uuid) is None:
-            errors.append(
-                AssignmentImportError(
-                    row=row_number, reason=f"ゼミが見つかりません: {seminar_uuid}"
-                )
-            )
-            continue
-        if await db.get(RecruitmentTerm, term_uuid) is None:
+        seminar = await _find_seminar(db, value=values["seminar_id"])
+        if seminar is None:
             errors.append(
                 AssignmentImportError(
                     row=row_number,
-                    reason=f"募集ラウンドが見つかりません: {term_uuid}",
+                    reason=f"ゼミが見つかりません(ID/名前): {values['seminar_id']}",
                 )
             )
             continue
@@ -97,9 +119,9 @@ async def import_assignments(
         already = (
             await db.execute(
                 select(SeminarMember).where(
-                    SeminarMember.seminar_id == seminar_uuid,
+                    SeminarMember.seminar_id == seminar.id,
                     SeminarMember.student_id == student.id,
-                    SeminarMember.term_id == term_uuid,
+                    SeminarMember.term_id == term_id,
                 )
             )
         ).scalar_one_or_none()
@@ -109,9 +131,9 @@ async def import_assignments(
 
         db.add(
             SeminarMember(
-                seminar_id=seminar_uuid,
+                seminar_id=seminar.id,
                 student_id=student.id,
-                term_id=term_uuid,
+                term_id=term_id,
             )
         )
         created += 1
