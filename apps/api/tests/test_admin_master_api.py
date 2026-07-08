@@ -287,6 +287,7 @@ async def test_create_teacher(client, db_session) -> None:
         json={
             "name": "新任教員",
             "email": "Prof.New@Example.com",  # 大文字はサーバで小文字化される
+            "research_title": "推薦アルゴリズムの研究",
             "research_theme": "推薦システム",
         },
     )
@@ -294,6 +295,7 @@ async def test_create_teacher(client, db_session) -> None:
     body = resp.json()
     assert body["name"] == "新任教員"
     assert body["email"] == "prof.new@example.com"
+    assert body["research_title"] == "推薦アルゴリズムの研究"
     assert body["research_theme"] == "推薦システム"
     assert body["is_active"] is True
 
@@ -362,6 +364,19 @@ async def test_update_teacher_edits_and_deactivates(client, db_session) -> None:
     assert teacher.is_active is False
     # 送っていない research_theme は据え置き
     assert teacher.research_theme == "元テーマ"
+
+
+async def test_update_teacher_edits_research_title(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.patch(
+        f"/admin/teachers/{teacher.id}",
+        json={"research_title": "新しい研究タイトル"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["research_title"] == "新しい研究タイトル"
 
 
 async def test_update_teacher_on_non_teacher_returns_404(client, db_session) -> None:

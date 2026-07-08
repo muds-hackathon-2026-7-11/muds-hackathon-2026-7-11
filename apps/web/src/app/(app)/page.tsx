@@ -15,6 +15,7 @@ type Me = {
   name: string;
   email: string;
   grade: string | null;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
   current_seminar: CurrentSeminar | null;
@@ -72,6 +73,7 @@ export default async function Home() {
                 name={me.name}
                 email={me.email}
                 grade={me.grade}
+                researchTitle={me.research_title}
                 researchTheme={me.research_theme}
                 interestTags={me.interest_tags}
                 allTags={researchTags}

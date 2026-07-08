@@ -27,6 +27,7 @@ type ProfileCardProps = {
   name: string;
   email: string;
   grade: string | null;
+  researchTitle: string | null;
   researchTheme: string | null;
   interestTags?: ResearchTag[];
   allTags?: ResearchTag[];
@@ -48,6 +49,7 @@ export function ProfileCard({
   name,
   email,
   grade,
+  researchTitle,
   researchTheme,
   interestTags = [],
   allTags = [],
@@ -56,16 +58,19 @@ export function ProfileCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [title, setTitle] = useState(researchTitle ?? "");
   const [theme, setTheme] = useState(researchTheme ?? "");
   const [tagIds, setTagIds] = useState<Set<string>>(
     () => new Set(interestTags.map((tag) => tag.id)),
   );
+  const [savedTitle, setSavedTitle] = useState(researchTitle);
   const [savedTheme, setSavedTheme] = useState(researchTheme);
   const [savedTagIds, setSavedTagIds] = useState<Set<string>>(
     () => new Set(interestTags.map((tag) => tag.id)),
   );
 
   function handleEditClick(): void {
+    setTitle(savedTitle ?? "");
     setTheme(savedTheme ?? "");
     setTagIds(new Set(savedTagIds));
     setErrorMessage(null);
@@ -97,6 +102,7 @@ export function ProfileCard({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          research_title: title.trim() === "" ? null : title,
           research_theme: theme.trim() === "" ? null : theme,
           interest_tag_ids: Array.from(tagIds),
         }),
@@ -106,9 +112,11 @@ export function ProfileCard({
         return;
       }
       const data = (await res.json()) as {
+        research_title: string | null;
         research_theme: string | null;
         interest_tags: ResearchTag[];
       };
+      setSavedTitle(data.research_title);
       setSavedTheme(data.research_theme);
       setSavedTagIds(new Set(data.interest_tags.map((tag) => tag.id)));
       setIsEditing(false);
@@ -162,7 +170,10 @@ export function ProfileCard({
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Research Summary
         </p>
-        <p className="mt-2 whitespace-pre-wrap text-zinc-700">
+        <p className="mt-2 font-semibold text-zinc-800">
+          {savedTitle ?? "研究タイトル未設定"}
+        </p>
+        <p className="mt-1 whitespace-pre-wrap text-zinc-700">
           {savedTheme ?? "未設定"}
         </p>
 
@@ -226,8 +237,25 @@ export function ProfileCard({
             <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-[3fr_2fr]">
               <div className="flex min-h-0 flex-col">
                 <label
-                  htmlFor="research-theme-input"
+                  htmlFor="research-title-input"
                   className="text-sm text-zinc-500"
+                >
+                  研究タイトル
+                </label>
+                <input
+                  id="research-title-input"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={isSaving}
+                  placeholder="研究タイトルを入力してください"
+                  maxLength={200}
+                  className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                />
+
+                <label
+                  htmlFor="research-theme-input"
+                  className="mt-4 text-sm text-zinc-500"
                 >
                   研究概要
                 </label>

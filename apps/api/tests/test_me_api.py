@@ -44,12 +44,17 @@ async def _make_tag(db_session, name: str) -> ResearchTag:
     return tag
 
 
-async def _make_term(db_session, academic_year: int) -> RecruitmentTerm:
+async def _make_term(
+    db_session,
+    academic_year: int,
+    status: RecruitmentTermStatus = RecruitmentTermStatus.open,
+    starts_at: date | None = None,
+) -> RecruitmentTerm:
     term = RecruitmentTerm(
         academic_year=academic_year,
-        starts_at=date.today() - timedelta(days=1),
+        starts_at=starts_at or date.today() - timedelta(days=1),
         ends_at=date.today() + timedelta(days=30),
-        status=RecruitmentTermStatus.open,
+        status=status,
     )
     db_session.add(term)
     await db_session.flush()
@@ -110,6 +115,64 @@ async def test_get_me_current_seminar_is_null_when_not_assigned(
     assert resp.json()["current_seminar"] is None
 
 
+async def test_get_me_current_seminar_ignores_a_newer_preparing_term(
+    client, db_session
+) -> None:
+    # 運営が来年度分のラウンドをstatus=preparingで前倒しに作っただけの
+    # 段階では、それを「現在の年度」にしてしまうと今の在籍ゼミ生の
+    # current_seminarが誰も表示されなくなってしまっていた(実際の不具合)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    user = await _make_user(db_session)
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=user.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、準備段階の次年度ラウンド。
+    await _make_term(
+        db_session, academic_year + 1, status=RecruitmentTermStatus.preparing
+    )
+    await db_session.flush()
+
+    resp = await client.get("/me", headers=_auth_headers(user.email))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_seminar"] is not None
+    assert body["current_seminar"]["name"] == seminar.name
+
+
+async def test_get_me_current_seminar_ignores_a_newer_term_opened_before_it_starts(
+    client, db_session
+) -> None:
+    # status=preparingを除くだけでは不十分: 運営がまだ始まっていない
+    # 来年度分のラウンドを(準備目的で)早めにstatus=openにしただけでも、
+    # 同じ不具合が再発しないことを確認する(get_current_termと同じ
+    # 「starts_atを過ぎるまでは現在扱いしない」考え方)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    user = await _make_user(db_session)
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=user.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、始まる前の次年度ラウンド(status=open)。
+    await _make_term(
+        db_session,
+        academic_year + 1,
+        status=RecruitmentTermStatus.open,
+        starts_at=date.today() + timedelta(days=30),
+    )
+    await db_session.flush()
+
+    resp = await client.get("/me", headers=_auth_headers(user.email))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_seminar"] is not None
+    assert body["current_seminar"]["name"] == seminar.name
+
+
 # --- GET /me ---
 
 
@@ -161,6 +224,43 @@ async def test_patch_me_updates_research_theme_only(client, db_session) -> None:
     body = resp.json()
     assert body["research_theme"] == "自然言語処理の研究"
     assert body["interest_tags"] == []
+
+
+async def test_patch_me_updates_research_title_and_theme(client, db_session) -> None:
+    user = await _make_user(db_session)
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={
+            "research_title": "画像認識モデルの研究",
+            "research_theme": "自然言語処理の研究",
+            "interest_tag_ids": [],
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["research_title"] == "画像認識モデルの研究"
+    assert body["research_theme"] == "自然言語処理の研究"
+
+    get_resp = await client.get("/me", headers=_auth_headers(user.email))
+    assert get_resp.json()["research_title"] == "画像認識モデルの研究"
+
+
+async def test_patch_me_can_clear_research_title(client, db_session) -> None:
+    user = await _make_user(db_session)
+    user.research_title = "以前のタイトル"
+    await db_session.flush()
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={"research_title": None, "interest_tag_ids": []},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["research_title"] is None
 
 
 async def test_patch_me_replaces_previous_tags(client, db_session) -> None:

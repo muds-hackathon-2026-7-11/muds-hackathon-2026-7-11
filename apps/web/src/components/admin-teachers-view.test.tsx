@@ -19,6 +19,7 @@ function makeTeacher(overrides: Partial<AdminTeacher> = {}): AdminTeacher {
     id: "teacher-1",
     name: "山田先生",
     email: "yamada@example.com",
+    research_title: "画像認識モデルの研究",
     research_theme: "機械学習",
     photo_url: null,
     is_active: true,
@@ -36,7 +37,38 @@ describe("AdminTeachersView", () => {
 
     expect(screen.getByText("山田先生")).toBeInTheDocument();
     expect(screen.getByText("yamada@example.com")).toBeInTheDocument();
+    expect(screen.getByText("画像認識モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("機械学習")).toBeInTheDocument();
+  });
+
+  it("edits a teacher's research title", async () => {
+    const user = userEvent.setup();
+    const teacher = makeTeacher();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...teacher, research_title: "新しいタイトル" }),
+          { status: 200 },
+        ),
+      );
+
+    render(<AdminTeachersView initialTeachers={[teacher]} />);
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    const titleInput = screen.getByDisplayValue("画像認識モデルの研究");
+    await user.clear(titleInput);
+    await user.type(titleInput, "新しいタイトル");
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(await screen.findByText("新しいタイトル")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/teachers/${teacher.id}`),
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"research_title":"新しいタイトル"'),
+      }),
+    );
   });
 
   it("edits a teacher's name and research theme", async () => {

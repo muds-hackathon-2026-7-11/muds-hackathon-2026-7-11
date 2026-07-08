@@ -39,6 +39,7 @@ class MeOut(BaseModel):
     role: UserRole
     student_id: str | None
     grade: str | None
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
@@ -47,8 +48,9 @@ class MeOut(BaseModel):
 
 
 class MeUpdateIn(BaseModel):
-    """本人の研究概要・興味分野タグの更新(PATCH /me)。"""
+    """本人の研究タイトル・研究概要・興味分野タグの更新(PATCH /me)。"""
 
+    research_title: str | None = Field(default=None, max_length=200)
     research_theme: str | None = Field(default=None, max_length=2000)
     interest_tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
@@ -75,6 +77,7 @@ class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     photo_url: str | None
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 
@@ -90,6 +93,7 @@ class SeminarMaterialOut(BaseModel):
 class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 
@@ -319,6 +323,7 @@ class AdminTeacherCreate(BaseModel):
     # 教員ユーザーを1名追加する(作成はここ、一括はCSV #40)。
     name: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=255)
+    research_title: str | None = None
     research_theme: str | None = None
     photo_url: str | None = None
 
@@ -334,6 +339,7 @@ class AdminTeacherCreate(BaseModel):
 
 class AdminTeacherUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    research_title: str | None = None
     research_theme: str | None = None
     photo_url: str | None = None
     is_active: bool | None = None
@@ -345,6 +351,7 @@ class AdminTeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     email: str
+    research_title: str | None
     research_theme: str | None
     photo_url: str | None
     is_active: bool
