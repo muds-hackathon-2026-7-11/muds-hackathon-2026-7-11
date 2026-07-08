@@ -89,6 +89,7 @@ class SeminarMaterialOut(BaseModel):
 class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
+    grade: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 

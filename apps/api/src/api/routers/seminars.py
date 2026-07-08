@@ -265,7 +265,9 @@ async def get_seminar(
                 SeminarMember.seminar_id == seminar_id,
                 RecruitmentTerm.academic_year == academic_year,
             )
-            .order_by(User.name)
+            # 学年順(B1→B4)に並べ、同学年内は名前順。gradeは"B1".."B4"の
+            # 文字列なので昇順で学年の昇順になる。gradeがNULLの学生は末尾。
+            .order_by(User.grade.asc().nulls_last(), User.name)
         )
         # 前期/後期で同一学生が複数termに所属し得るため重複排除する。
         member_users = list({u.id: u for u in members_result.scalars().all()}.values())
@@ -276,6 +278,7 @@ async def get_seminar(
             SeminarMemberOut(
                 id=u.id,
                 name=u.name,
+                grade=u.grade,
                 research_theme=u.research_theme,
                 interest_tags=member_tags.get(u.id, []),
             )
