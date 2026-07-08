@@ -99,9 +99,7 @@ export default async function Home() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Application Status
               </p>
-              <p className="mt-2 text-lg font-semibold text-zinc-800">
-                準備中
-              </p>
+              <p className="mt-2 text-lg font-semibold text-zinc-800">準備中</p>
               <div className="mt-4">
                 <Link
                   href="/apply"
