@@ -127,6 +127,50 @@ async def test_upsert_membership_is_idempotent(db_session) -> None:
     assert result == "unchanged"
 
 
+async def test_upsert_membership_consolidates_duplicate_rows(db_session) -> None:
+    # 同一学生・同一年度に(過去の重複データ等で)複数の所属行が残っている
+    # ケース。scalar_one_or_none()だとMultipleResultsFoundで落ちて
+    # バッチ全体が失敗するため、CSVの内容(new_seminar)に1件へ統一する。
+    student = await _make_student(db_session, student_id=f"s{_unique('9')[:7]}")
+    stale_seminar_a = await _make_seminar(db_session)
+    stale_seminar_b = await _make_seminar(db_session)
+    new_seminar = await _make_seminar(db_session)
+    term = await _make_term(db_session, 3000 + int(uuid.uuid4().int % 1000))
+
+    db_session.add_all(
+        [
+            SeminarMember(
+                seminar_id=stale_seminar_a.id, student_id=student.id, term_id=term.id
+            ),
+            SeminarMember(
+                seminar_id=stale_seminar_b.id, student_id=student.id, term_id=term.id
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    result = await _upsert_membership(
+        db_session, seminar=new_seminar, student=student, term=term
+    )
+    await db_session.flush()
+
+    assert result == "updated"
+    rows = (
+        (
+            await db_session.execute(
+                select(SeminarMember).where(
+                    SeminarMember.student_id == student.id,
+                    SeminarMember.term_id == term.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].seminar_id == new_seminar.id
+
+
 async def test_upsert_membership_corrects_seminar_when_changed(db_session) -> None:
     student = await _make_student(db_session, student_id=f"s{_unique('9')[:7]}")
     old_seminar = await _make_seminar(db_session)
