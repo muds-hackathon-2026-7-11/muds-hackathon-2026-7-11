@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user
@@ -136,19 +136,22 @@ async def seminar_stats(
     # (現在のゼミ生は年間通して見える必要があるため)。
     academic_year = await current_academic_year(db)
     continuing_by_seminar: dict[uuid.UUID, int] = {}
+    # ゼミ→現在の所属学生idの集合。継続希望人数(同じゼミを第1志望に
+    # 選んだ在籍ゼミ生数)を出すのに使う。
+    members_by_seminar: dict[uuid.UUID, set[uuid.UUID]] = {}
     if academic_year is not None:
-        # 所属は term 単位で持つため、term経由で現在年度の所属を数える。
+        # 所属は term 単位で持つため、term経由で現在年度の所属を集める。
         # 前期/後期など同年度に複数termがある場合の二重計上を避けて学生で重複排除する。
         member_rows = await db.execute(
-            select(
-                SeminarMember.seminar_id,
-                func.count(SeminarMember.student_id.distinct()),
-            )
+            select(SeminarMember.seminar_id, SeminarMember.student_id)
             .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
             .where(RecruitmentTerm.academic_year == academic_year)
-            .group_by(SeminarMember.seminar_id)
         )
-        continuing_by_seminar = {sid: cnt for sid, cnt in member_rows.all()}
+        for seminar_id, student_id in member_rows.all():
+            members_by_seminar.setdefault(seminar_id, set()).add(student_id)
+        continuing_by_seminar = {
+            sid: len(students) for sid, students in members_by_seminar.items()
+        }
 
     if term is None:
         return [
@@ -162,6 +165,7 @@ async def seminar_stats(
                 priority_grade_counts={"1": {}, "2": {}, "3": {}},
                 ratio=None,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                continuing_first_choice_count=0,
                 target_grades=None,
             )
             for s in seminars
@@ -183,7 +187,12 @@ async def seminar_stats(
 
     # 志望内容（当該ラウンドの提出済み・在籍学生のみ）
     choice_rows = await db.execute(
-        select(ApplicationChoice.seminar_id, ApplicationChoice.priority, User.grade)
+        select(
+            ApplicationChoice.seminar_id,
+            ApplicationChoice.priority,
+            User.grade,
+            ApplicationForm.student_id,
+        )
         .join(
             ApplicationForm,
             ApplicationChoice.application_form_id == ApplicationForm.id,
@@ -200,7 +209,9 @@ async def seminar_stats(
     grade_by_seminar: dict[uuid.UUID, dict[str, int]] = {}
     # ゼミ→志望順位→学年→人数(応募状況グラフの積み上げ用)。
     priority_grade_by_seminar: dict[uuid.UUID, dict[int, dict[str, int]]] = {}
-    for seminar_id, priority, grade in choice_rows.all():
+    # 継続希望人数: 在籍ゼミ生が同じゼミを第1志望に選んだ数。
+    continuing_first_choice_by_seminar: dict[uuid.UUID, int] = {}
+    for seminar_id, priority, grade, student_id in choice_rows.all():
         applicant_count[seminar_id] = applicant_count.get(seminar_id, 0) + 1
         priorities = priority_by_seminar.setdefault(seminar_id, {1: 0, 2: 0, 3: 0})
         priorities[priority] = priorities.get(priority, 0) + 1
@@ -210,6 +221,10 @@ async def seminar_stats(
         by_priority = priority_grade_by_seminar.setdefault(seminar_id, {})
         by_grade = by_priority.setdefault(priority, {})
         by_grade[grade_key] = by_grade.get(grade_key, 0) + 1
+        if priority == 1 and student_id in members_by_seminar.get(seminar_id, set()):
+            continuing_first_choice_by_seminar[seminar_id] = (
+                continuing_first_choice_by_seminar.get(seminar_id, 0) + 1
+            )
 
     # 継続者数は term is None の分岐前(現在の年度ベース)で算出済みの
     # continuing_by_seminar をそのまま使う。
@@ -238,6 +253,9 @@ async def seminar_stats(
                 },
                 ratio=ratio,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                continuing_first_choice_count=continuing_first_choice_by_seminar.get(
+                    s.id, 0
+                ),
                 target_grades=target_grades_by_seminar.get(s.id),
             )
         )
