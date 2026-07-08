@@ -161,7 +161,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
     <div className="flex flex-col gap-6">
       <Link
         href="/assignment"
-        className="self-start text-sm text-zinc-500 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+        className="self-start text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
       >
         ← 応募状況に戻る
       </Link>
@@ -178,9 +178,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </div>
 
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-800">教員紹介</h2>
+        <h2 className="text-lg font-bold text-zinc-900">教員紹介</h2>
         {seminar.teachers.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">未設定です。</p>
+          <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-6">
             {seminar.teachers.map((teacher) => (
@@ -194,13 +194,13 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   seminarPhotoUrl={seminar.photo_url}
                 />
                 <div className="min-w-0">
-                  <p className="font-semibold text-zinc-800">{teacher.name}</p>
+                  <p className="font-semibold text-zinc-900">{teacher.name}</p>
                   {teacher.interest_tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {teacher.interest_tags.map((tag) => (
                         <span
                           key={tag.id}
-                          className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-sky-900/70"
+                          className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-zinc-900"
                         >
                           {tag.name}
                         </span>
@@ -215,15 +215,15 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </section>
 
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-800">研究内容</h2>
+        <h2 className="text-lg font-bold text-zinc-900">研究内容</h2>
         {seminar.description && (
-          <p className="mt-2 whitespace-pre-wrap text-zinc-700">
+          <p className="mt-2 whitespace-pre-wrap text-zinc-900">
             {seminar.description}
           </p>
         )}
 
         {seminar.materials.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">資料はまだありません。</p>
+          <p className="mt-2 text-sm text-zinc-900">資料はまだありません。</p>
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
             {seminar.materials.map((material) => (
@@ -238,7 +238,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   href={material.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="min-w-0 truncate text-sm text-zinc-700 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+                  className="min-w-0 truncate text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
                 >
                   {material.url}
                 </a>
@@ -249,11 +249,11 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </section>
 
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-800">
+        <h2 className="text-lg font-bold text-zinc-900">
           現在のゼミ生の研究分野
         </h2>
         {chartData.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 text-sm text-zinc-900">
             集計できるデータがありません。
           </p>
         ) : (
@@ -305,9 +305,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </section>
 
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-800">現在のゼミ生</h2>
+        <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
         {seminar.current_members.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">未設定です。</p>
+          <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
         ) : (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {seminar.current_members.map((member) => (
@@ -317,14 +317,14 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 onClick={() => setOpenMemberId(member.id)}
                 className="rounded-xl border border-[#add8e6]/50 px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
               >
-                <span className="block truncate font-semibold text-zinc-800">
+                <span className="block truncate font-semibold text-zinc-900">
                   {member.grade
                     ? `${member.grade} ${member.name}`
                     : member.name}
                 </span>
                 {/* 研究タイトルは研究概要(research_theme)とは別項目。
                     詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
-                <span className="mt-0.5 block truncate text-xs text-zinc-400">
+                <span className="mt-0.5 block truncate text-xs text-zinc-900">
                   {member.research_title ?? "研究タイトル未設定"}
                 </span>
               </button>
@@ -352,7 +352,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-base font-medium text-zinc-500">
+                <p className="text-base font-medium text-zinc-900">
                   {openMember.grade
                     ? `${openMember.grade} ${openMember.name}`
                     : openMember.name}
@@ -383,10 +383,10 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
               </button>
             </div>
 
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-900">
               研究概要
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-zinc-700">
+            <p className="mt-1 whitespace-pre-wrap text-zinc-900">
               {openMember.research_theme ?? "未設定"}
             </p>
 
@@ -395,7 +395,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 {openMember.interest_tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-sky-900/70"
+                    className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-zinc-900"
                   >
                     {tag.name}
                   </span>
@@ -424,7 +424,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <div className="flex items-start justify-between gap-4">
-              <p className="text-xl font-bold text-zinc-800">{openTag}</p>
+              <p className="text-xl font-bold text-zinc-900">{openTag}</p>
               <button
                 type="button"
                 onClick={() => setOpenTag(null)}
@@ -447,14 +447,14 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
               </button>
             </div>
 
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-900">
               この分野のゼミ生 ({openTagMembers.length}人)
             </p>
             <ul className="mt-2 flex flex-wrap gap-2">
               {openTagMembers.map((name) => (
                 <li
                   key={name}
-                  className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-sm text-zinc-700"
+                  className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-sm text-zinc-900"
                 >
                   {name}
                 </li>

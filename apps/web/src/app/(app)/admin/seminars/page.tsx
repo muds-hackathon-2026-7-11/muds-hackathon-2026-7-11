@@ -49,15 +49,20 @@ export default async function AdminSeminarsPage() {
   ]);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4">
-      <Link
-        href="/admin"
-        className="self-start text-sm underline hover:opacity-70"
-      >
-        ← 管理者メニューに戻る
-      </Link>
-      <h1 className="text-xl font-semibold">ゼミ管理</h1>
-      <AdminSeminarsView initialSeminars={seminars} teacherOptions={teachers} />
+    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        <Link
+          href="/admin"
+          className="self-start text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+        >
+          ← 管理者メニューに戻る
+        </Link>
+        <h1 className="text-2xl font-bold text-zinc-900">ゼミ管理</h1>
+        <AdminSeminarsView
+          initialSeminars={seminars}
+          teacherOptions={teachers}
+        />
+      </div>
     </main>
   );
 }

@@ -63,7 +63,8 @@ describe("AdminSeminarsView", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders existing seminars and their assigned teachers", () => {
+  it("renders existing seminars and their assigned teachers", async () => {
+    const user = userEvent.setup();
     const teacher = makeTeacher();
     const seminar = makeSeminar({
       teachers: [{ id: teacher.id, name: teacher.name }],
@@ -71,6 +72,8 @@ describe("AdminSeminarsView", () => {
     renderView({ seminars: [seminar], teachers: [teacher] });
 
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
+    // 担当教員リストは折りたたまれているので開いてから確認する。
+    await user.click(screen.getByRole("button", { name: /担当教員/ }));
     const checkbox = screen.getByRole("checkbox", { name: /山田先生/ });
     expect(checkbox).toBeChecked();
   });
@@ -287,6 +290,8 @@ describe("AdminSeminarsView", () => {
 
     renderView({ seminars: [seminar], teachers: [teacher] });
 
+    // 担当教員リストは折りたたまれているので開いてから操作する。
+    await user.click(screen.getByRole("button", { name: /担当教員/ }));
     const checkbox = screen.getByRole("checkbox", { name: /山田先生/ });
     expect(checkbox).not.toBeChecked();
     await user.click(checkbox);

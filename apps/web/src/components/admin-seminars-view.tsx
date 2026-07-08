@@ -72,6 +72,8 @@ export function AdminSeminarsView({
   const [pendingTeacherKey, setPendingTeacherKey] = useState<string | null>(
     null,
   );
+  // 担当教員の選択リストは常時表示すると長いので、ゼミごとに開閉する。
+  const [openTeachersId, setOpenTeachersId] = useState<string | null>(null);
 
   const [materialUrlInputs, setMaterialUrlInputs] = useState<
     Record<string, string>
@@ -312,7 +314,7 @@ export function AdminSeminarsView({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-foreground/60">
+      <p className="text-sm text-zinc-700">
         募集人数・対象学年の設定は
         <Link
           href="/admin/recruitment-terms"
@@ -324,64 +326,80 @@ export function AdminSeminarsView({
       </p>
 
       {errorMessage && (
-        <p className="rounded-lg border border-black/[.08] p-4 text-sm dark:border-white/[.145]">
+        <p className="rounded-lg border border-[#add8e6]/60 bg-white p-4 text-sm">
           {errorMessage}
         </p>
       )}
 
-      {isCreateFormOpen ? (
-        <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-          <h2 className="font-semibold">新規ゼミ作成</h2>
-          <div className="mt-3 flex flex-col gap-2">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="ゼミ名"
-              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-            />
-            <textarea
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              placeholder="説明(任意)"
-              rows={2}
-              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-            />
-            <input
-              type="text"
-              value={newPhotoUrl}
-              onChange={(e) => setNewPhotoUrl(e.target.value)}
-              placeholder="アイコン画像のURL(任意)"
-              className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={isCreating}
-                className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isCreating ? "作成中..." : "作成する"}
-              </button>
-              <button
-                type="button"
-                onClick={cancelCreate}
-                disabled={isCreating}
-                className="self-start rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-              >
-                キャンセル
-              </button>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <button
-          type="button"
-          onClick={openCreateForm}
-          className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+      <button
+        type="button"
+        onClick={openCreateForm}
+        className="self-start rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0]"
+      >
+        + 新規ゼミを作成
+      </button>
+
+      {isCreateFormOpen && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: 背景クリックで閉じるための領域
+        // biome-ignore lint/a11y/useKeyWithClickEvents: 閉じるはキャンセルボタンで代替する
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isCreating) {
+              cancelCreate();
+            }
+          }}
         >
-          + 新規ゼミを作成
-        </button>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="新規ゼミ作成"
+            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+          >
+            <h2 className="text-lg font-bold text-zinc-900">新規ゼミ作成</h2>
+            <div className="mt-4 flex flex-col gap-2">
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="ゼミ名"
+                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+              />
+              <textarea
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="説明(任意)"
+                rows={2}
+                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={newPhotoUrl}
+                onChange={(e) => setNewPhotoUrl(e.target.value)}
+                placeholder="アイコン画像のURL(任意)"
+                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={isCreating}
+                  className="rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isCreating ? "作成中..." : "作成する"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCreate}
+                  disabled={isCreating}
+                  className="rounded-full border border-[#e6e6e6] bg-white px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-[#e6e6e6]/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
       )}
 
       <div className="flex flex-col gap-4">
@@ -392,7 +410,7 @@ export function AdminSeminarsView({
           return (
             <section
               key={seminar.id}
-              className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+              className="rounded-lg border border-[#add8e6]/60 bg-white p-4"
             >
               {isEditing ? (
                 <div className="flex flex-col gap-2">
@@ -400,27 +418,27 @@ export function AdminSeminarsView({
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
                   />
                   <textarea
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
                     rows={2}
-                    className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
                   />
                   <input
                     type="text"
                     value={editPhotoUrl}
                     onChange={(e) => setEditPhotoUrl(e.target.value)}
                     placeholder="アイコン画像のURL(任意)"
-                    className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
                   />
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => handleSaveEdit(seminar.id)}
                       disabled={isSavingEdit}
-                      className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isSavingEdit ? "保存中..." : "保存する"}
                     </button>
@@ -428,7 +446,7 @@ export function AdminSeminarsView({
                       type="button"
                       onClick={cancelEdit}
                       disabled={isSavingEdit}
-                      className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                      className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium hover:bg-[#add8e6]/10"
                     >
                       キャンセル
                     </button>
@@ -447,10 +465,10 @@ export function AdminSeminarsView({
                     )}
                     <div>
                       <p className="font-semibold">{seminar.name}</p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
                         {seminar.description ?? "説明は未設定です。"}
                       </p>
-                      <p className="mt-1 text-xs text-foreground/40">
+                      <p className="mt-1 text-xs text-zinc-600">
                         ID(配属結果CSVのseminar_id列に使用):{" "}
                         <code className="select-all">{seminar.id}</code>
                       </p>
@@ -460,7 +478,7 @@ export function AdminSeminarsView({
                     <button
                       type="button"
                       onClick={() => startEdit(seminar)}
-                      className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium hover:bg-[#add8e6]/10"
                     >
                       編集
                     </button>
@@ -468,7 +486,7 @@ export function AdminSeminarsView({
                       type="button"
                       onClick={() => handleDelete(seminar)}
                       disabled={deletingId === seminar.id}
-                      className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:text-red-400 dark:hover:bg-white/[.08]"
+                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deletingId === seminar.id ? "削除中..." : "削除"}
                     </button>
@@ -477,46 +495,76 @@ export function AdminSeminarsView({
               )}
 
               <div className="mt-3">
-                <p className="text-sm text-foreground/60">担当教員</p>
-                {teacherOptions.length === 0 ? (
-                  <p className="mt-1 text-sm text-foreground/40">
-                    教員が登録されていません。
-                  </p>
-                ) : (
-                  <div className="mt-2 flex flex-wrap gap-3">
-                    {teacherOptions.map((teacher) => {
-                      const isAssigned = assignedIds.has(teacher.id);
-                      const key = `${seminar.id}:${teacher.id}`;
-                      return (
-                        <label
-                          key={teacher.id}
-                          className="flex items-center gap-1.5 text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isAssigned}
-                            disabled={pendingTeacherKey === key}
-                            onChange={() =>
-                              handleToggleTeacher(seminar, teacher, isAssigned)
-                            }
-                          />
-                          {teacher.name}
-                          {!teacher.is_active && (
-                            <span className="text-xs text-foreground/40">
-                              (無効)
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenTeachersId(
+                      openTeachersId === seminar.id ? null : seminar.id,
+                    )
+                  }
+                  aria-expanded={openTeachersId === seminar.id}
+                  className="flex items-center gap-1.5 text-sm text-zinc-700 hover:opacity-70"
+                >
+                  担当教員 ({seminar.teachers.length}人)
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`h-4 w-4 text-[#add8e6] transition-transform ${openTeachersId === seminar.id ? "rotate-180" : ""}`}
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {openTeachersId === seminar.id &&
+                  (teacherOptions.length === 0 ? (
+                    <p className="mt-1 text-sm text-zinc-600">
+                      教員が登録されていません。
+                    </p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      {teacherOptions.map((teacher) => {
+                        const isAssigned = assignedIds.has(teacher.id);
+                        const key = `${seminar.id}:${teacher.id}`;
+                        return (
+                          <label
+                            key={teacher.id}
+                            className="flex items-center gap-1.5 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isAssigned}
+                              disabled={pendingTeacherKey === key}
+                              onChange={() =>
+                                handleToggleTeacher(
+                                  seminar,
+                                  teacher,
+                                  isAssigned,
+                                )
+                              }
+                              className="h-4 w-4 accent-[#add8e6]"
+                            />
+                            {teacher.name}
+                            {!teacher.is_active && (
+                              <span className="text-xs text-zinc-600">
+                                (無効)
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
               </div>
 
               <div className="mt-3">
-                <p className="text-sm text-foreground/60">紹介資料</p>
+                <p className="text-sm text-zinc-700">紹介資料</p>
                 {seminar.materials.length === 0 ? (
-                  <p className="mt-1 text-sm text-foreground/40">
+                  <p className="mt-1 text-sm text-zinc-600">
                     資料はまだありません。
                   </p>
                 ) : (
@@ -528,7 +576,7 @@ export function AdminSeminarsView({
                           key={material.id}
                           className="flex items-center gap-2 text-sm"
                         >
-                          <span className="shrink-0 text-xs text-foreground/40">
+                          <span className="shrink-0 text-xs text-zinc-600">
                             {MATERIAL_TYPE_LABEL[material.type]}
                           </span>
                           <a
@@ -545,7 +593,7 @@ export function AdminSeminarsView({
                               handleDeleteMaterial(seminar.id, material.id)
                             }
                             disabled={deletingMaterialKey === materialKey}
-                            className="shrink-0 text-xs text-red-600 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+                            className="shrink-0 text-xs text-red-600 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             削除
                           </button>
@@ -564,7 +612,7 @@ export function AdminSeminarsView({
                           .value as AdminSeminarMaterial["type"],
                       }))
                     }
-                    className="rounded-lg border border-black/[.08] bg-background px-2 py-1.5 text-sm dark:border-white/[.145]"
+                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm"
                   >
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
@@ -580,13 +628,13 @@ export function AdminSeminarsView({
                       }))
                     }
                     placeholder="資料のURL"
-                    className="min-w-0 flex-1 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
+                    className="min-w-0 flex-1 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => handleAddMaterial(seminar.id)}
                     disabled={addingMaterialId === seminar.id}
-                    className="shrink-0 rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                    className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {addingMaterialId === seminar.id ? "追加中..." : "追加"}
                   </button>
