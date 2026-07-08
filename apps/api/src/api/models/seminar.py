@@ -2,7 +2,7 @@ import enum
 import uuid
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,9 @@ class Seminar(IDMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # ゼミ資料(PDF)から生成したAI用の要約知識。マッチ度診断・相談チャットの
+    # 文脈として使う。import_seminar_docs で投入する(未投入なら NULL)。
+    knowledge: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SeminarTeacher(IDMixin, Base):
@@ -64,14 +67,15 @@ class SeminarMember(IDMixin, Base):
     """所属ゼミ生（配属結果を兼ねる）。
 
     ER図上の assignment_results（配属結果）はこのテーブルで代替する。
-    現在の所属かどうかは academic_year が現在の年度と一致するかで判定し、
-    is_current のようなフラグは持たない。
+    所属は募集ラウンド(recruitment_terms)単位で持つ。前期/後期は別termなので、
+    同一年度でも前期ゼミA→後期ゼミBのような移動を別レコードで表現できる。
+    現在の所属かどうかは term_id が現在アクティブなtermと一致するかで判定する。
     """
 
     __tablename__ = "seminar_members"
     __table_args__ = (
         UniqueConstraint(
-            "seminar_id", "student_id", "academic_year", name="uq_seminar_member_year"
+            "seminar_id", "student_id", "term_id", name="uq_seminar_member_term"
         ),
     )
 
@@ -81,4 +85,6 @@ class SeminarMember(IDMixin, Base):
     student_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
-    academic_year: Mapped[int] = mapped_column(Integer)
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("recruitment_terms.id", ondelete="CASCADE")
+    )

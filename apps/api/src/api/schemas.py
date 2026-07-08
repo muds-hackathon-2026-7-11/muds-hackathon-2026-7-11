@@ -1,9 +1,31 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from api.models import MaterialType, QuestionStatus, UserRole
+from api.models import (
+    ApplicationStatus,
+    MaterialType,
+    QuestionStatus,
+    RecruitmentTermStatus,
+    UserRole,
+)
+
+
+class ResearchTagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    category: str
+
+
+class CurrentSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
 
 
 class MeOut(BaseModel):
@@ -17,8 +39,20 @@ class MeOut(BaseModel):
     role: UserRole
     student_id: str | None
     grade: str | None
+    research_title: str | None
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
+    # 現在の年度に所属しているゼミ(学生のみ。無ければNone)。
+    current_seminar: CurrentSeminarOut | None
+
+
+class MeUpdateIn(BaseModel):
+    """本人の研究タイトル・研究概要・興味分野タグの更新(PATCH /me)。"""
+
+    research_title: str | None = Field(default=None, max_length=200)
+    research_theme: str | None = Field(default=None, max_length=2000)
+    interest_tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
 
 class UserExistsOut(BaseModel):
@@ -42,7 +76,10 @@ class SeminarOut(BaseModel):
 class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
+    photo_url: str | None
+    research_title: str | None
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarMaterialOut(BaseModel):
@@ -56,7 +93,10 @@ class SeminarMaterialOut(BaseModel):
 class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
+    grade: str | None
+    research_title: str | None
     research_theme: str | None
+    interest_tags: list[ResearchTagOut]
 
 
 class SeminarDetailOut(SeminarOut):
@@ -65,9 +105,59 @@ class SeminarDetailOut(SeminarOut):
     current_members: list[SeminarMemberOut]
 
 
+class PriorityCounts(BaseModel):
+    """第1〜第3志望それぞれの人数。"""
+
+    first: int
+    second: int
+    third: int
+
+
+class SeminarStatsOut(BaseModel):
+    """ゼミごとの応募状況（現在の募集ラウンド基準）。"""
+
+    id: uuid.UUID
+    name: str
+    capacity: int | None
+    applicant_count: int
+    priority_counts: PriorityCounts
+    # 学年(users.grade)別の志望人数(累計)。grade未設定は "不明"。
+    grade_counts: dict[str, int]
+    # 志望順位(1〜3)ごとの学年別人数。キーは "1"/"2"/"3"、内側は学年→人数。
+    # 例: {"1": {"B3": 2, "B4": 1}, "2": {"B3": 1}, "3": {}}
+    # 応募状況グラフで「各志望順位の人数を学年で積み上げる」ために使う。
+    priority_grade_counts: dict[str, dict[str, int]]
+    # 倍率 = applicant_count / capacity。定員が未設定/0 の場合は null。
+    ratio: float | None
+    # 現在の所属ゼミ生数（継続者）。
+    continuing_count: int
+    # 継続希望人数: 現在の所属ゼミ生のうち、今回の募集ラウンドで
+    # 同じゼミを第1志望に選んだ人数。
+    continuing_first_choice_count: int
+    # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
+    target_grades: list[str] | None
+    # アイコン表示用(#139)。ゼミ自体の写真。
+    photo_url: str | None
+    # アイコン表示用(#139)。担当教員が1人だけの場合に限りその教員の写真を
+    # 使う(複数教員のゼミは特定の1人を代表にできないためnull)。
+    teacher_photo_url: str | None
+
+
 class QuestionCreate(BaseModel):
     seminar_id: uuid.UUID
     slack_user_id: str
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class QuestionCreateWeb(BaseModel):
+    """Web(FAQ画面)からの質問投稿(#141)。
+
+    Slack Bot経由のQuestionCreateとは別経路。投稿者はslack_user_idではなく
+    Web認証済みユーザーで特定し、投稿時にSlack通知(notify_answer_candidates)
+    は送らない(通知機能は別issueで対応予定)。
+    """
+
+    seminar_id: uuid.UUID
     content: str = Field(min_length=1, max_length=2000)
 
 
@@ -96,3 +186,293 @@ class AnswerCreate(BaseModel):
     question_id: uuid.UUID
     slack_user_id: str
     content: str = Field(min_length=1, max_length=2000)
+
+
+class ApplicationChoiceIn(BaseModel):
+    seminar_id: uuid.UUID
+    priority: int = Field(ge=1, le=3)
+    reason: str = Field(max_length=400)
+
+
+class ApplicationUpsertIn(BaseModel):
+    choices: list[ApplicationChoiceIn] = Field(max_length=3)
+
+
+class ApplicationChoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    seminar_id: uuid.UUID
+    priority: int
+    reason: str
+    match_score: int | None
+    match_feedback: dict | None
+
+
+class ApplicationFormOut(BaseModel):
+    id: uuid.UUID | None
+    status: ApplicationStatus
+    submitted_at: datetime | None
+    choices: list[ApplicationChoiceOut]
+    # 現在アクティブな募集期間の内容ならtrue。falseは過去期間の閲覧専用表示
+    # (提出期間外でも直近の提出内容は見えるが、編集・再提出はできない)。
+    is_editable: bool
+
+
+# --- 運営: 募集ラウンド・定員設定 (#57) ---
+
+
+class RecruitmentTermCreate(BaseModel):
+    academic_year: int
+    starts_at: date
+    ends_at: date
+    status: RecruitmentTermStatus = RecruitmentTermStatus.preparing
+
+
+class RecruitmentTermUpdate(BaseModel):
+    starts_at: date | None = None
+    ends_at: date | None = None
+    status: RecruitmentTermStatus | None = None
+
+
+class RecruitmentTermOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    academic_year: int
+    starts_at: date
+    ends_at: date
+    status: RecruitmentTermStatus
+
+
+class SeminarRecruitmentUpsert(BaseModel):
+    capacity: int = Field(ge=0)
+    # 募集対象学年(#99)。空リストは「募集していない」を意味する。
+    # このエンドポイントは全置換なので必須にする(省略時に暗黙で
+    # 閉じる/開くのどちらかにフォールバックすると、teacher.py側の
+    # 「省略時は既存値据え置き」という別の省略時挙動と食い違うため)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]]
+
+
+class SeminarRecruitmentOut(BaseModel):
+    """募集ラウンドでのゼミ別設定。未設定のゼミは値が null。"""
+
+    seminar_id: uuid.UUID
+    seminar_name: str
+    capacity: int | None
+    target_grades: list[str] | None
+
+
+# --- 教員向け応募者管理 (#58) ---
+
+
+class PastSeminarOut(BaseModel):
+    seminar_name: str
+    academic_year: int
+
+
+class ApplicantOut(BaseModel):
+    student_id: str | None
+    name: str
+    grade: str | None
+    priority: int
+    reason: str
+    past_seminars: list[PastSeminarOut]
+
+
+class SeminarApplicantsOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    applicants: list[ApplicantOut]
+
+
+class TeacherRecruitmentUpdate(BaseModel):
+    capacity: int = Field(ge=0)
+    # Noneなら据え置き(現状の対象学年を変更しない)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]] | None = None
+
+
+class TeacherRecruitmentOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    capacity: int | None
+    target_grades: list[str] | None
+
+
+# --- マッチ度診断 (#59) ---
+
+
+class MatchOut(BaseModel):
+    seminar_id: uuid.UUID
+    score: int | None
+    feedback: dict | None
+    # score を出せない場合(研究テーマ/ゼミ紹介が未設定など)の説明。
+    message: str | None = None
+
+
+# --- 運営: 教員・ゼミ管理 (#62) ---
+# 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
+
+
+class AdminSeminarCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarUpdate(BaseModel):
+    # 送られたフィールドのみ更新する(未指定は据え置き)。ルーター側で
+    # model_dump(exclude_unset=True) を使うため、既定値は「未指定」を表す。
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    photo_url: str | None = None
+
+
+class AdminSeminarTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
+class SeminarMaterialCreate(BaseModel):
+    url: str = Field(min_length=1)
+    type: MaterialType
+
+
+class AdminSeminarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    photo_url: str | None
+    teachers: list[AdminSeminarTeacherOut]
+    materials: list[SeminarMaterialOut]
+
+
+class AdminTeacherCreate(BaseModel):
+    # 教員ユーザーを1名追加する(作成はここ、一括はCSV #40)。
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=3, max_length=255)
+    research_title: str | None = None
+    research_theme: str | None = None
+    photo_url: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        # import系と揃えて小文字正規化し、最低限の形式チェックを行う。
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
+
+
+class AdminTeacherUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    research_title: str | None = None
+    research_theme: str | None = None
+    photo_url: str | None = None
+    is_active: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
+
+
+class AdminTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    research_title: str | None
+    research_theme: str | None
+    photo_url: str | None
+    is_active: bool
+
+
+# --- 管理者管理(#134) ---
+# 管理者は教員とは完全に独立したユーザー(role=admin)として扱う。
+# 新規作成はせず、既にusers(学生・教員)に登録済みのメールアドレスから
+# 既存ユーザーを探してroleをadminに変更する形で追加する。
+
+
+class AdminUserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
+
+
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    is_active: bool
+
+
+class AdminUserLookupOut(BaseModel):
+    """管理者追加前に、メールアドレスから既存ユーザーの名前を確認するための表示用。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    role: UserRole
+    is_active: bool
+
+
+# --- 配属結果CSVインポート (#61) ---
+
+
+class AssignmentImportError(BaseModel):
+    # CSVの行番号(ヘッダを除いた1始まり)と理由。
+    row: int
+    reason: str
+
+
+class AssignmentImportResult(BaseModel):
+    created: int  # 新規に作成した配属レコード数
+    existing: int  # 既に存在していた(スキップした)数
+    errors: list[AssignmentImportError]
+
+
+# --- AIゼミ相談アシスタント (requirements §2 / chat_logs) ---
+
+
+class ConsultTurnIn(BaseModel):
+    # 会話履歴の1発話。role は "user" / "assistant"。
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ConsultIn(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    # 継続会話用。直近の履歴(なければ空)。長すぎる分はサーバ側で切り詰める。
+    history: list[ConsultTurnIn] = Field(default_factory=list, max_length=20)
+
+
+class ConsultRecommendation(BaseModel):
+    seminar_name: str
+    reason: str
+
+
+class ConsultOut(BaseModel):
+    reply: str
+    recommendations: list[ConsultRecommendation]

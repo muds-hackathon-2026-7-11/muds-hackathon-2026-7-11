@@ -1,6 +1,7 @@
 import logging
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,30 @@ def _question_action_buttons(question: Question) -> list[dict]:
     ]
 
 
+# 学年別募集(#99)の対象学年。学部生のみを対象とし、大学院生・guest等は
+# 対象外(常に学年別募集ゼミには応募できない)。
+GRADE_OPTIONS: tuple[str, ...] = ("B1", "B2", "B3", "B4")
+
+JST = ZoneInfo("Asia/Tokyo")
+
+
+def normalize_grade(raw: str | None) -> str | None:
+    """学年文字列をB1〜B4のいずれかに正規化する(#99)。
+
+    実データのusers.gradeは表記が統一されておらず(例:
+    "MIDS/B1"、"M1 guest"、空文字)、そのままでは学年別募集の対象判定に
+    使えない。末尾がB1〜B4のいずれかに一致すれば学部生としてその学年に
+    含める(例: "MIDS/B1" -> "B1")。M1/M2/D1/guestや空文字はどのB1〜B4にも
+    一致しないため、常に学年別募集の対象外(None)として扱う。
+    """
+    if raw is None:
+        return None
+    for grade in GRADE_OPTIONS:
+        if raw.endswith(grade):
+            return grade
+    return None
+
+
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     """今アクティブな募集ラウンドを1件返す(なければNone)。
 
@@ -51,8 +76,11 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     募集期間(1ヶ月程度)は「今年度が何年か」とは別の概念。ゼミ生の所属判定
     (current_academic_year)には使わないこと — 募集期間外は常にNoneになる
     ため、それに依存すると質問通知・現在のゼミ生表示が年中止まってしまう。
+
+    todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
+    だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
     """
-    today = date.today()
+    today = datetime.now(JST).date()
     result = await db.execute(
         select(RecruitmentTerm)
         .where(
@@ -66,13 +94,37 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     return result.scalar_one_or_none()
 
 
-def current_academic_year(today: date | None = None) -> int:
-    """今年度(4月始まり)を、募集期間の有無に関わらず暦日から計算する。
+async def current_academic_year(db: AsyncSession) -> int | None:
+    """「現在の年度」を返す(該当する募集期間が無ければNone)。
 
-    例: 2026-07-06 -> 2026年度。2026-03-31 -> 2025年度。
+    直近に開始済みの募集期間のacademic_yearを返す。get_current_termと違い、
+    status=openやends_atは問わない。募集期間が(終了日を含めて)アクティブな
+    間だけ「現在のゼミ生」等が見えるのは誤りで(1年のほとんどは募集期間外の
+    ため)、志望提出画面同様「新しい募集期間が始まったら切り替わる」形にする。
+
+    ただし以下の2つは「まだ始まっていない」とみなして除外する。除外しないと、
+    運営が来年度分のラウンドを配属作業より前倒しで作成しただけで(まだ何の
+    配属も行われていない段階なのに)、それが「現在の年度」として扱われ、
+    今の在籍ゼミ生が誰も表示されなくなる(実際に発生した不具合)。
+    - status=preparing(#93で追加された、開始前の準備段階)
+    - starts_atが未来のもの(status=openであっても。運営が翌年度分を
+      準備目的で早めにopenにしても、開始日前は「現在」として扱わない。
+      get_current_termと同じ考え方)
+
+    todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
+    だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
     """
-    d = today or date.today()
-    return d.year if d.month >= 4 else d.year - 1
+    today = datetime.now(JST).date()
+    result = await db.execute(
+        select(RecruitmentTerm.academic_year)
+        .where(
+            RecruitmentTerm.status != RecruitmentTermStatus.preparing,
+            RecruitmentTerm.starts_at <= today,
+        )
+        .order_by(RecruitmentTerm.academic_year.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def find_answer_candidates(
@@ -84,12 +136,17 @@ async def find_answer_candidates(
     質問者自身(exclude_user_id)は除く。募集期間中かどうかには関係なく、
     年中いつでも通知できるようにする(質問・相談機能は募集期間限定ではない)。
     """
+    academic_year = await current_academic_year(db)
+    if academic_year is None:
+        return []
+
     members_result = await db.execute(
         select(User)
         .join(SeminarMember, SeminarMember.student_id == User.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
         .where(
             SeminarMember.seminar_id == seminar_id,
-            SeminarMember.academic_year == current_academic_year(),
+            RecruitmentTerm.academic_year == academic_year,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
         )

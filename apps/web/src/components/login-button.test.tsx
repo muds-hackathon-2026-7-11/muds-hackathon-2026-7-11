@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { signIn } from "next-auth/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LoginButton } from "./login-button";
 
 vi.mock("next-auth/react", () => ({
@@ -9,12 +9,16 @@ vi.mock("next-auth/react", () => ({
 }));
 
 describe("LoginButton", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('calls signIn("google") when clicked', async () => {
     const user = userEvent.setup();
     render(<LoginButton />);
 
     await user.click(screen.getByRole("button", { name: "Googleでログイン" }));
 
-    expect(signIn).toHaveBeenCalledWith("google");
+    expect(signIn).toHaveBeenCalledExactlyOnceWith("google");
   });
 });

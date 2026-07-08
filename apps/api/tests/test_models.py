@@ -101,11 +101,12 @@ async def test_recruitment_term_allows_multiple_rounds_in_same_year(
 async def test_deleting_seminar_cascades_to_seminar_members(db_session) -> None:
     seminar = await _make_seminar(db_session)
     student = await _make_user(db_session)
+    term = await _make_recruitment_term(db_session)
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=student.id,
-            academic_year=2026,
+            term_id=term.id,
         )
     )
     await db_session.flush()
@@ -120,18 +121,19 @@ async def test_deleting_seminar_cascades_to_seminar_members(db_session) -> None:
     assert remaining.scalar_one() == 0
 
 
-async def test_seminar_member_academic_year_must_be_unique_per_student(
+async def test_seminar_member_must_be_unique_per_term(
     db_session,
 ) -> None:
     seminar = await _make_seminar(db_session)
     student = await _make_user(db_session)
+    term = await _make_recruitment_term(db_session)
     db_session.add(
-        SeminarMember(seminar_id=seminar.id, student_id=student.id, academic_year=2026)
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
     )
     await db_session.flush()
 
     db_session.add(
-        SeminarMember(seminar_id=seminar.id, student_id=student.id, academic_year=2026)
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
     )
     with pytest.raises(IntegrityError):
         await db_session.flush()

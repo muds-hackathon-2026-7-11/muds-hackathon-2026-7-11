@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+from api.auth import get_current_user
+from api.main import app
 from api.models import AnswerSource, Question, Seminar, User, UserRole
 from api.services import record_answer
 
@@ -10,6 +12,10 @@ pytestmark = pytest.mark.asyncio
 
 def _unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+def _authenticate_as(user: User) -> None:
+    app.dependency_overrides[get_current_user] = lambda: user
 
 
 async def _make_seminar(db_session) -> Seminar:
@@ -32,6 +38,8 @@ async def _make_user(db_session, role: UserRole = UserRole.student) -> User:
 
 
 async def test_list_seminars(client, db_session) -> None:
+    # 教員は学年別募集(#99/#103)の絞り込みを受けないため認証はteacherにする。
+    _authenticate_as(await _make_user(db_session, UserRole.teacher))
     seminar = await _make_seminar(db_session)
 
     resp = await client.get("/seminars")
@@ -135,6 +143,87 @@ async def test_create_question_empty_content_is_rejected(client, db_session) -> 
     )
 
     assert resp.status_code == 422
+
+
+async def test_create_question_web_success(
+    client, db_session, fake_slack_client
+) -> None:
+    student = await _make_user(db_session, UserRole.student)
+    seminar = await _make_seminar(db_session)
+    _authenticate_as(student)
+
+    resp = await client.post(
+        "/questions/me",
+        json={
+            "seminar_id": str(seminar.id),
+            "content": "プログラミング未経験でも大丈夫ですか？",
+        },
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["seminar_id"] == str(seminar.id)
+    assert body["content"] == "プログラミング未経験でも大丈夫ですか？"
+    assert "user_id" not in body
+
+    created = await db_session.get(Question, uuid.UUID(body["id"]))
+    assert created is not None
+    assert created.user_id == student.id
+
+    # 最重要: Web経由の投稿ではSlack通知を送らない。
+    assert fake_slack_client.sent == []
+
+
+async def test_create_question_web_unknown_seminar_returns_404(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.student))
+
+    resp = await client.post(
+        "/questions/me",
+        json={"seminar_id": str(uuid.uuid4()), "content": "質問です"},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_create_question_web_empty_content_is_rejected(
+    client, db_session
+) -> None:
+    seminar = await _make_seminar(db_session)
+    _authenticate_as(await _make_user(db_session, UserRole.student))
+
+    resp = await client.post(
+        "/questions/me",
+        json={"seminar_id": str(seminar.id), "content": ""},
+    )
+
+    assert resp.status_code == 422
+
+
+async def test_create_question_web_requires_authentication(client, monkeypatch) -> None:
+    from api import auth
+
+    monkeypatch.setattr(auth.settings, "auth_dev_mode", False)
+
+    resp = await client.post(
+        "/questions/me",
+        json={"seminar_id": str(uuid.uuid4()), "content": "質問です"},
+    )
+
+    assert resp.status_code == 401
+
+
+async def test_create_question_web_rejects_teacher(client, db_session) -> None:
+    seminar = await _make_seminar(db_session)
+    _authenticate_as(await _make_user(db_session, UserRole.teacher))
+
+    resp = await client.post(
+        "/questions/me",
+        json={"seminar_id": str(seminar.id), "content": "質問です"},
+    )
+
+    assert resp.status_code == 403
 
 
 async def test_list_questions_returns_answered_and_unanswered(

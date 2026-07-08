@@ -3,6 +3,11 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* マイページのカラーパレット: 白 / 淡いグレー / ライトブルー */
+  --color-white: #ffffff;
+  --color-mist: #e6e6e6;
+  --color-sky: #add8e6;
 }
 
 @theme inline {
@@ -10,6 +15,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Tailwindユーティリティ用(bg-mist, text-sky など) */
+  --color-mist: var(--color-mist);
+  --color-sky: var(--color-sky);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +32,22 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* マイページの背景。ライトグレー単色。 */
+.page-canvas {
+  background: var(--color-mist);
+}
+
+/* recharts(応募状況グラフ等)をクリックすると、内部のsvgがフォーカスされ
+   ブラウザ標準の青い枠線が出てしまう。マウス操作時は消し、キーボード
+   操作(Tab移動)時のフォーカスリングだけ残す(:focus-visible)。 */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--color-sky);
+  outline-offset: 2px;
 }

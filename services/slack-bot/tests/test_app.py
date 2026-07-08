@@ -2,13 +2,19 @@ import json
 from unittest.mock import MagicMock, patch
 
 import httpx
+from slack_sdk.errors import SlackApiError
 
 from slack_bot.app import (
     _handle_answer_action,
     _handle_answer_view_submission,
+    _handle_global_error,
     _handle_question_action,
     _handle_question_view_submission,
 )
+
+
+def _slack_api_error(message: str = "boom") -> SlackApiError:
+    return SlackApiError(message, MagicMock())
 
 
 def _action_body(user_id: str = "U123", trigger_id: str = "T1") -> dict:
@@ -59,9 +65,15 @@ def _answer_view(
     }
 
 
-def test_question_action_opens_modal_when_seminars_exist() -> None:
-    ack = MagicMock()
+def _client_with_opened_view(view_id: str = "V1") -> MagicMock:
     client = MagicMock()
+    client.views_open.return_value = {"view": {"id": view_id}}
+    return client
+
+
+def test_question_action_opens_loading_modal_immediately() -> None:
+    ack = MagicMock()
+    client = _client_with_opened_view()
     with patch(
         "slack_bot.app.fetch_seminars",
         return_value=[{"id": "s1", "name": "AIゼミ"}],
@@ -69,29 +81,55 @@ def test_question_action_opens_modal_when_seminars_exist() -> None:
         _handle_question_action(ack, _action_body(), client)
 
     ack.assert_called_once()
-    client.views_open.assert_called_once()
+    # trigger_idを消費するviews_openは、自前APIへの問い合わせより前に
+    # (読み込み中のモーダルとして)即座に呼ばれる。
     assert client.views_open.call_args.kwargs["trigger_id"] == "T1"
-    client.chat_postEphemeral.assert_not_called()
 
 
-def test_question_action_shows_ephemeral_message_when_no_seminars() -> None:
+def test_question_action_updates_modal_with_seminars_after_fetch() -> None:
     ack = MagicMock()
-    client = MagicMock()
+    client = _client_with_opened_view("V1")
+    with patch(
+        "slack_bot.app.fetch_seminars",
+        return_value=[{"id": "s1", "name": "AIゼミ"}],
+    ):
+        _handle_question_action(ack, _action_body(), client)
+
+    client.views_update.assert_called_once()
+    assert client.views_update.call_args.kwargs["view_id"] == "V1"
+    view = client.views_update.call_args.kwargs["view"]
+    assert view["callback_id"] == "question_submit"
+
+
+def test_question_action_updates_modal_with_message_when_no_seminars() -> None:
+    ack = MagicMock()
+    client = _client_with_opened_view("V1")
     with patch("slack_bot.app.fetch_seminars", return_value=[]):
         _handle_question_action(ack, _action_body(), client)
 
-    client.views_open.assert_not_called()
-    client.chat_postEphemeral.assert_called_once()
+    view = client.views_update.call_args.kwargs["view"]
+    assert "現在登録されているゼミがありません" in view["blocks"][0]["text"]["text"]
 
 
-def test_question_action_shows_ephemeral_message_on_api_error() -> None:
+def test_question_action_updates_modal_with_message_on_api_error() -> None:
     ack = MagicMock()
-    client = MagicMock()
+    client = _client_with_opened_view("V1")
     with patch("slack_bot.app.fetch_seminars", side_effect=httpx.ConnectError("boom")):
         _handle_question_action(ack, _action_body(), client)
 
-    client.views_open.assert_not_called()
-    client.chat_postEphemeral.assert_called_once()
+    view = client.views_update.call_args.kwargs["view"]
+    assert "取得に失敗" in view["blocks"][0]["text"]["text"]
+
+
+def test_question_action_does_not_call_api_when_loading_modal_fails_to_open() -> None:
+    ack = MagicMock()
+    client = MagicMock()
+    client.views_open.side_effect = _slack_api_error("trigger_id_expired")
+    with patch("slack_bot.app.fetch_seminars") as fetch_seminars:
+        _handle_question_action(ack, _action_body(), client)
+
+    fetch_seminars.assert_not_called()
+    client.views_update.assert_not_called()
 
 
 def test_view_submission_sends_success_message_on_201() -> None:
@@ -158,6 +196,18 @@ def test_answer_action_opens_modal_with_question_id() -> None:
     }
 
 
+def test_answer_action_does_not_raise_when_modal_fails_to_open() -> None:
+    ack = MagicMock()
+    client = MagicMock()
+    client.views_open.side_effect = _slack_api_error("trigger_id_expired")
+
+    _handle_answer_action(
+        ack, _button_action_body("q1", channel_id="D1", message_ts="111.222"), client
+    )
+
+    ack.assert_called_once()
+
+
 def test_answer_view_submission_sends_success_message_on_201() -> None:
     ack = MagicMock()
     client = MagicMock()
@@ -222,3 +272,11 @@ def test_answer_view_submission_shows_generic_error_on_connection_failure() -> N
 
     text = client.chat_postMessage.call_args.kwargs["text"]
     assert "失敗" in text
+
+
+def test_global_error_handler_logs_the_exception() -> None:
+    logger = MagicMock()
+
+    _handle_global_error(ValueError("boom"), _action_body(), logger)
+
+    logger.exception.assert_called_once()

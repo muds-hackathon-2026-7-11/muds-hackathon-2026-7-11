@@ -4,6 +4,7 @@ import os
 
 import httpx
 from slack_bolt import App
+from slack_sdk.errors import SlackApiError
 
 from slack_bot.api_client import fetch_seminars, submit_answer, submit_question
 
@@ -88,6 +89,30 @@ def _question_modal_view(seminars: list[dict]) -> dict:
     }
 
 
+def _loading_modal_view(title: str) -> dict:
+    return {
+        "type": "modal",
+        "callback_id": "loading",
+        "title": {"type": "plain_text", "text": title},
+        "close": {"type": "plain_text", "text": "閉じる"},
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": "読み込み中..."}},
+        ],
+    }
+
+
+def _message_modal_view(title: str, message: str) -> dict:
+    return {
+        "type": "modal",
+        "callback_id": "message",
+        "title": {"type": "plain_text", "text": title},
+        "close": {"type": "plain_text", "text": "閉じる"},
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": message}},
+        ],
+    }
+
+
 def _answer_modal_view(question_id: str, channel_id: str, message_ts: str) -> dict:
     private_metadata = json.dumps(
         {
@@ -124,36 +149,60 @@ def _handle_home_opened(client, event) -> None:
     client.views_publish(user_id=event["user"], view=_home_view())
 
 
+def _safe_views_update(client, *, view_id: str, view: dict) -> None:
+    try:
+        client.views_update(view_id=view_id, view=view)
+    except SlackApiError:
+        logger.exception("failed to update modal view_id=%s", view_id)
+
+
 def _handle_question_action(ack, body, client) -> None:
     """「💬 質問する」ボタン押下時のハンドラ。
 
     Boltのデコレータの外に切り出してあるのは、`client`/`ack`をMockに差し替えて
     ユニットテストしやすくするため(create_app内に閉じ込めるとテストできない)。
+
+    trigger_idは発行から3秒しか有効でなく、1回しか使えない。fetch_seminars
+    (自前APIへのHTTP呼び出し)をtrigger_idの消費(views_open)より前に置くと、
+    API側が少し遅いだけでtrigger_id_expiredになりモーダルが開かずボタンが
+    無反応に見えてしまう。そのため、まず読み込み中のモーダルをtrigger_idで
+    即座に開き、内容が揃ってからviews_updateで差し替える。
     """
     ack()
-    user_id = body["user"]["id"]
+    try:
+        opened = client.views_open(
+            trigger_id=body["trigger_id"], view=_loading_modal_view("質問する")
+        )
+    except SlackApiError:
+        logger.exception("failed to open loading modal for question action")
+        return
+    view_id = opened["view"]["id"]
+
     try:
         seminars = fetch_seminars()
     except httpx.HTTPError:
         logger.exception("failed to fetch seminars from API")
-        client.chat_postEphemeral(
-            channel=user_id,
-            user=user_id,
-            text="ゼミ情報の取得に失敗しました。時間をおいて再度お試しください。",
+        _safe_views_update(
+            client,
+            view_id=view_id,
+            view=_message_modal_view(
+                "質問する",
+                "ゼミ情報の取得に失敗しました。時間をおいて再度お試しください。",
+            ),
         )
         return
 
     if not seminars:
-        client.chat_postEphemeral(
-            channel=user_id,
-            user=user_id,
-            text="現在登録されているゼミがありません。",
+        _safe_views_update(
+            client,
+            view_id=view_id,
+            view=_message_modal_view(
+                "質問する", "現在登録されているゼミがありません。"
+            ),
         )
         return
 
-    client.views_open(
-        trigger_id=body["trigger_id"], view=_question_modal_view(seminars)
-    )
+    _safe_views_update(client, view_id=view_id, view=_question_modal_view(seminars))
 
 
 def _handle_question_view_submission(ack, body, view, client) -> None:
@@ -211,10 +260,13 @@ def _handle_answer_action(ack, body, client) -> None:
     question_id = body["actions"][0]["value"]
     channel_id = body["channel"]["id"]
     message_ts = body["message"]["ts"]
-    client.views_open(
-        trigger_id=body["trigger_id"],
-        view=_answer_modal_view(question_id, channel_id, message_ts),
-    )
+    try:
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view=_answer_modal_view(question_id, channel_id, message_ts),
+        )
+    except SlackApiError:
+        logger.exception("failed to open answer modal")
 
 
 def _handle_answer_view_submission(ack, body, view, client) -> None:
@@ -270,6 +322,15 @@ def _handle_answer_view_submission(ack, body, view, client) -> None:
         )
 
 
+def _handle_global_error(error, body, logger) -> None:
+    """未処理の例外を必ずログに残すためのフォールバック。
+
+    個別ハンドラでcatchし損ねた例外(SlackApiError以外の予期しないものも
+    含む)がここで握りつぶされて何のログも残らない、という事態を防ぐ。
+    """
+    logger.exception("unhandled error in listener: %s (body=%s)", error, body)
+
+
 def create_app(token_verification_enabled: bool = True) -> App:
     """Build the Bolt App and register all handlers.
 
@@ -286,5 +347,6 @@ def create_app(token_verification_enabled: bool = True) -> App:
     app.view("question_submit")(_handle_question_view_submission)
     app.action("answer_question")(_handle_answer_action)
     app.view("answer_submit")(_handle_answer_view_submission)
+    app.error(_handle_global_error)
 
     return app

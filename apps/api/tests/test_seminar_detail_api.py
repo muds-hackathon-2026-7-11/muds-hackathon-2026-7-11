@@ -15,7 +15,6 @@ from api.models import (
     User,
     UserRole,
 )
-from api.services import current_academic_year
 
 pytestmark = pytest.mark.asyncio
 
@@ -82,22 +81,21 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
         )
     )
 
-    # 現在のゼミ生判定は募集期間(academic_year)ではなく暦日の今年度で行うため、
-    # ここは実際のcurrent_academic_year()に合わせる。
+    past_term = await _make_open_term(db_session, academic_year - 1)
     current_student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
     past_student = await _make_user(db_session, UserRole.student, "過去の研究テーマ")
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=current_student.id,
-            academic_year=current_academic_year(),
+            term_id=term.id,
         )
     )
     db_session.add(
         SeminarMember(
             seminar_id=seminar.id,
             student_id=past_student.id,
-            academic_year=current_academic_year() - 1,
+            term_id=past_term.id,
         )
     )
     await db_session.flush()
@@ -123,30 +121,6 @@ async def test_get_seminar_detail_unknown_id_returns_404(client) -> None:
     assert resp.status_code == 404
 
 
-async def test_get_seminar_detail_shows_current_members_without_active_term(
-    client, db_session
-) -> None:
-    # 現在のゼミ生表示は、募集期間(recruitment_terms)が1件も無い/期間外でも
-    # 暦日の今年度で判定されるべき(募集期間限定の機能ではないため)。
-    seminar = await _make_seminar(db_session)
-    current_student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
-    db_session.add(
-        SeminarMember(
-            seminar_id=seminar.id,
-            student_id=current_student.id,
-            academic_year=current_academic_year(),
-        )
-    )
-    await db_session.flush()
-
-    resp = await client.get(f"/seminars/{seminar.id}")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["capacity"] is None
-    assert {m["name"] for m in body["current_members"]} == {current_student.name}
-
-
 async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(
     client, db_session
 ) -> None:
@@ -161,6 +135,97 @@ async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(
     assert body["teachers"] == []
     assert body["materials"] == []
     assert body["current_members"] == []
+
+
+async def test_get_seminar_detail_shows_current_members_without_an_active_term(
+    client, db_session
+) -> None:
+    # 募集期間が(open/日付内という意味で)アクティブでなくても、現在のゼミ生は
+    # 直近に作成された募集期間の年度を基準に表示できる(#77)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id, student_id=student.id, term_id=closed_term.id
+        )
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # 募集期間がアクティブでないため定員は未設定のままだが、現在のゼミ生は見える。
+    assert body["capacity"] is None
+    assert {m["name"] for m in body["current_members"]} == {student.name}
+
+
+async def test_get_seminar_detail_ignores_a_newer_preparing_term_for_current_members(
+    client, db_session
+) -> None:
+    # 運営が来年度分のラウンドをstatus=preparingで前倒しに作っただけの
+    # 段階では、それを「現在の年度」にしてしまうと在籍ゼミ生が誰も
+    # 表示されなくなってしまっていた(実際の不具合)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、準備段階の次年度ラウンド。
+    next_term = RecruitmentTerm(
+        academic_year=academic_year + 1,
+        starts_at=date.today() + timedelta(days=300),
+        ends_at=date.today() + timedelta(days=330),
+        status=RecruitmentTermStatus.preparing,
+    )
+    db_session.add(next_term)
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
+
+
+async def test_get_seminar_detail_ignores_a_term_opened_before_it_starts(
+    client, db_session
+) -> None:
+    # status=preparingを除くだけでは不十分: 運営がまだ始まっていない
+    # 来年度分のラウンドを(準備目的で)早めにstatus=openにしただけでも、
+    # 在籍ゼミ生が消えないことを確認する。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、始まる前の次年度ラウンド(status=open)。
+    next_term = RecruitmentTerm(
+        academic_year=academic_year + 1,
+        starts_at=date.today() + timedelta(days=30),
+        ends_at=date.today() + timedelta(days=60),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(next_term)
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
 
 
 async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(

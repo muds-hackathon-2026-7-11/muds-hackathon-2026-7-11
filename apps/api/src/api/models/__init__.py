@@ -1,4 +1,5 @@
 from api.models.application import ApplicationChoice, ApplicationForm, ApplicationStatus
+from api.models.chat_log import ChatLog
 from api.models.match_evaluation import MatchEvaluation
 from api.models.notification import Notification, NotificationType
 from api.models.question import (
@@ -14,6 +15,7 @@ from api.models.recruitment import (
     RecruitmentTermStatus,
     SeminarRecruitment,
 )
+from api.models.research_tag import ResearchTag, UserInterestTag
 from api.models.seminar import (
     MaterialType,
     Seminar,
@@ -31,6 +33,7 @@ __all__ = [
     "ApplicationChoice",
     "ApplicationForm",
     "ApplicationStatus",
+    "ChatLog",
     "MaterialType",
     "MatchEvaluation",
     "Notification",
@@ -39,11 +42,13 @@ __all__ = [
     "QuestionStatus",
     "RecruitmentTerm",
     "RecruitmentTermStatus",
+    "ResearchTag",
     "Seminar",
     "SeminarMaterial",
     "SeminarMember",
     "SeminarRecruitment",
     "SeminarTeacher",
     "User",
+    "UserInterestTag",
     "UserRole",
 ]

@@ -3,10 +3,17 @@ import os
 import httpx
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://api:8000")
+INTERNAL_API_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
 
 
 def fetch_seminars() -> list[dict]:
-    response = httpx.get(f"{API_BASE_URL}/seminars", timeout=5.0)
+    # Slack Botはログイン中の学生セッションを持たないため、通常のGET /seminars
+    # (JWT必須)ではなくrequire_internal_secretで認証する専用エンドポイントを叩く。
+    response = httpx.get(
+        f"{API_BASE_URL}/seminars/for-slack-bot",
+        headers={"X-Internal-Secret": INTERNAL_API_SECRET},
+        timeout=5.0,
+    )
     response.raise_for_status()
     seminars: list[dict] = response.json()
     return seminars
