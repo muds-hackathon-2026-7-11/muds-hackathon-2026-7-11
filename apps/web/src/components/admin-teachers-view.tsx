@@ -8,8 +8,6 @@ export type AdminTeacher = {
   id: string;
   name: string;
   email: string;
-  research_title: string | null;
-  research_theme: string | null;
   photo_url: string | null;
   is_active: boolean;
 };
@@ -34,8 +32,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [editResearchTitle, setEditResearchTitle] = useState("");
-  const [editResearchTheme, setEditResearchTheme] = useState("");
+  const [editEmail, setEditEmail] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -62,8 +59,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
   function startEdit(teacher: AdminTeacher): void {
     setEditingId(teacher.id);
     setEditName(teacher.name);
-    setEditResearchTitle(teacher.research_title ?? "");
-    setEditResearchTheme(teacher.research_theme ?? "");
+    setEditEmail(teacher.email);
     setEditIsActive(teacher.is_active);
     setErrorMessage(null);
   }
@@ -74,8 +70,8 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
 
   async function handleSave(teacherId: string): Promise<void> {
     setErrorMessage(null);
-    if (editName.trim() === "") {
-      setErrorMessage("名前を入力してください。");
+    if (editName.trim() === "" || editEmail.trim() === "") {
+      setErrorMessage("名前とメールアドレスを入力してください。");
       return;
     }
     setIsSaving(true);
@@ -85,8 +81,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editName,
-          research_title: editResearchTitle === "" ? null : editResearchTitle,
-          research_theme: editResearchTheme === "" ? null : editResearchTheme,
+          email: editEmail,
           is_active: editIsActive,
         }),
       });
@@ -248,21 +243,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
+                    placeholder="名前"
                     className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
                   />
                   <input
-                    type="text"
-                    value={editResearchTitle}
-                    onChange={(e) => setEditResearchTitle(e.target.value)}
-                    placeholder="研究タイトル"
-                    maxLength={200}
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
-                  />
-                  <textarea
-                    value={editResearchTheme}
-                    onChange={(e) => setEditResearchTheme(e.target.value)}
-                    placeholder="研究テーマ"
-                    rows={2}
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="メールアドレス"
                     className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
                   />
                   <label className="flex items-center gap-1.5 text-sm text-zinc-700">
@@ -310,12 +298,6 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                       )}
                     </p>
                     <p className="text-sm text-zinc-600">{teacher.email}</p>
-                    <p className="mt-1 text-sm font-medium text-zinc-900">
-                      {teacher.research_title ?? "研究タイトルは未設定です。"}
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
-                      {teacher.research_theme ?? "研究テーマは未設定です。"}
-                    </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <button

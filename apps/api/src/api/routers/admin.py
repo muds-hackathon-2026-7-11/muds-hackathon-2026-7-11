@@ -303,7 +303,20 @@ async def update_teacher(
     teacher = await db.get(User, teacher_id)
     if teacher is None or teacher.role != UserRole.teacher:
         raise HTTPException(status_code=404, detail="教員が見つかりません。")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    changes = payload.model_dump(exclude_unset=True)
+    new_email = changes.get("email")
+    if new_email is not None and new_email != teacher.email:
+        existing = await db.execute(
+            select(User).where(User.email == new_email, User.id != teacher.id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="このメールアドレスのユーザーは既に存在します。",
+            )
+
+    for field, value in changes.items():
         setattr(teacher, field, value)
     await db.flush()
     return teacher

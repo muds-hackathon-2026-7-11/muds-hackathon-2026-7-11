@@ -379,6 +379,48 @@ async def test_update_teacher_edits_research_title(client, db_session) -> None:
     assert resp.json()["research_title"] == "新しい研究タイトル"
 
 
+async def test_update_teacher_edits_email(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.patch(
+        f"/admin/teachers/{teacher.id}",
+        json={"email": "New.Email@Example.com"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "new.email@example.com"
+    await db_session.refresh(teacher)
+    assert teacher.email == "new.email@example.com"
+
+
+async def test_update_teacher_email_conflict_on_duplicate(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.patch(
+        f"/admin/teachers/{teacher.id}", json={"email": other.email}
+    )
+
+    assert resp.status_code == 409
+    await db_session.refresh(teacher)
+    assert teacher.email != other.email
+
+
+async def test_update_teacher_email_unchanged_when_same_value(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.patch(
+        f"/admin/teachers/{teacher.id}", json={"email": teacher.email}
+    )
+
+    assert resp.status_code == 200
+
+
 async def test_update_teacher_on_non_teacher_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     student = await _make_user(db_session, UserRole.student)

@@ -347,10 +347,21 @@ class AdminTeacherCreate(BaseModel):
 
 class AdminTeacherUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    email: str | None = Field(default=None, min_length=3, max_length=255)
     research_title: str | None = None
     research_theme: str | None = None
     photo_url: str | None = None
     is_active: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
 
 
 class AdminTeacherOut(BaseModel):

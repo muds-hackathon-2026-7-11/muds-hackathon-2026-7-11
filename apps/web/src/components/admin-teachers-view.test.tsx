@@ -19,8 +19,6 @@ function makeTeacher(overrides: Partial<AdminTeacher> = {}): AdminTeacher {
     id: "teacher-1",
     name: "山田先生",
     email: "yamada@example.com",
-    research_title: "画像認識モデルの研究",
-    research_theme: "機械学習",
     photo_url: null,
     is_active: true,
     ...overrides,
@@ -37,18 +35,16 @@ describe("AdminTeachersView", () => {
 
     expect(screen.getByText("山田先生")).toBeInTheDocument();
     expect(screen.getByText("yamada@example.com")).toBeInTheDocument();
-    expect(screen.getByText("画像認識モデルの研究")).toBeInTheDocument();
-    expect(screen.getByText("機械学習")).toBeInTheDocument();
   });
 
-  it("edits a teacher's research title", async () => {
+  it("edits a teacher's email", async () => {
     const user = userEvent.setup();
     const teacher = makeTeacher();
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
         new Response(
-          JSON.stringify({ ...teacher, research_title: "新しいタイトル" }),
+          JSON.stringify({ ...teacher, email: "new-email@example.com" }),
           { status: 200 },
         ),
       );
@@ -56,22 +52,24 @@ describe("AdminTeachersView", () => {
     render(<AdminTeachersView initialTeachers={[teacher]} />);
 
     await user.click(screen.getByRole("button", { name: "編集" }));
-    const titleInput = screen.getByDisplayValue("画像認識モデルの研究");
-    await user.clear(titleInput);
-    await user.type(titleInput, "新しいタイトル");
+    const emailInput = screen.getByDisplayValue("yamada@example.com");
+    await user.clear(emailInput);
+    await user.type(emailInput, "new-email@example.com");
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
-    expect(await screen.findByText("新しいタイトル")).toBeInTheDocument();
+    expect(
+      await screen.findByText("new-email@example.com"),
+    ).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining(`/admin/teachers/${teacher.id}`),
       expect.objectContaining({
         method: "PATCH",
-        body: expect.stringContaining('"research_title":"新しいタイトル"'),
+        body: expect.stringContaining('"email":"new-email@example.com"'),
       }),
     );
   });
 
-  it("edits a teacher's name and research theme", async () => {
+  it("edits a teacher's name", async () => {
     const user = userEvent.setup();
     const teacher = makeTeacher();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -122,8 +120,6 @@ describe("AdminTeachersView", () => {
       id: "teacher-2",
       name: "新任先生",
       email: "new@example.com",
-      research_title: null,
-      research_theme: null,
     });
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -199,7 +195,7 @@ describe("AdminTeachersView", () => {
     expect(screen.queryByText("(無効)")).not.toBeInTheDocument();
   });
 
-  it("shows an error when the name is cleared before saving", async () => {
+  it("shows an error when the name and email are cleared before saving", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
@@ -210,7 +206,7 @@ describe("AdminTeachersView", () => {
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
     expect(
-      await screen.findByText("名前を入力してください。"),
+      await screen.findByText("名前とメールアドレスを入力してください。"),
     ).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
