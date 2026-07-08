@@ -138,7 +138,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {errorMessage && (
+      {!isCreateFormOpen && errorMessage && (
         <p className="rounded-lg border border-[#add8e6]/60 bg-white p-4 text-sm">
           {errorMessage}
         </p>
@@ -173,6 +173,11 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
             <p className="mt-1 text-sm text-zinc-600">
               既に登録されている学生・教員のメールアドレスを入力してください。
             </p>
+            {errorMessage && (
+              <p className="mt-3 rounded-lg border border-[#add8e6]/60 bg-white p-3 text-sm">
+                {errorMessage}
+              </p>
+            )}
             <div className="mt-4 flex flex-col gap-2">
               {candidate ? (
                 <>
