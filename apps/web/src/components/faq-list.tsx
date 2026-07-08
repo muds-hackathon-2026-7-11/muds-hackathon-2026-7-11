@@ -135,6 +135,9 @@ export function FaqList({
             className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">質問する</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              回答が届いたら、slackに通知されます。
+            </p>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
