@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import {
-  AdminTeachersView,
-  type AdminTeacher,
-} from "@/components/admin-teachers-view";
+import type { AdminUser } from "@/components/admin-admins-view";
+import { AdminPeopleTabs } from "@/components/admin-people-tabs";
+import type { AdminTeacher } from "@/components/admin-teachers-view";
 import { serverApiFetch } from "@/lib/api-server";
 import type { Session } from "next-auth";
 
@@ -21,11 +20,28 @@ async function getTeachers(session: Session | null): Promise<AdminTeacher[]> {
   }
 }
 
+async function getAdmins(session: Session | null): Promise<AdminUser[]> {
+  try {
+    const res = await serverApiFetch("/admin/admins", session, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return [];
+    }
+    return (await res.json()) as AdminUser[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function AdminTeachersPage() {
   // /admin配下は apps/web/src/app/(app)/admin/layout.tsx で
   // 認証・admin権限を既にチェック済み。
   const session = await auth();
-  const teachers = await getTeachers(session);
+  const [teachers, admins] = await Promise.all([
+    getTeachers(session),
+    getAdmins(session),
+  ]);
 
   return (
     <main className="page-canvas relative flex flex-1 flex-col">
@@ -36,11 +52,15 @@ export default async function AdminTeachersPage() {
         >
           ← 管理者メニューに戻る
         </Link>
-        <h1 className="text-xl font-semibold text-zinc-900">教員管理</h1>
-        <p className="text-sm text-zinc-500">
-          新規の教員追加はCSVインポートで行います。ここでは既存教員の編集のみ行えます。
-        </p>
-        <AdminTeachersView initialTeachers={teachers} />
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900">
+            教員・管理者管理
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            教員は研究情報を含めて管理し、管理者はログイン権限のみの独立したユーザーとして管理します。
+          </p>
+        </div>
+        <AdminPeopleTabs initialTeachers={teachers} initialAdmins={admins} />
       </div>
     </main>
   );

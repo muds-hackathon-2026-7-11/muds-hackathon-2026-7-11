@@ -15,6 +15,9 @@ from api.schemas import (
     AdminTeacherCreate,
     AdminTeacherOut,
     AdminTeacherUpdate,
+    AdminUserCreate,
+    AdminUserLookupOut,
+    AdminUserOut,
     SeminarMaterialCreate,
     SeminarMaterialOut,
 )
@@ -300,7 +303,20 @@ async def update_teacher(
     teacher = await db.get(User, teacher_id)
     if teacher is None or teacher.role != UserRole.teacher:
         raise HTTPException(status_code=404, detail="教員が見つかりません。")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    changes = payload.model_dump(exclude_unset=True)
+    new_email = changes.get("email")
+    if new_email is not None and new_email != teacher.email:
+        existing = await db.execute(
+            select(User).where(User.email == new_email, User.id != teacher.id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="このメールアドレスのユーザーは既に存在します。",
+            )
+
+    for field, value in changes.items():
         setattr(teacher, field, value)
     await db.flush()
     return teacher
@@ -317,5 +333,104 @@ async def deactivate_teacher(
     if teacher is None or teacher.role != UserRole.teacher:
         raise HTTPException(status_code=404, detail="教員が見つかりません。")
     teacher.is_active = False
+    await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- 管理者管理(#134) ---
+# 管理者は教員とは独立したユーザー(role=admin)として追加・削除する。
+# 昇格候補はrole=studentのみ許可する。教員は対象外(role=teacherが
+# role=adminへ書き換わると、担当ゼミの一覧・ドロップダウン等の
+# role==teacher基準のクエリから消えてしまうため)。
+
+
+@router.get("/admins/lookup", response_model=AdminUserLookupOut)
+async def lookup_admin_candidate(
+    email: str, db: AsyncSession = Depends(get_db)
+) -> User:
+    """管理者追加の確認用に、メールアドレスから既存ユーザーを検索する。
+
+    追加前に名前を画面に表示して確認できるようにするための下見。
+    実際の追加は create_admin 側で改めて検証する。
+    """
+    normalized = email.strip().lower()
+    result = await db.execute(select(User).where(User.email == normalized))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=404, detail="登録されているユーザーが見つかりません。"
+        )
+    if user.role == UserRole.teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="教員は管理者に選べません。",
+        )
+    return user
+
+
+@router.post("/admins", response_model=AdminUserOut, status_code=201)
+async def create_admin(
+    payload: AdminUserCreate, db: AsyncSession = Depends(get_db)
+) -> User:
+    """既存ユーザーを管理者に昇格させる。
+
+    管理者は新規に作らず、既にusers(学生として登録済み)にいる
+    ユーザーのroleをadminへ変更する形で追加する(#134)。
+    """
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=404, detail="登録されているユーザーが見つかりません。"
+        )
+    if user.role == UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="既に管理者です。"
+        )
+    if user.role == UserRole.teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="教員は管理者に選べません。",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="無効化されたユーザーは管理者にできません。",
+        )
+    user.role = UserRole.admin
+    await db.flush()
+    return user
+
+
+@router.get("/admins", response_model=list[AdminUserOut])
+async def list_admins(db: AsyncSession = Depends(get_db)) -> list[User]:
+    """管理者ユーザー一覧を返す。"""
+    result = await db.execute(
+        select(User).where(User.role == UserRole.admin).order_by(User.name)
+    )
+    return list(result.scalars().all())
+
+
+@router.delete("/admins/{admin_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_admin(
+    admin_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+) -> Response:
+    """管理者を「削除」する。無効化はせず、role=studentに戻すだけ(#134)。
+
+    自分自身の解除は禁止する。操作できるのは常に他の管理者からのみなので、
+    これだけで「誰も管理者を管理できなくなる」ロックアウトを防げる
+    (自分自身を解除しない限り、操作者自身は管理者であり続けるため)。
+    """
+    admin_user = await db.get(User, admin_id)
+    if admin_user is None or admin_user.role != UserRole.admin:
+        raise HTTPException(status_code=404, detail="管理者が見つかりません。")
+    if admin_user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="自分自身は解除できません。",
+        )
+    admin_user.role = UserRole.student
     await db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

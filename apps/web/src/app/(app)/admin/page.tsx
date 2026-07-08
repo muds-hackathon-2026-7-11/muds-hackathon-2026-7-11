@@ -17,7 +17,7 @@ export default function AdminIndexPage() {
             href="/admin/teachers"
             className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 text-sm font-medium text-zinc-900 shadow-sm shadow-[#add8e6]/30 transition-colors hover:bg-[#add8e6]/10"
           >
-            教員管理
+            教員・管理者管理
           </Link>
           <Link
             href="/admin/recruitment-terms"
