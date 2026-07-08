@@ -60,10 +60,40 @@ export function AdminAssignmentImportView({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<AssignmentImportResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  function chooseFile(file: File | null): void {
+    setErrorMessage(null);
+    if (file && !file.name.toLowerCase().endsWith(".csv")) {
+      setErrorMessage("CSVファイル(.csv)を選択してください。");
+      return;
+    }
+    setSelectedFile(file);
+  }
 
   function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>): void {
-    setErrorMessage(null);
-    setSelectedFile(e.target.files?.[0] ?? null);
+    chooseFile(e.target.files?.[0] ?? null);
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLButtonElement>): void {
+    e.preventDefault();
+    if (!isUploading) {
+      setIsDraggingOver(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLButtonElement>): void {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLButtonElement>): void {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (isUploading) {
+      return;
+    }
+    chooseFile(e.dataTransfer.files?.[0] ?? null);
   }
 
   async function handleUpload(): Promise<void> {
@@ -150,26 +180,35 @@ export function AdminAssignmentImportView({
               </select>
             </label>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileSelected}
-                disabled={isUploading}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-              >
-                CSVファイルを選択
-              </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFileSelected}
+              disabled={isUploading}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                isDraggingOver
+                  ? "border-foreground bg-black/[.04] dark:bg-white/[.08]"
+                  : "border-black/[.15] dark:border-white/[.2]"
+              }`}
+            >
+              <span className="text-sm text-foreground/70">
+                CSVファイルをここにドラッグ&ドロップ、またはクリックして選択
+              </span>
               <span className="text-sm text-foreground/60">
                 {selectedFile ? selectedFile.name : "未選択"}
               </span>
+            </button>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleUpload}

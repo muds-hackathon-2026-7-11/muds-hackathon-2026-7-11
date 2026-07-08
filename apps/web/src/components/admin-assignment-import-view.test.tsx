@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useSession } from "next-auth/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -98,6 +98,42 @@ describe("AdminAssignmentImportView", () => {
       await screen.findByText("CSVファイルを選択してください。"),
     ).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("selects a file dropped onto the drop zone", async () => {
+    const user = userEvent.setup();
+    const term = makeTerm();
+
+    render(<AdminAssignmentImportView terms={[term]} />);
+    await selectTerm(user, term);
+
+    const dropZone = screen.getByRole("button", {
+      name: /ドラッグ&ドロップ/,
+    });
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [makeCsvFile()] },
+    });
+
+    expect(await screen.findByText("assignments.csv")).toBeInTheDocument();
+  });
+
+  it("shows an error when the dropped file is not a .csv", async () => {
+    const user = userEvent.setup();
+    const term = makeTerm();
+
+    render(<AdminAssignmentImportView terms={[term]} />);
+    await selectTerm(user, term);
+
+    const dropZone = screen.getByRole("button", {
+      name: /ドラッグ&ドロップ/,
+    });
+    const notCsv = new File(["hello"], "notes.txt", { type: "text/plain" });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [notCsv] } });
+
+    expect(
+      await screen.findByText("CSVファイル(.csv)を選択してください。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("未選択")).toBeInTheDocument();
   });
 
   it("uploads the selected term_id and CSV as multipart form data on button click", async () => {
