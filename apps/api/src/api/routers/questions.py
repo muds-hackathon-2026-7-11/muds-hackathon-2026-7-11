@@ -5,9 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth import require_role
 from api.db import get_db
-from api.models import Answer, Question, Seminar, User
-from api.schemas import AnswerOut, QuestionCreate, QuestionOut, QuestionWithAnswersOut
+from api.models import Answer, Question, Seminar, User, UserRole
+from api.schemas import (
+    AnswerOut,
+    QuestionCreate,
+    QuestionCreateWeb,
+    QuestionOut,
+    QuestionWithAnswersOut,
+)
 from api.services import notify_answer_candidates
 from api.slack_client import SlackClient, get_slack_client
 
@@ -49,6 +56,34 @@ async def create_question(
         db, slack_client, question=question, seminar_name=seminar.name
     )
 
+    return question
+
+
+@router.post("/me", response_model=QuestionOut, status_code=201)
+async def create_question_web(
+    payload: QuestionCreateWeb,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.student, UserRole.admin)),
+) -> Question:
+    """Web(FAQ画面)から質問を投稿する(#141)。
+
+    Slack Bot経由のcreate_question(POST /questions)とは別経路。
+    投稿者はWeb認証済みユーザーで特定し、slack_user_idは不要。
+    注意: ここではnotify_answer_candidates(Slack通知)を意図的に
+    呼ばない。呼び出すとSlack Botの通知が二重に発火しかねないため、
+    このエンドポイントを変更する際は呼び出さないことを維持すること。
+    """
+    seminar = await db.get(Seminar, payload.seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+
+    question = Question(
+        seminar_id=payload.seminar_id,
+        user_id=user.id,
+        content=payload.content,
+    )
+    db.add(question)
+    await db.flush()
     return question
 
 

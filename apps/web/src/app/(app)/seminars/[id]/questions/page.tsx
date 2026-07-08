@@ -69,7 +69,7 @@ export default async function SeminarQuestionsPage({
             質問一覧を取得できませんでした。時間をおいて再度お試しください。
           </section>
         ) : (
-          <FaqList questions={result.questions} />
+          <FaqList seminarId={id} questions={result.questions} />
         )}
       </div>
     </main>

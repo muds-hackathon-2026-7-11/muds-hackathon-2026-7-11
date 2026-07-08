@@ -1,6 +1,8 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 export type Answer = {
   id: string;
@@ -18,6 +20,7 @@ export type Question = {
 };
 
 type FaqListProps = {
+  seminarId: string;
   questions: Question[];
 };
 
@@ -32,8 +35,26 @@ function formatDate(iso: string): string {
   });
 }
 
-export function FaqList({ questions }: FaqListProps) {
+async function extractErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: string };
+    return body.detail ?? "エラーが発生しました。";
+  } catch {
+    return "エラーが発生しました。";
+  }
+}
+
+export function FaqList({
+  seminarId,
+  questions: initialQuestions,
+}: FaqListProps) {
+  const { data: session } = useSession();
+  const [questions, setQuestions] = useState(initialQuestions);
   const [keyword, setKeyword] = useState("");
+
+  const [content, setContent] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const trimmed = keyword.trim().toLowerCase();
@@ -47,8 +68,57 @@ export function FaqList({ questions }: FaqListProps) {
     );
   }, [questions, keyword]);
 
+  async function handleSubmit(): Promise<void> {
+    setErrorMessage(null);
+    if (content.trim() === "") {
+      setErrorMessage("質問内容を入力してください。");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await apiFetch("/questions/me", session, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seminar_id: seminarId, content }),
+      });
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      const created = (await res.json()) as Omit<Question, "answers">;
+      setQuestions((prev) => [{ ...created, answers: [] }, ...prev]);
+      setContent("");
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
+        <p className="text-sm font-semibold text-zinc-800">質問する</p>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="ゼミへの質問を入力してください"
+          rows={3}
+          className="mt-2 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+        />
+        {errorMessage && (
+          <p className="mt-2 text-sm text-red-600">{errorMessage}</p>
+        )}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="mt-3 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
+        >
+          {isSubmitting ? "送信中..." : "質問を送信"}
+        </button>
+      </section>
+
       <input
         type="text"
         value={keyword}

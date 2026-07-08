@@ -144,6 +144,18 @@ class QuestionCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
 
+class QuestionCreateWeb(BaseModel):
+    """Web(FAQ画面)からの質問投稿(#141)。
+
+    Slack Bot経由のQuestionCreateとは別経路。投稿者はslack_user_idではなく
+    Web認証済みユーザーで特定し、投稿時にSlack通知(notify_answer_candidates)
+    は送らない(通知機能は別issueで対応予定)。
+    """
+
+    seminar_id: uuid.UUID
+    content: str = Field(min_length=1, max_length=2000)
+
+
 class QuestionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
