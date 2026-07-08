@@ -565,10 +565,10 @@ export function ApplicationForm({
                       updateSlot(index, { reason: e.target.value })
                     }
                     disabled={isBusy}
-                    rows={4}
+                    rows={8}
                     maxLength={REASON_MAX_LENGTH}
                     placeholder="このゼミを志望する理由を入力してください"
-                    className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="mt-1 min-h-40 w-full resize-y rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                 </div>
               </section>
