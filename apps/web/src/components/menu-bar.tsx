@@ -7,7 +7,7 @@ import { useState } from "react";
 const baseNavItems = [
   { label: "マイページ", href: "/" },
   { label: "志望理由提出", href: "/apply" },
-  { label: "志望状況一覧", href: "/assignment" },
+  { label: "応募状況", href: "/assignment" },
 ] as const;
 
 const adminNavItem = { label: "管理者", href: "/admin" } as const;
