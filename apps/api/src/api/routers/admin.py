@@ -272,6 +272,7 @@ async def create_teacher(
         email=payload.email,
         name=payload.name,
         role=UserRole.teacher,
+        research_title=payload.research_title,
         research_theme=payload.research_theme,
         photo_url=payload.photo_url,
     )

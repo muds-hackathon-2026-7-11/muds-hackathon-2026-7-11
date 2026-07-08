@@ -8,6 +8,7 @@ export type AdminTeacher = {
   id: string;
   name: string;
   email: string;
+  research_title: string | null;
   research_theme: string | null;
   photo_url: string | null;
   is_active: boolean;
@@ -33,6 +34,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editResearchTitle, setEditResearchTitle] = useState("");
   const [editResearchTheme, setEditResearchTheme] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,6 +42,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
   function startEdit(teacher: AdminTeacher): void {
     setEditingId(teacher.id);
     setEditName(teacher.name);
+    setEditResearchTitle(teacher.research_title ?? "");
     setEditResearchTheme(teacher.research_theme ?? "");
     setEditIsActive(teacher.is_active);
     setErrorMessage(null);
@@ -62,6 +65,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editName,
+          research_title: editResearchTitle === "" ? null : editResearchTitle,
           research_theme: editResearchTheme === "" ? null : editResearchTheme,
           is_active: editIsActive,
         }),
@@ -104,6 +108,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  />
+                  <input
+                    type="text"
+                    value={editResearchTitle}
+                    onChange={(e) => setEditResearchTitle(e.target.value)}
+                    placeholder="研究タイトル"
+                    maxLength={200}
                     className="w-full rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
                   />
                   <textarea
@@ -158,6 +170,9 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     </p>
                     <p className="text-sm text-foreground/60">
                       {teacher.email}
+                    </p>
+                    <p className="mt-1 text-sm font-medium">
+                      {teacher.research_title ?? "研究タイトルは未設定です。"}
                     </p>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
                       {teacher.research_theme ?? "研究テーマは未設定です。"}

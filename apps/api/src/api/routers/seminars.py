@@ -268,6 +268,7 @@ async def get_seminar(
             id=u.id,
             name=u.name,
             photo_url=u.photo_url,
+            research_title=u.research_title,
             research_theme=u.research_theme,
             interest_tags=teacher_tags.get(u.id, []),
         )
@@ -303,6 +304,7 @@ async def get_seminar(
             SeminarMemberOut(
                 id=u.id,
                 name=u.name,
+                research_title=u.research_title,
                 research_theme=u.research_theme,
                 interest_tags=member_tags.get(u.id, []),
             )

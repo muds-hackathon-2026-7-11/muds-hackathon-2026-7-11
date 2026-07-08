@@ -22,6 +22,7 @@ type Teacher = {
   id: string;
   name: string;
   photo_url: string | null;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -35,6 +36,7 @@ type Material = {
 type Member = {
   id: string;
   name: string;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -145,6 +147,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 />
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-800">{teacher.name}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-700">
+                    {teacher.research_title ?? "研究タイトル未設定"}
+                  </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">
                     {teacher.research_theme ?? "未設定"}
                   </p>
@@ -241,6 +246,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             {seminar.current_members.map((member) => (
               <div key={member.id}>
                 <p className="font-semibold text-zinc-800">{member.name}</p>
+                <p className="mt-1 text-sm font-medium text-foreground/80">
+                  {member.research_title ?? "研究タイトル未設定"}
+                </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
                   {member.research_theme ?? "未設定"}
                 </p>

@@ -163,6 +163,43 @@ async def test_patch_me_updates_research_theme_only(client, db_session) -> None:
     assert body["interest_tags"] == []
 
 
+async def test_patch_me_updates_research_title_and_theme(client, db_session) -> None:
+    user = await _make_user(db_session)
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={
+            "research_title": "画像認識モデルの研究",
+            "research_theme": "自然言語処理の研究",
+            "interest_tag_ids": [],
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["research_title"] == "画像認識モデルの研究"
+    assert body["research_theme"] == "自然言語処理の研究"
+
+    get_resp = await client.get("/me", headers=_auth_headers(user.email))
+    assert get_resp.json()["research_title"] == "画像認識モデルの研究"
+
+
+async def test_patch_me_can_clear_research_title(client, db_session) -> None:
+    user = await _make_user(db_session)
+    user.research_title = "以前のタイトル"
+    await db_session.flush()
+
+    resp = await client.patch(
+        "/me",
+        headers=_auth_headers(user.email),
+        json={"research_title": None, "interest_tag_ids": []},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["research_title"] is None
+
+
 async def test_patch_me_replaces_previous_tags(client, db_session) -> None:
     user = await _make_user(db_session)
     tag_a = await _make_tag(db_session, "機械学習")
