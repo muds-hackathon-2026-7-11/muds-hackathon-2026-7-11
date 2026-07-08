@@ -44,12 +44,16 @@ async def _make_tag(db_session, name: str) -> ResearchTag:
     return tag
 
 
-async def _make_term(db_session, academic_year: int) -> RecruitmentTerm:
+async def _make_term(
+    db_session,
+    academic_year: int,
+    status: RecruitmentTermStatus = RecruitmentTermStatus.open,
+) -> RecruitmentTerm:
     term = RecruitmentTerm(
         academic_year=academic_year,
         starts_at=date.today() - timedelta(days=1),
         ends_at=date.today() + timedelta(days=30),
-        status=RecruitmentTermStatus.open,
+        status=status,
     )
     db_session.add(term)
     await db_session.flush()
@@ -108,6 +112,33 @@ async def test_get_me_current_seminar_is_null_when_not_assigned(
 
     assert resp.status_code == 200
     assert resp.json()["current_seminar"] is None
+
+
+async def test_get_me_current_seminar_ignores_a_newer_preparing_term(
+    client, db_session
+) -> None:
+    # 運営が来年度分のラウンドをstatus=preparingで前倒しに作っただけの
+    # 段階では、それを「現在の年度」にしてしまうと今の在籍ゼミ生の
+    # current_seminarが誰も表示されなくなってしまっていた(実際の不具合)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    user = await _make_user(db_session)
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=user.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、準備段階の次年度ラウンド。
+    await _make_term(
+        db_session, academic_year + 1, status=RecruitmentTermStatus.preparing
+    )
+    await db_session.flush()
+
+    resp = await client.get("/me", headers=_auth_headers(user.email))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_seminar"] is not None
+    assert body["current_seminar"]["name"] == seminar.name
 
 
 # --- GET /me ---

@@ -71,15 +71,22 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
 
 
 async def current_academic_year(db: AsyncSession) -> int | None:
-    """「現在の年度」を返す(募集期間が一度も作成されていなければNone)。
+    """「現在の年度」を返す(該当する募集期間が無ければNone)。
 
     直近に作成された募集期間のacademic_yearを返す。get_current_termと違い、
     status=openや日付範囲は問わない。募集期間が開いている間だけ「現在の
     ゼミ生」等が見えるのは誤りで(1年のほとんどは募集期間外のため)、
     志望提出画面同様「新しい募集期間が作成されたら切り替わる」形にする。
+
+    ただしstatus=preparing(#93で追加された、開始前の準備段階)の
+    募集期間は除く。運営が来年度分のラウンドを配属作業より前倒しで
+    作成しただけで、まだ何の配属も行われていない段階なので、それを
+    「現在の年度」にしてしまうと今の在籍ゼミ生が誰も表示されなくなる
+    (実際に発生した不具合)。
     """
     result = await db.execute(
         select(RecruitmentTerm.academic_year)
+        .where(RecruitmentTerm.status != RecruitmentTermStatus.preparing)
         .order_by(RecruitmentTerm.academic_year.desc())
         .limit(1)
     )
