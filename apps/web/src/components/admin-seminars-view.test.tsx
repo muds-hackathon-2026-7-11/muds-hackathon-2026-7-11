@@ -83,6 +83,13 @@ describe("AdminSeminarsView", () => {
     ).toHaveAttribute("href", "/admin/recruitment-terms");
   });
 
+  it("shows the seminar's id for use in the assignment import CSV's seminar_id column", () => {
+    const seminar = makeSeminar({ id: "seminar-abc-123" });
+    renderView({ seminars: [seminar] });
+
+    expect(screen.getByText("seminar-abc-123")).toBeInTheDocument();
+  });
+
   it("does not show the create form until the toggle button is clicked", async () => {
     const user = userEvent.setup();
     renderView();
