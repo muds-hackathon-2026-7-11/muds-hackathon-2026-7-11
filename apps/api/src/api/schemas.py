@@ -122,6 +122,8 @@ class SeminarStatsOut(BaseModel):
     ratio: float | None
     # 現在の所属ゼミ生数（継続者）。
     continuing_count: int
+    # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
+    target_grades: list[str] | None
 
 
 class QuestionCreate(BaseModel):

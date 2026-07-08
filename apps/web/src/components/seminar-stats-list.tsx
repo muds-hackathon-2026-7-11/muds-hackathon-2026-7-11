@@ -22,7 +22,33 @@ export type SeminarStats = {
     third: number;
   };
   ratio: number | null;
+  // 対象学年(#99/#103)。募集ラウンドの設定が無ければnull。
+  target_grades: string[] | null;
 };
+
+// 保存順のままだと"B2・B3・B1"のような並びになりうるため、表示前に
+// 学年順へ揃える(admin-seminars-view.tsx側でも保存時に揃えているが、
+// 過去に保存された順序のままのデータもあるためここでも念のため揃える)。
+const GRADE_ORDER = ["B1", "B2", "B3", "B4"];
+
+function sortByGradeOrder(targetGrades: string[]): string[] {
+  return [...targetGrades].sort(
+    (a, b) => GRADE_ORDER.indexOf(a) - GRADE_ORDER.indexOf(b),
+  );
+}
+
+function targetGradesLabel(targetGrades: string[] | null): string {
+  if (targetGrades === null) {
+    return "未設定(募集していません)";
+  }
+  if (targetGrades.length === 0) {
+    return "募集していません";
+  }
+  if (targetGrades.length >= GRADE_ORDER.length) {
+    return "全学年";
+  }
+  return sortByGradeOrder(targetGrades).join("・");
+}
 
 type SeminarStatsListProps = {
   stats: SeminarStats[];
@@ -70,6 +96,8 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
       </div>
 
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-600">
+        <dt>対象学年</dt>
+        <dd>{targetGradesLabel(seminar.target_grades)}</dd>
         <dt>上限人数</dt>
         <dd>{seminar.capacity ?? "未設定"}</dd>
         <dt>累計志望者数</dt>

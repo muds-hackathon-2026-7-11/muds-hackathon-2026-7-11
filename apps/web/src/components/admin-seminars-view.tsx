@@ -308,9 +308,12 @@ export function AdminSeminarsView({
     const current = recruitmentInputs[seminarId]?.targetGrades ?? [
       ...GRADE_OPTIONS,
     ];
-    const targetGrades = current.includes(grade)
+    const next = current.includes(grade)
       ? current.filter((g) => g !== grade)
       : [...current, grade];
+    // 常にGRADE_OPTIONS順(B1〜B4)で保存し、応募状況画面などでの
+    // 表示順がチェックした順に左右されないようにする。
+    const targetGrades = GRADE_OPTIONS.filter((g) => next.includes(g));
     updateRecruitmentInput(seminarId, { targetGrades });
   }
 
