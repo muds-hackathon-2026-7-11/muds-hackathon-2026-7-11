@@ -30,31 +30,9 @@ export type SeminarStats = {
   target_grades: string[] | null;
   // 現在の所属ゼミ生数(継続者)。
   continuing_count?: number;
+  // 継続希望人数: 在籍ゼミ生のうち、同じゼミを第1志望に選んだ人数。
+  continuing_first_choice_count: number;
 };
-
-// 保存順のままだと"B2・B3・B1"のような並びになりうるため、表示前に
-// 学年順へ揃える(admin-seminars-view.tsx側でも保存時に揃えているが、
-// 過去に保存された順序のままのデータもあるためここでも念のため揃える)。
-const GRADE_ORDER = ["B1", "B2", "B3", "B4"];
-
-function sortByGradeOrder(targetGrades: string[]): string[] {
-  return [...targetGrades].sort(
-    (a, b) => GRADE_ORDER.indexOf(a) - GRADE_ORDER.indexOf(b),
-  );
-}
-
-function targetGradesLabel(targetGrades: string[] | null): string {
-  if (targetGrades === null) {
-    return "未設定(募集していません)";
-  }
-  if (targetGrades.length === 0) {
-    return "募集していません";
-  }
-  if (targetGrades.length >= GRADE_ORDER.length) {
-    return "全学年";
-  }
-  return sortByGradeOrder(targetGrades).join("・");
-}
 
 // 学年ごとの表示色。既存UIの水色(#add8e6)に合わせた淡いパステルトーンで、
 // 学年ごとに色を分ける: 1年=黄・2年=赤・3年=緑・4年=青紫。
@@ -64,6 +42,48 @@ const GRADES = [
   { key: "B3", label: "3年", color: "#a6dcb0" },
   { key: "B4", label: "4年", color: "#b3a7e6" },
 ] as const;
+
+type ChartTooltipEntry = {
+  dataKey?: string;
+  name?: string;
+  value?: number;
+  color?: string;
+};
+
+function StatsTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: string;
+  payload?: ChartTooltipEntry[];
+}) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+  const total = payload.reduce((sum, entry) => sum + (entry.value ?? 0), 0);
+  return (
+    <div className="rounded-lg border border-[#add8e6] bg-white px-3 py-2 text-sm shadow">
+      <p className="font-semibold text-zinc-800">
+        {label}: {total}人
+      </p>
+      {payload.map((entry) => (
+        <p
+          key={entry.dataKey}
+          className="flex items-center gap-1.5 text-zinc-700"
+        >
+          <span
+            className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+            style={{ backgroundColor: entry.color }}
+            aria-hidden
+          />
+          {entry.name}: {entry.value ?? 0}人
+        </p>
+      ))}
+    </div>
+  );
+}
 
 type SeminarStatsListProps = {
   stats: SeminarStats[];
@@ -79,7 +99,7 @@ export function SeminarStatsList({ stats }: SeminarStatsListProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
       {stats.map((seminar) => (
         <SeminarStatsCard key={seminar.id} seminar={seminar} />
       ))}
@@ -104,77 +124,78 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
     }
     return row;
   });
+  // 縦軸の最大値: 累計志望者数を5の倍数へ繰り上げる(最低5)。
+  const yAxisMax = Math.max(5, Math.ceil(seminar.applicant_count / 5) * 5);
+  // 目盛りは0,5,10,...を明示し、recharts任せの自動目盛り(2や4等)を防ぐ。
+  const yAxisTicks = Array.from({ length: yAxisMax / 5 + 1 }, (_, i) => i * 5);
 
   return (
-    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
-      <div className="flex items-center gap-3">
+    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <div className="flex items-center gap-4">
         {/* ゼミアイコン用のスペース。アイコン未設定時はゼミ名の頭文字を表示。 */}
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#add8e6]/20 text-lg font-bold text-sky-900">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#add8e6]/20 text-3xl font-bold text-sky-900">
           {seminar.name.charAt(0)}
         </div>
         <Link
           href={`/seminars/${seminar.id}`}
-          className="font-semibold text-zinc-800 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+          className="text-lg font-semibold text-zinc-800 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
         >
           {seminar.name}
         </Link>
       </div>
 
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-600">
-        <dt>対象学年</dt>
-        <dd>{targetGradesLabel(seminar.target_grades)}</dd>
-        <dt>上限人数</dt>
-        <dd>{seminar.capacity ?? "未設定"}</dd>
-        <dt>累計志望者数</dt>
-        <dd>{seminar.applicant_count}人</dd>
-        <dt>第1志望</dt>
-        <dd>{seminar.priority_counts.first}人</dd>
-        <dt>第2志望</dt>
-        <dd>{seminar.priority_counts.second}人</dd>
-        <dt>第3志望</dt>
-        <dd>{seminar.priority_counts.third}人</dd>
-        <dt>倍率</dt>
-        <dd>{seminar.ratio ?? "-"}</dd>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600 sm:grid-cols-3">
+        <div>
+          <dt className="text-xs text-zinc-400">上限人数</dt>
+          <dd className="text-base text-zinc-700">
+            {seminar.capacity ?? "未設定"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-400">第1志望</dt>
+          <dd className="text-base text-zinc-700">
+            {seminar.priority_counts.first}人
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-400">継続希望人数</dt>
+          <dd className="text-base text-zinc-700">
+            {seminar.continuing_first_choice_count}人
+          </dd>
+        </div>
       </dl>
 
-      <p className="mt-4 text-xs font-medium text-zinc-500">
-        志望者数(学年別の内訳)
-      </p>
-      <div className="mt-1 h-40">
+      <div className="mt-4 h-52">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
             <XAxis
               dataKey="label"
-              tick={{ fill: "#71717a", fontSize: 12 }}
+              tick={{ fill: "#71717a", fontSize: 13 }}
               stroke="#e6e6e6"
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fill: "#71717a", fontSize: 12 }}
+              width={28}
+              domain={[0, yAxisMax]}
+              ticks={yAxisTicks}
+              tick={{ fill: "#71717a", fontSize: 13 }}
               stroke="#e6e6e6"
             />
             <Tooltip
-              cursor={{ fill: "#add8e6", opacity: 0.15 }}
-              contentStyle={{
-                background: "#ffffff",
-                color: "#3f3f46",
-                border: "1px solid #add8e6",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
+              cursor={{ fill: "#3f3f46", opacity: 0.15 }}
+              content={<StatsTooltip />}
             />
-            {GRADES.map((grade, index) => (
+            {GRADES.map((grade) => (
               <Bar
                 key={grade.key}
                 dataKey={grade.key}
                 name={grade.label}
                 stackId="grade"
                 fill={grade.color}
-                // 積み上げの最上段(最後の学年)だけ角丸にする。
-                radius={
-                  index === GRADES.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]
-                }
               />
             ))}
           </BarChart>
@@ -182,11 +203,11 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
       </div>
 
       {/* 色分けの凡例(1年=黄・2年=赤・3年=緑・4年=青紫)。 */}
-      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600">
+      <ul className="mt-3 ml-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-600">
         {GRADES.map((grade) => (
-          <li key={grade.key} className="flex items-center gap-1">
+          <li key={grade.key} className="flex items-center gap-1.5">
             <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
+              className="inline-block h-3 w-3 rounded-sm"
               style={{ backgroundColor: grade.color }}
               aria-hidden
             />

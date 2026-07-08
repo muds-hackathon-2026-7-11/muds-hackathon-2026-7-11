@@ -172,6 +172,8 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert a["priority_grade_counts"] == {"1": {"B3": 2}, "2": {"B4": 1}, "3": {}}
     assert a["ratio"] == 0.3
     assert a["continuing_count"] == 1
+    # s1はseminar_aの在籍ゼミ生で、かつseminar_aを第1志望に選んでいる。
+    assert a["continuing_first_choice_count"] == 1
 
     b = _find(stats, seminar_b.id)
     assert b["capacity"] == 4
@@ -181,6 +183,7 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert b["priority_grade_counts"] == {"1": {"B4": 1}, "2": {"B3": 1}, "3": {}}
     assert b["ratio"] == 0.5
     assert b["continuing_count"] == 0
+    assert b["continuing_first_choice_count"] == 0
 
 
 async def test_seminar_stats_excludes_draft_and_inactive(client, db_session) -> None:
@@ -316,6 +319,52 @@ async def test_seminar_stats_continuing_count_without_an_active_term(
     assert stats["continuing_count"] == 1
     # 募集期間がアクティブでないため、志望集計自体は0のまま。
     assert stats["applicant_count"] == 0
+    assert stats["continuing_first_choice_count"] == 0
+
+
+async def test_seminar_stats_continuing_first_choice_count(client, db_session) -> None:
+    # 継続希望人数は「在籍ゼミ生」かつ「同じゼミを第1志望」の両方を満たす
+    # 学生だけを数える。それ以外(別ゼミが第1志望/自分のゼミだが第2志望)は
+    # 数えないことを確認する。
+    term = await _make_open_term(db_session)
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar_a, 10)
+    await _set_capacity(db_session, term, seminar_b, 10)
+
+    stays = await _make_student(db_session, grade="B3")  # a在籍、a@1
+    leaves = await _make_student(
+        db_session, grade="B3"
+    )  # a在籍、b@1(継続希望に数えない)
+    ranks_second = await _make_student(db_session, grade="B3")  # a在籍、a@2
+
+    for student, choices in (
+        (stays, [(seminar_a, 1)]),
+        (leaves, [(seminar_b, 1)]),
+        (ranks_second, [(seminar_b, 1), (seminar_a, 2)]),
+    ):
+        await _make_application(
+            db_session,
+            term=term,
+            student=student,
+            status=ApplicationStatus.submitted,
+            choices=choices,
+        )
+    for student in (stays, leaves, ranks_second):
+        db_session.add(
+            SeminarMember(
+                seminar_id=seminar_a.id, student_id=student.id, term_id=term.id
+            )
+        )
+    await db_session.flush()
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    a = _find(resp.json(), seminar_a.id)
+    assert a["continuing_count"] == 3
+    assert a["continuing_first_choice_count"] == 1
 
 
 async def test_seminar_stats_requires_auth(client) -> None:

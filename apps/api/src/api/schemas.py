@@ -130,6 +130,9 @@ class SeminarStatsOut(BaseModel):
     ratio: float | None
     # 現在の所属ゼミ生数（継続者）。
     continuing_count: int
+    # 継続希望人数: 現在の所属ゼミ生のうち、今回の募集ラウンドで
+    # 同じゼミを第1志望に選んだ人数。
+    continuing_first_choice_count: int
     # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
     target_grades: list[str] | None
 
