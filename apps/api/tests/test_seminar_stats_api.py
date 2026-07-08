@@ -47,9 +47,18 @@ async def _make_seminar(db_session) -> Seminar:
     return seminar
 
 
-async def _set_capacity(db_session, term, seminar, capacity: int) -> None:
+async def _set_capacity(
+    db_session, term, seminar, capacity: int, target_grades: list[str] | None = None
+) -> None:
     db_session.add(
-        SeminarRecruitment(term_id=term.id, seminar_id=seminar.id, capacity=capacity)
+        SeminarRecruitment(
+            term_id=term.id,
+            seminar_id=seminar.id,
+            capacity=capacity,
+            target_grades=(
+                target_grades if target_grades is not None else ["B1", "B2", "B3", "B4"]
+            ),
+        )
     )
     await db_session.flush()
 
@@ -231,6 +240,44 @@ async def test_seminar_stats_ratio_null_when_no_capacity(client, db_session) -> 
     assert stats["capacity"] is None
     assert stats["applicant_count"] == 1
     assert stats["ratio"] is None
+    assert stats["target_grades"] is None
+
+
+async def test_seminar_stats_includes_target_grades(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10, target_grades=["B1", "B2"])
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["target_grades"] == ["B1", "B2"]
+
+
+async def test_seminar_stats_target_grades_null_without_an_active_term(
+    client, db_session
+) -> None:
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    student = await _make_student(db_session)
+
+    _authenticate_as(student)
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["target_grades"] is None
 
 
 async def test_seminar_stats_continuing_count_without_an_active_term(

@@ -293,6 +293,217 @@ describe("AdminSeminarsView", () => {
     );
   });
 
+  it("shows a message instead of capacity inputs when there is no recruitment term", () => {
+    const seminar = makeSeminar();
+    renderView({ seminars: [seminar], latestTerm: null });
+
+    expect(
+      screen.getByText("募集ラウンドがまだ作成されていません。"),
+    ).toBeInTheDocument();
+  });
+
+  it("saves the recruitment capacity and target grades for the latest term", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B1", "B2", "B3", "B4"],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({
+            capacity: 5,
+            target_grades: ["B1", "B2", "B3", "B4"],
+          }),
+        }),
+      );
+    });
+  });
+
+  it("excludes an unchecked grade from target_grades on save", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B2", "B3", "B4"],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    await user.click(screen.getByRole("checkbox", { name: "B1" }));
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify(["B2", "B3", "B4"])),
+        }),
+      );
+    });
+  });
+
+  it("keeps target_grades in B1〜B4 order regardless of check order", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B1", "B4"],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    // 先にB4だけをチェックした状態から始め、後からB1をチェックする
+    // (チェックした順ではなくB1〜B4順で保存されることを確認する)。
+    renderView({
+      seminars: [seminar],
+      latestTerm: term,
+      recruitments: [
+        {
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: ["B4"],
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("checkbox", { name: "B1" }));
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify(["B1", "B4"])),
+        }),
+      );
+    });
+  });
+
+  it("asks for confirmation before saving with no grades selected", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar({
+      name: "AIゼミ",
+    });
+    const term = makeTerm();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          seminar_id: seminar.id,
+          seminar_name: seminar.name,
+          capacity: 5,
+          target_grades: [],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    for (const grade of ["B1", "B2", "B3", "B4"]) {
+      await user.click(screen.getByRole("checkbox", { name: grade }));
+    }
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("AIゼミ"));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
+        ),
+        expect.objectContaining({
+          body: expect.stringContaining(JSON.stringify([])),
+        }),
+      );
+    });
+  });
+
+  it("does not save when the no-grades confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    await user.type(screen.getByPlaceholderText("人数"), "5");
+    for (const grade of ["B1", "B2", "B3", "B4"]) {
+      await user.click(screen.getByRole("checkbox", { name: grade }));
+    }
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows a hint that unchecking all grades closes recruiting", () => {
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    renderView({ seminars: [seminar], latestTerm: term });
+
+    expect(
+      screen.getByText(
+        "対象学年をすべて外すと、このゼミは募集していない扱いになります。",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an error and does not call the API when capacity is empty", async () => {
+    const user = userEvent.setup();
+    const seminar = makeSeminar();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    renderView({ seminars: [seminar], latestTerm: term });
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(
+      await screen.findByText("募集人数を入力してください。"),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("adds a material and shows it in the list", async () => {
     const user = userEvent.setup();
     const seminar = makeSeminar();
