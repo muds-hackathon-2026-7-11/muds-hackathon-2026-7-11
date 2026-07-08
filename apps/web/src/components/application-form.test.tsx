@@ -689,8 +689,14 @@ describe("ApplicationForm", () => {
     );
     await user.click(screen.getByRole("button", { name: "マッチ度診断" }));
 
-    expect(await screen.findByText(/マッチ度 \d+%/)).toBeInTheDocument();
-    expect(screen.getByText(/第1志望・福原ゼミ/)).toBeInTheDocument();
+    // マッチ度は各志望理由の直下に表示される。第1志望の志望理由入力欄と
+    // 同じセクション内にマッチ度が出ていることを確認する。
+    const matchResult = await screen.findByText(/マッチ度 \d+%/);
+    expect(matchResult).toBeInTheDocument();
+    const firstReason = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
+    )[0];
+    expect(firstReason.closest("section")).toContainElement(matchResult);
   });
 
   it("hides the match results again after the slots are edited further", async () => {
