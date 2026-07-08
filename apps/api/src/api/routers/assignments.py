@@ -18,6 +18,17 @@ require_admin = require_role(UserRole.admin)
 _REQUIRED_COLUMNS = ("student_id", "seminar_id")
 
 
+class _AmbiguousMatch(Exception):
+    """student_id/seminar_idの値に対して複数のレコードが一致し、
+    どれを使うべきか一意に決められない場合。student_id(users)にも
+    Seminar.nameにもDBのユニーク制約が無いため起こりうる。
+
+    呼び出し側でこの行だけの取り込みエラーとして扱う(例外を伝播させて
+    アップロード全体を失敗させると、既に処理済みの他の行の配属まで
+    ロールバックされてしまうため)。
+    """
+
+
 def _parse_uuid(value: str) -> uuid.UUID | None:
     try:
         return uuid.UUID(value)
@@ -31,14 +42,19 @@ async def _find_student(db: AsyncSession, *, value: str) -> User | None:
     配属結果CSVは学籍番号の生数字(例: 2522091)で運用されているため)。
     """
     result = await db.execute(select(User).where(User.student_id == value))
-    student = result.scalar_one_or_none()
-    if student is not None:
-        return student
+    students = result.scalars().all()
+    if len(students) > 1:
+        raise _AmbiguousMatch(f"学籍番号が重複しています: {value}")
+    if len(students) == 1:
+        return students[0]
 
     result = await db.execute(
         select(User).where(User.student_id.in_([f"s{value}", f"g{value}"]))
     )
-    return result.scalars().first()
+    students = result.scalars().all()
+    if len(students) > 1:
+        raise _AmbiguousMatch(f"学籍番号(s/g接頭辞)に複数の学生が該当します: {value}")
+    return students[0] if students else None
 
 
 async def _find_seminar(db: AsyncSession, *, value: str) -> Seminar | None:
@@ -50,7 +66,10 @@ async def _find_seminar(db: AsyncSession, *, value: str) -> Seminar | None:
         return await db.get(Seminar, seminar_uuid)
 
     result = await db.execute(select(Seminar).where(Seminar.name == value))
-    return result.scalar_one_or_none()
+    seminars = result.scalars().all()
+    if len(seminars) > 1:
+        raise _AmbiguousMatch(f"ゼミ名が重複しています: {value}")
+    return seminars[0] if seminars else None
 
 
 @router.post("/import", response_model=AssignmentImportResult)
@@ -96,7 +115,11 @@ async def import_assignments(
             )
             continue
 
-        student = await _find_student(db, value=values["student_id"])
+        try:
+            student = await _find_student(db, value=values["student_id"])
+        except _AmbiguousMatch as exc:
+            errors.append(AssignmentImportError(row=row_number, reason=str(exc)))
+            continue
         if student is None:
             errors.append(
                 AssignmentImportError(
@@ -106,7 +129,11 @@ async def import_assignments(
             )
             continue
 
-        seminar = await _find_seminar(db, value=values["seminar_id"])
+        try:
+            seminar = await _find_seminar(db, value=values["seminar_id"])
+        except _AmbiguousMatch as exc:
+            errors.append(AssignmentImportError(row=row_number, reason=str(exc)))
+            continue
         if seminar is None:
             errors.append(
                 AssignmentImportError(

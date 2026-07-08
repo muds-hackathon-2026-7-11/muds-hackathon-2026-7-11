@@ -37,7 +37,11 @@ async def _make_term(db_session) -> RecruitmentTerm:
 
 
 async def _make_seminar(db_session) -> Seminar:
-    seminar = Seminar(name=_unique("seminar"))
+    return await _make_seminar_named(db_session, _unique("seminar"))
+
+
+async def _make_seminar_named(db_session, name: str) -> Seminar:
+    seminar = Seminar(name=name)
     db_session.add(seminar)
     await db_session.flush()
     return seminar
@@ -228,6 +232,83 @@ async def test_import_resolves_student_by_bare_number(client, db_session) -> Non
         )
     )
     assert count.scalar_one() == 1
+
+
+async def test_import_reports_ambiguous_seminar_name_without_failing_other_rows(
+    client, db_session
+) -> None:
+    # Seminar.nameにはDBのユニーク制約が無いため、同名ゼミが複数存在する
+    # ケースがありうる。その行だけをエラーにし、他の正常な行の取り込みを
+    # 巻き込んで失敗させない(アップロード全体のロールバック)ことを確認する。
+    _authenticate_as(await _make_admin(db_session))
+    term = await _make_term(db_session)
+    duplicate_name = _unique("同名ゼミ")
+    await _make_seminar_named(db_session, duplicate_name)
+    await _make_seminar_named(db_session, duplicate_name)
+    ok_seminar = await _make_seminar(db_session)
+    await _make_student(db_session, "s2311070")
+    await _make_student(db_session, "s2311071")
+
+    resp = await _post(
+        client,
+        _csv(
+            [
+                ("s2311070", duplicate_name),  # あいまい: エラーになるべき
+                ("s2311071", str(ok_seminar.id)),  # 正常: 取り込まれるべき
+            ]
+        ),
+        term_id=term.id,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["created"] == 1
+    errors_by_row = {e["row"]: e["reason"] for e in body["errors"]}
+    assert set(errors_by_row) == {1}
+    assert "重複" in errors_by_row[1]
+
+    count = await db_session.execute(
+        select(func.count())
+        .select_from(SeminarMember)
+        .where(
+            SeminarMember.term_id == term.id, SeminarMember.seminar_id == ok_seminar.id
+        )
+    )
+    assert count.scalar_one() == 1
+
+
+async def test_import_reports_ambiguous_student_id_without_failing_other_rows(
+    client, db_session
+) -> None:
+    # User.student_idにもDBのユニーク制約が無いため、同じstudent_idを
+    # 持つユーザーが複数存在するケースがありうる。
+    _authenticate_as(await _make_admin(db_session))
+    term = await _make_term(db_session)
+    seminar = await _make_seminar(db_session)
+    duplicate_student_id = f"s{900_000_000 + (uuid.uuid4().int % 99_999_999)}"
+    await _make_student(db_session, duplicate_student_id)
+    await _make_student(db_session, duplicate_student_id)
+    ok_student = await _make_student(
+        db_session, f"s{900_000_000 + (uuid.uuid4().int % 99_999_999)}"
+    )
+
+    resp = await _post(
+        client,
+        _csv(
+            [
+                (duplicate_student_id, str(seminar.id)),  # あいまい
+                (str(ok_student.student_id), str(seminar.id)),  # 正常
+            ]
+        ),
+        term_id=term.id,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["created"] == 1
+    errors_by_row = {e["row"]: e["reason"] for e in body["errors"]}
+    assert set(errors_by_row) == {1}
+    assert "重複" in errors_by_row[1]
 
 
 async def test_import_rejects_unknown_term(client, db_session) -> None:
