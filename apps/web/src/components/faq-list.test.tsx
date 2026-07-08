@@ -116,6 +116,31 @@ describe("FaqList", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not show the question form until the button is clicked", () => {
+    render(<FaqList seminarId="seminar-1" questions={questions} />);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("opens the question form when the button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<FaqList seminarId="seminar-1" questions={questions} />);
+
+    await user.click(screen.getByRole("button", { name: "質問する" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("closes the question form when cancelled", async () => {
+    const user = userEvent.setup();
+    render(<FaqList seminarId="seminar-1" questions={questions} />);
+
+    await user.click(screen.getByRole("button", { name: "質問する" }));
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("submits a new question and prepends it to the list", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -133,6 +158,7 @@ describe("FaqList", () => {
 
     render(<FaqList seminarId="seminar-1" questions={questions} />);
 
+    await user.click(screen.getByRole("button", { name: "質問する" }));
     await user.type(
       screen.getByPlaceholderText("ゼミへの質問を入力してください"),
       "新しい質問です",
@@ -158,6 +184,7 @@ describe("FaqList", () => {
 
     render(<FaqList seminarId="seminar-1" questions={questions} />);
 
+    await user.click(screen.getByRole("button", { name: "質問する" }));
     await user.click(screen.getByRole("button", { name: "質問を送信" }));
 
     expect(
@@ -179,6 +206,7 @@ describe("FaqList", () => {
 
     render(<FaqList seminarId="seminar-1" questions={questions} />);
 
+    await user.click(screen.getByRole("button", { name: "質問する" }));
     await user.type(
       screen.getByPlaceholderText("ゼミへの質問を入力してください"),
       "質問",
