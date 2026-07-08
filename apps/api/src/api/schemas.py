@@ -301,6 +301,41 @@ class SeminarMatchesOut(BaseModel):
     message: str | None = None
 
 
+# --- 志望理由ごとのマッチ度診断 (#119) ---
+
+
+class ReasonMatchIn(BaseModel):
+    seminar_id: uuid.UUID
+    reason: str = Field(max_length=400)
+
+
+class ReasonMatchesIn(BaseModel):
+    choices: list[ReasonMatchIn] = Field(max_length=3)
+
+
+class ReasonMatchRecommendation(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    score: int  # 0-100
+
+
+class ReasonMatchResult(BaseModel):
+    seminar_id: uuid.UUID  # 志望に選んだゼミ
+    seminar_name: str
+    # 選んだゼミ自身のマッチ度(採点対象外=紹介文/資料が無い等ならnull)。
+    selected_score: int | None
+    rubric: dict
+    summary: str
+    # この志望理由に相性の良い他ゼミTop3(第1〜3志望のゼミは除外)。
+    recommendations: list[ReasonMatchRecommendation]
+
+
+class ReasonMatchesOut(BaseModel):
+    # choices と同じ並び。志望理由が空のスロットは含まない。
+    results: list[ReasonMatchResult]
+    message: str | None = None
+
+
 # --- 運営: 教員・ゼミ管理 (#62) ---
 # 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
 
