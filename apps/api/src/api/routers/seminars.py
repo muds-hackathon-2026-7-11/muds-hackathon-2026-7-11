@@ -132,6 +132,21 @@ async def seminar_stats(
     )
     term = await get_current_term(db)
 
+    # アイコン表示用(#139)。担当教員が1人だけのゼミに限り、その教員の
+    # 写真をゼミアイコンのフォールバックに使えるようにする。
+    teacher_photo_rows = await db.execute(
+        select(SeminarTeacher.seminar_id, User.photo_url).join(
+            User, SeminarTeacher.teacher_id == User.id
+        )
+    )
+    teacher_photos_by_seminar: dict[uuid.UUID, list[str | None]] = {}
+    for seminar_id, photo_url in teacher_photo_rows.all():
+        teacher_photos_by_seminar.setdefault(seminar_id, []).append(photo_url)
+
+    def _single_teacher_photo(seminar_id: uuid.UUID) -> str | None:
+        photos = teacher_photos_by_seminar.get(seminar_id, [])
+        return photos[0] if len(photos) == 1 else None
+
     # 継続ゼミ生数は募集期間の有無に関わらず「現在の年度」で数える
     # (現在のゼミ生は年間通して見える必要があるため)。
     academic_year = await current_academic_year(db)
@@ -167,6 +182,8 @@ async def seminar_stats(
                 continuing_count=continuing_by_seminar.get(s.id, 0),
                 continuing_first_choice_count=0,
                 target_grades=None,
+                photo_url=s.photo_url,
+                teacher_photo_url=_single_teacher_photo(s.id),
             )
             for s in seminars
         ]
@@ -257,6 +274,8 @@ async def seminar_stats(
                     s.id, 0
                 ),
                 target_grades=target_grades_by_seminar.get(s.id),
+                photo_url=s.photo_url,
+                teacher_photo_url=_single_teacher_photo(s.id),
             )
         )
     return stats

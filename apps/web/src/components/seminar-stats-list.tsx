@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -17,6 +18,11 @@ export type SeminarStats = {
   id: string;
   name: string;
   capacity: number | null;
+  // アイコン表示用(#139)。ゼミ自体の写真を最優先で使う。
+  photo_url: string | null;
+  // アイコン表示用(#139)。担当教員が1人だけの場合のみ、その教員の写真を
+  // ゼミ写真未設定時のフォールバックとして使う(複数教員なら常にnull)。
+  teacher_photo_url: string | null;
   applicant_count: number;
   priority_counts: {
     first: number;
@@ -125,6 +131,31 @@ function CategoryDividers({ categories }: { categories: string[] }) {
   );
 }
 
+// ゼミアイコン。ゼミ自体の写真があればそれを優先し、無ければ(担当教員が
+// 1人だけの場合に限り)その教員の写真、どちらも無ければ頭文字を表示する
+// (seminar-detail.tsxのTeacherAvatarと同じ優先順位、#139)。
+function SeminarAvatar({ seminar }: { seminar: SeminarStats }) {
+  const src = seminar.photo_url ?? seminar.teacher_photo_url;
+  const [erroredSrc, setErroredSrc] = useState<string | null>(null);
+
+  if (src && src !== erroredSrc) {
+    return (
+      // biome-ignore lint/performance/noImgElement: photo_urlは任意の外部ドメインのため next/image のドメイン許可設定が不要なimgタグを使う
+      <img
+        src={src}
+        alt={seminar.name}
+        onError={() => setErroredSrc(src)}
+        className="h-20 w-20 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#add8e6]/20 text-3xl font-bold text-sky-900">
+      {seminar.name.charAt(0)}
+    </div>
+  );
+}
+
 type SeminarStatsListProps = {
   stats: SeminarStats[];
 };
@@ -173,10 +204,7 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
   return (
     <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
       <div className="flex items-center gap-4">
-        {/* ゼミアイコン用のスペース。アイコン未設定時はゼミ名の頭文字を表示。 */}
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#add8e6]/20 text-3xl font-bold text-sky-900">
-          {seminar.name.charAt(0)}
-        </div>
+        <SeminarAvatar seminar={seminar} />
         <Link
           href={`/seminars/${seminar.id}`}
           className="text-lg font-semibold text-zinc-800 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"

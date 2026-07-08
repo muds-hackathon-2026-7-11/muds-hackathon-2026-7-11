@@ -14,6 +14,7 @@ from api.models import (
     Seminar,
     SeminarMember,
     SeminarRecruitment,
+    SeminarTeacher,
     User,
     UserRole,
 )
@@ -40,11 +41,29 @@ async def _make_open_term(db_session) -> RecruitmentTerm:
     return term
 
 
-async def _make_seminar(db_session) -> Seminar:
-    seminar = Seminar(name=_unique("seminar"))
+async def _make_seminar(db_session, *, photo_url: str | None = None) -> Seminar:
+    seminar = Seminar(name=_unique("seminar"), photo_url=photo_url)
     db_session.add(seminar)
     await db_session.flush()
     return seminar
+
+
+async def _make_teacher(db_session, *, photo_url: str | None = None) -> User:
+    teacher = User(
+        google_id=_unique("google"),
+        email=f"{_unique('teacher')}@example.com",
+        name=_unique("teacher"),
+        role=UserRole.teacher,
+        photo_url=photo_url,
+    )
+    db_session.add(teacher)
+    await db_session.flush()
+    return teacher
+
+
+async def _link_teacher(db_session, *, seminar: Seminar, teacher: User) -> None:
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=teacher.id))
+    await db_session.flush()
 
 
 async def _set_capacity(
@@ -365,6 +384,83 @@ async def test_seminar_stats_continuing_first_choice_count(client, db_session) -
     a = _find(resp.json(), seminar_a.id)
     assert a["continuing_count"] == 3
     assert a["continuing_first_choice_count"] == 1
+
+
+async def test_seminar_stats_includes_seminar_photo_url(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session, photo_url="https://example.com/lab.jpg")
+    await _set_capacity(db_session, term, seminar, 10)
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["photo_url"] == "https://example.com/lab.jpg"
+
+
+async def test_seminar_stats_uses_sole_teacher_photo(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10)
+    teacher = await _make_teacher(db_session, photo_url="https://example.com/t.jpg")
+    await _link_teacher(db_session, seminar=seminar, teacher=teacher)
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["teacher_photo_url"] == "https://example.com/t.jpg"
+
+
+async def test_seminar_stats_teacher_photo_null_with_multiple_teachers(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10)
+    teacher_a = await _make_teacher(db_session, photo_url="https://example.com/a.jpg")
+    teacher_b = await _make_teacher(db_session, photo_url="https://example.com/b.jpg")
+    await _link_teacher(db_session, seminar=seminar, teacher=teacher_a)
+    await _link_teacher(db_session, seminar=seminar, teacher=teacher_b)
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    # 教員が複数いる場合は、特定の1人を代表にできないためnull。
+    assert stats["teacher_photo_url"] is None
+
+
+async def test_seminar_stats_teacher_photo_null_with_no_teachers(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10)
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["teacher_photo_url"] is None
+
+
+async def test_seminar_stats_photo_fields_present_without_an_active_term(
+    client, db_session
+) -> None:
+    seminar = await _make_seminar(db_session, photo_url="https://example.com/lab.jpg")
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["photo_url"] == "https://example.com/lab.jpg"
+    assert stats["teacher_photo_url"] is None
 
 
 async def test_seminar_stats_requires_auth(client) -> None:

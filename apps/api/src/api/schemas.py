@@ -136,6 +136,11 @@ class SeminarStatsOut(BaseModel):
     continuing_first_choice_count: int
     # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
     target_grades: list[str] | None
+    # アイコン表示用(#139)。ゼミ自体の写真。
+    photo_url: str | None
+    # アイコン表示用(#139)。担当教員が1人だけの場合に限りその教員の写真を
+    # 使う(複数教員のゼミは特定の1人を代表にできないためnull)。
+    teacher_photo_url: str | None
 
 
 class QuestionCreate(BaseModel):

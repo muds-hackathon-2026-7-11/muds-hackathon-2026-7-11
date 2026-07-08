@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SeminarStatsList, type SeminarStats } from "./seminar-stats-list";
 
@@ -18,6 +18,8 @@ const stats: SeminarStats[] = [
     ratio: 0.5,
     target_grades: ["B1", "B2", "B3", "B4"],
     continuing_first_choice_count: 2,
+    photo_url: null,
+    teacher_photo_url: null,
   },
   {
     id: "seminar-2",
@@ -30,6 +32,8 @@ const stats: SeminarStats[] = [
     ratio: null,
     target_grades: null,
     continuing_first_choice_count: 0,
+    photo_url: null,
+    teacher_photo_url: null,
   },
 ];
 
@@ -80,6 +84,65 @@ describe("SeminarStatsList", () => {
     const labels = screen.getAllByText("継続希望人数");
     expect(labels[0].nextElementSibling).toHaveTextContent("2人");
     expect(labels[1].nextElementSibling).toHaveTextContent("0人");
+  });
+
+  it("shows the seminar's own photo when set", () => {
+    const withPhoto: SeminarStats[] = [
+      { ...stats[0], photo_url: "https://example.com/lab.jpg" },
+    ];
+    render(<SeminarStatsList stats={withPhoto} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/lab.jpg",
+    );
+  });
+
+  it("falls back to the sole teacher's photo when the seminar has no photo", () => {
+    const withTeacherPhoto: SeminarStats[] = [
+      { ...stats[0], teacher_photo_url: "https://example.com/teacher.jpg" },
+    ];
+    render(<SeminarStatsList stats={withTeacherPhoto} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/teacher.jpg",
+    );
+  });
+
+  it("prefers the seminar's own photo over the teacher's photo", () => {
+    const withBothPhotos: SeminarStats[] = [
+      {
+        ...stats[0],
+        photo_url: "https://example.com/lab.jpg",
+        teacher_photo_url: "https://example.com/teacher.jpg",
+      },
+    ];
+    render(<SeminarStatsList stats={withBothPhotos} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/lab.jpg",
+    );
+  });
+
+  it("shows the seminar's initial when neither photo is set", () => {
+    render(<SeminarStatsList stats={[stats[0]]} />);
+
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.queryByAltText("AIゼミ")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the initial when the photo fails to load", () => {
+    const withPhoto: SeminarStats[] = [
+      { ...stats[0], photo_url: "https://example.com/broken.jpg" },
+    ];
+    render(<SeminarStatsList stats={withPhoto} />);
+
+    fireEvent.error(screen.getByAltText("AIゼミ"));
+
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.queryByAltText("AIゼミ")).not.toBeInTheDocument();
   });
 
   it("shows a message when there are no stats", () => {
