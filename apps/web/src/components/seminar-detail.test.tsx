@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SeminarDetailView, type SeminarDetail } from "./seminar-detail";
 
@@ -27,6 +27,7 @@ const seminar: SeminarDetail = {
     {
       id: "member-1",
       name: "学生A",
+      grade: "B3",
       research_title: "画像認識の精度向上",
       research_theme: "画像認識",
       interest_tags: [
@@ -36,6 +37,7 @@ const seminar: SeminarDetail = {
     {
       id: "member-2",
       name: "学生B",
+      grade: "B4",
       research_title: null,
       research_theme: "自然言語処理",
       interest_tags: [
@@ -62,9 +64,10 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("山田教授")).toBeInTheDocument();
     expect(screen.getByText("深層学習モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("PDF")).toBeInTheDocument();
-    expect(screen.getByText("学生A")).toBeInTheDocument();
+    // 学年を名前の前に付けて表示し、その下に研究タイトルを出す。
+    expect(screen.getByText("B3 学生A")).toBeInTheDocument();
     expect(screen.getByText("画像認識の精度向上")).toBeInTheDocument();
-    expect(screen.getByText("学生B")).toBeInTheDocument();
+    expect(screen.getByText("B4 学生B")).toBeInTheDocument();
   });
 
   it("falls back to a placeholder when a member's research title is unset", () => {
@@ -135,12 +138,18 @@ describe("SeminarDetailView", () => {
     );
   });
 
-  it("aggregates member interest tags into a chart with counts", () => {
+  it("opens a dialog with the member's research theme and tags when clicked", () => {
     render(<SeminarDetailView seminar={seminar} />);
 
-    // 画像認識タグは学生A・学生Bの両方が持つため、研究概要・タグ表示・
-    // グラフの軸ラベルなど複数箇所に現れる。
-    expect(screen.getAllByText("画像認識").length).toBeGreaterThan(0);
+    // 初期状態ではモーダル(dialog)は開いていない。
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // 名前をクリックすると画面中央にモーダルが開き、研究概要とタグが現れる。
+    fireEvent.click(screen.getByRole("button", { name: /学生A/ }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getAllByText("画像認識").length).toBeGreaterThan(0);
   });
 
   it("always links to the seminar's question page", () => {
