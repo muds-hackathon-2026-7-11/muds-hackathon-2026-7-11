@@ -24,6 +24,12 @@ export default function AdminIndexPage() {
         >
           募集ラウンド管理
         </Link>
+        <Link
+          href="/admin/assignments"
+          className="rounded-lg border border-black/[.08] p-4 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+        >
+          配属結果インポート
+        </Link>
       </div>
     </main>
   );
