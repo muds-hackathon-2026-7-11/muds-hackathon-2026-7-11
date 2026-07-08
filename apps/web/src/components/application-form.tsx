@@ -540,6 +540,12 @@ export function ApplicationForm({
             const seminarSelectId = `seminar-select-${index}`;
             const reasonInputId = `reason-input-${index}`;
 
+            // 動画撮影用の仮画面(#106)。マッチ度診断を押したら、各志望理由の
+            // 直下にその志望のマッチ度(ダミー)を表示する。
+            const mock =
+              MOCK_MATCH_RESULTS[index] ??
+              MOCK_MATCH_RESULTS[MOCK_MATCH_RESULTS.length - 1];
+
             return (
               <section
                 key={PRIORITY_LABELS[index]}
@@ -593,6 +599,17 @@ export function ApplicationForm({
                     placeholder="このゼミを志望する理由を入力してください"
                     className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
+
+                  {showMatchResults && slot.seminarId !== "" && (
+                    <div className="mt-3 rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/10 p-3">
+                      <p className="text-lg font-bold text-sky-900">
+                        マッチ度 {mock.score}%
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        {mock.feedback}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </section>
             );
@@ -631,39 +648,6 @@ export function ApplicationForm({
               {autosaveState === "error" && "自動保存に失敗しました"}
             </span>
           </div>
-
-          {showMatchResults && (
-            <div className="flex flex-col gap-3">
-              {slots
-                .map((slot, index) => ({ slot, index }))
-                .filter(({ slot }) => slot.seminarId !== "")
-                .map(({ slot, index }) => {
-                  const seminarName =
-                    seminars.find((s) => s.id === slot.seminarId)?.name ?? "";
-                  const mock =
-                    MOCK_MATCH_RESULTS[index] ??
-                    MOCK_MATCH_RESULTS[MOCK_MATCH_RESULTS.length - 1];
-                  return (
-                    <section
-                      key={PRIORITY_LABELS[index]}
-                      className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-zinc-500">
-                          {PRIORITY_LABELS[index]}・{seminarName}
-                        </p>
-                        <p className="text-lg font-bold text-sky-900">
-                          マッチ度 {mock.score}%
-                        </p>
-                      </div>
-                      <p className="mt-1 text-sm text-zinc-600">
-                        {mock.feedback}
-                      </p>
-                    </section>
-                  );
-                })}
-            </div>
-          )}
         </>
       )}
     </div>
