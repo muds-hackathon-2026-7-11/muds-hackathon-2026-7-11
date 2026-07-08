@@ -160,7 +160,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
   return (
     <div className="flex flex-col gap-4">
       {errorMessage && (
-        <p className="rounded-lg border border-[#add8e6]/60 bg-white p-4 text-sm">
+        <p className="rounded-2xl border-2 border-red-300 bg-white p-4 text-sm text-red-600 shadow-sm">
           {errorMessage}
         </p>
       )}
@@ -235,7 +235,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
           return (
             <section
               key={teacher.id}
-              className="rounded-lg border border-[#add8e6]/60 bg-white p-4"
+              className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30"
             >
               {isEditing ? (
                 <div className="flex flex-col gap-2">
@@ -244,14 +244,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="名前"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="メールアドレス"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <label className="flex items-center gap-1.5 text-sm text-zinc-700">
                     <input
@@ -263,7 +263,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     有効(is_active)
                   </label>
                   {!editIsActive && (
-                    <p className="text-xs text-zinc-600">
+                    <p className="text-xs text-zinc-400">
                       無効にすると、この教員はログインできなくなります。
                     </p>
                   )}
@@ -272,7 +272,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                       type="button"
                       onClick={() => handleSave(teacher.id)}
                       disabled={isSaving}
-                      className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
                     >
                       {isSaving ? "保存中..." : "保存する"}
                     </button>
@@ -280,7 +280,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                       type="button"
                       onClick={cancelEdit}
                       disabled={isSaving}
-                      className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium hover:bg-[#add8e6]/10"
+                      className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       キャンセル
                     </button>
@@ -289,21 +289,21 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
               ) : (
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-zinc-900">
+                    <p className="font-semibold text-zinc-800">
                       {teacher.name}
                       {!teacher.is_active && (
-                        <span className="ml-2 text-xs font-normal text-zinc-600">
+                        <span className="ml-2 text-xs font-normal text-zinc-400">
                           (無効)
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-zinc-600">{teacher.email}</p>
+                    <p className="text-sm text-zinc-500">{teacher.email}</p>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <button
                       type="button"
                       onClick={() => startEdit(teacher)}
-                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium hover:bg-[#add8e6]/10"
+                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10"
                     >
                       編集
                     </button>
@@ -311,7 +311,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                       type="button"
                       onClick={() => handleDelete(teacher)}
                       disabled={deletingId === teacher.id || !teacher.is_active}
-                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deletingId === teacher.id ? "削除中..." : "削除"}
                     </button>

@@ -44,17 +44,19 @@ export default async function AdminTeachersPage() {
   ]);
 
   return (
-    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
+    <main className="page-canvas relative flex flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 sm:p-6">
         <Link
           href="/admin"
-          className="self-start text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+          className="self-start text-sm text-zinc-500 underline decoration-[#add8e6] underline-offset-4 transition-colors hover:text-zinc-800"
         >
           ← 管理者メニューに戻る
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">教員・管理者管理</h1>
-          <p className="mt-2 text-sm text-zinc-700">
+          <h1 className="text-xl font-semibold text-zinc-900">
+            教員・管理者管理
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
             教員は研究情報を含めて管理し、管理者はログイン権限のみの独立したユーザーとして管理します。
           </p>
         </div>
