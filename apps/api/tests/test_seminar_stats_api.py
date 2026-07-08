@@ -168,6 +168,8 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert a["applicant_count"] == 3
     assert a["priority_counts"] == {"first": 2, "second": 1, "third": 0}
     assert a["grade_counts"] == {"B3": 2, "B4": 1}
+    # s1(B3)/s2(B3)がa@1、s3(B4)がa@2。
+    assert a["priority_grade_counts"] == {"1": {"B3": 2}, "2": {"B4": 1}, "3": {}}
     assert a["ratio"] == 0.3
     assert a["continuing_count"] == 1
 
@@ -175,6 +177,8 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert b["capacity"] == 4
     assert b["applicant_count"] == 2
     assert b["priority_counts"] == {"first": 1, "second": 1, "third": 0}
+    # s3(B4)がb@1、s1(B3)がb@2。
+    assert b["priority_grade_counts"] == {"1": {"B4": 1}, "2": {"B3": 1}, "3": {}}
     assert b["ratio"] == 0.5
     assert b["continuing_count"] == 0
 

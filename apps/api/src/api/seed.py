@@ -14,12 +14,14 @@ from api.models import (
     MaterialType,
     Question,
     RecruitmentTerm,
+    ResearchTag,
     Seminar,
     SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
     User,
+    UserInterestTag,
     UserRole,
 )
 from api.recruitment_terms import get_or_create_recruitment_term
@@ -44,6 +46,8 @@ class StudentSeed(TypedDict):
     name: str
     research_theme: str
     academic_year: int
+    # 興味分野タグ(research_tagsマスタのname)。プロフィール/マッチ用の仮データ。
+    interest_tags: list[str]
 
 
 class MaterialSeed(TypedDict):
@@ -67,6 +71,10 @@ class ApplicationChoiceSeed(TypedDict):
 class ApplicationSeed(TypedDict):
     name: str
     grade: str
+    # 研究概要(users.research_theme)。マッチ度診断・プロフィール表示の仮データ。
+    research_theme: str
+    # 興味分野タグ(research_tagsマスタのname)。
+    interest_tags: list[str]
     choices: list[ApplicationChoiceSeed]
 
 
@@ -118,42 +126,85 @@ STUDENTS: list[StudentSeed] = [
         "name": "山田太郎",
         "research_theme": "画像認識モデルの研究",
         "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["画像認識", "深層学習"],
     },
     {
         "seminar": "中村ゼミ",
         "name": "伊藤さくら",
         "research_theme": "強化学習によるゲームAI",
         "academic_year": CURRENT_ACADEMIC_YEAR - 1,
+        "interest_tags": ["強化学習", "深層学習"],
     },
     {
         "seminar": "福原ゼミ",
         "name": "渡辺健太",
         "research_theme": "分散データベースの性能評価",
         "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["データベース", "最適化"],
     },
     {
         "seminar": "岡ゼミ",
         "name": "小林愛",
         "research_theme": "自律移動ロボットの経路計画",
         "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["自律移動", "制御"],
     },
     {
         "seminar": "高橋・浦木ゼミ",
         "name": "加藤翔太",
         "research_theme": "Webアプリケーションの脆弱性診断",
         "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["認証", "Web開発"],
     },
     {
         "seminar": "高橋・浦木ゼミ",
         "name": "斎藤桃子",
         "research_theme": "無線ネットワークの経路最適化",
         "academic_year": CURRENT_ACADEMIC_YEAR - 1,
+        "interest_tags": ["センサ", "最適化"],
     },
     {
         "seminar": "林・清木ゼミ",
         "name": "吉田陽菜",
         "research_theme": "購買データのクラスタリング分析",
         "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["統計解析", "データ可視化"],
+    },
+    # 中村ゼミ所属を厚めに。研究はVR系がメインの傾向(デモ用の仮データ)。
+    {
+        "seminar": "中村ゼミ",
+        "name": "藤井蓮",
+        "research_theme": "VR空間での没入型学習コンテンツの研究",
+        "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["VR/AR", "VRコンテンツ制作"],
+    },
+    {
+        "seminar": "中村ゼミ",
+        "name": "岡田結衣",
+        "research_theme": "メタバース上での協調作業を支援するインタフェースの研究",
+        "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["メタバース", "VR/AR"],
+    },
+    {
+        "seminar": "中村ゼミ",
+        "name": "松本大和",
+        "research_theme": "VRリハビリテーションの効果測定と可視化",
+        "academic_year": CURRENT_ACADEMIC_YEAR - 1,
+        "interest_tags": ["VR/AR", "データ可視化"],
+    },
+    {
+        "seminar": "中村ゼミ",
+        "name": "中島美咲",
+        "research_theme": "ARによる現実空間への情報重畳と操作支援",
+        "academic_year": CURRENT_ACADEMIC_YEAR,
+        "interest_tags": ["VR/AR", "UI/UX"],
+    },
+    {
+        "seminar": "中村ゼミ",
+        "name": "前田悠斗",
+        "research_theme": "VRコンテンツ制作パイプラインの自動化",
+        "academic_year": CURRENT_ACADEMIC_YEAR - 1,
+        "interest_tags": ["VRコンテンツ制作", "メタバース"],
     },
 ]
 
@@ -213,11 +264,125 @@ QA_PAIRS: list[QASeed] = [
     },
 ]
 
-# 応募状況(GET /seminars/stats)を空にしないための、提出済み志望データ。
+# 応募状況(GET /seminars/stats)のグラフ用の、提出済み志望データ。
+# 学年別グラフを埋めるため B1〜B4 を各ゼミに散らしてある。
+# 研究概要(research_theme)は中村ゼミ(第1志望)をメインに厚く用意し、
+# 他ゼミ第1志望は空にしている(タグ・応募データはグラフ用に全ゼミ付与)。
 APPLICATIONS: list[ApplicationSeed] = [
+    # --- B1(1年生) ---
+    {
+        "name": "応募一花",
+        "grade": "B1",
+        "research_theme": (
+            "スマホで撮った写真を自動で仕分けするような、"
+            "画像認識AIの仕組みを基礎から学びたい。"
+        ),
+        "interest_tags": ["深層学習", "画像認識"],
+        "choices": [
+            {
+                "seminar": "中村ゼミ",
+                "priority": 1,
+                "reason": "AIを基礎から学びたいため。",
+            },
+            {
+                "seminar": "福原ゼミ",
+                "priority": 2,
+                "reason": "データの扱いにも興味があるため。",
+            },
+        ],
+    },
+    {
+        "name": "応募一輝",
+        "grade": "B1",
+        "research_theme": "",
+        "interest_tags": ["自律移動", "制御"],
+        "choices": [
+            {"seminar": "岡ゼミ", "priority": 1, "reason": "ロボットを作りたいため。"},
+            {
+                "seminar": "高橋・浦木ゼミ",
+                "priority": 2,
+                "reason": "ネットワークにも触れたいため。",
+            },
+        ],
+    },
+    {
+        "name": "応募一葉",
+        "grade": "B1",
+        "research_theme": "",
+        "interest_tags": ["Web開発", "UI/UX"],
+        "choices": [
+            {
+                "seminar": "林・清木ゼミ",
+                "priority": 1,
+                "reason": "Web開発を学びたいため。",
+            },
+        ],
+    },
+    # --- B2(2年生) ---
+    {
+        "name": "応募二郎",
+        "grade": "B2",
+        "research_theme": "",
+        "interest_tags": ["データベース", "統計解析"],
+        "choices": [
+            {
+                "seminar": "福原ゼミ",
+                "priority": 1,
+                "reason": "データベースを深く学びたいため。",
+            },
+            {
+                "seminar": "中村ゼミ",
+                "priority": 2,
+                "reason": "分析にも興味があるため。",
+            },
+        ],
+    },
+    {
+        "name": "応募二菜",
+        "grade": "B2",
+        "research_theme": "",
+        "interest_tags": ["暗号", "認証"],
+        "choices": [
+            {
+                "seminar": "高橋・浦木ゼミ",
+                "priority": 1,
+                "reason": "暗号技術を学びたいため。",
+            },
+            {
+                "seminar": "林・清木ゼミ",
+                "priority": 2,
+                "reason": "Web技術にも関心があるため。",
+            },
+        ],
+    },
+    {
+        "name": "応募二葉",
+        "grade": "B2",
+        "research_theme": (
+            "文章や画像を作る生成AIやLLMを、学習支援ツールに応用することに関心がある。"
+        ),
+        "interest_tags": ["生成AI", "LLM"],
+        "choices": [
+            {
+                "seminar": "中村ゼミ",
+                "priority": 1,
+                "reason": "生成AIを研究したいため。",
+            },
+            {
+                "seminar": "岡ゼミ",
+                "priority": 3,
+                "reason": "ロボットへの応用も見たいため。",
+            },
+        ],
+    },
+    # --- B3(3年生) ---
     {
         "name": "応募太郎",
         "grade": "B3",
+        "research_theme": (
+            "気象や株価などの時系列データを、深層学習で予測する研究に取り組みたい。"
+        ),
+        "interest_tags": ["深層学習", "時系列解析"],
         "choices": [
             {
                 "seminar": "中村ゼミ",
@@ -239,6 +404,10 @@ APPLICATIONS: list[ApplicationSeed] = [
     {
         "name": "応募花子",
         "grade": "B3",
+        "research_theme": (
+            "画像認識モデルの認識精度を、データ拡張やモデル改良で高める研究をしたい。"
+        ),
+        "interest_tags": ["画像認識", "深層学習"],
         "choices": [
             {
                 "seminar": "中村ゼミ",
@@ -251,6 +420,8 @@ APPLICATIONS: list[ApplicationSeed] = [
     {
         "name": "応募次郎",
         "grade": "B3",
+        "research_theme": "",
+        "interest_tags": ["データベース", "最適化"],
         "choices": [
             {
                 "seminar": "福原ゼミ",
@@ -266,8 +437,32 @@ APPLICATIONS: list[ApplicationSeed] = [
         ],
     },
     {
+        "name": "応募健",
+        "grade": "B3",
+        "research_theme": "",
+        "interest_tags": ["自律移動", "センサ"],
+        "choices": [
+            {
+                "seminar": "岡ゼミ",
+                "priority": 1,
+                "reason": "自律移動ロボットに関心があるため。",
+            },
+            {
+                "seminar": "福原ゼミ",
+                "priority": 2,
+                "reason": "データベースも学びたいため。",
+            },
+        ],
+    },
+    # --- B4(4年生) ---
+    {
         "name": "応募さくら",
         "grade": "B4",
+        "research_theme": (
+            "深層学習を使って大規模データから有用なパターンを見つける、"
+            "データマイニングの研究を深めたい。"
+        ),
+        "interest_tags": ["深層学習", "データ可視化"],
         "choices": [
             {
                 "seminar": "中村ゼミ",
@@ -282,24 +477,10 @@ APPLICATIONS: list[ApplicationSeed] = [
         ],
     },
     {
-        "name": "応募健",
-        "grade": "B3",
-        "choices": [
-            {
-                "seminar": "岡ゼミ",
-                "priority": 1,
-                "reason": "自律移動ロボットに関心があるため。",
-            },
-            {
-                "seminar": "福原ゼミ",
-                "priority": 2,
-                "reason": "データベースも学びたいため。",
-            },
-        ],
-    },
-    {
         "name": "応募舞",
         "grade": "B4",
+        "research_theme": "",
+        "interest_tags": ["認証", "Web開発"],
         "choices": [
             {
                 "seminar": "高橋・浦木ゼミ",
@@ -310,6 +491,42 @@ APPLICATIONS: list[ApplicationSeed] = [
                 "seminar": "中村ゼミ",
                 "priority": 2,
                 "reason": "機械学習にも興味があるため。",
+            },
+        ],
+    },
+    {
+        "name": "応募翔",
+        "grade": "B4",
+        "research_theme": "",
+        "interest_tags": ["統計解析", "マーケティング"],
+        "choices": [
+            {
+                "seminar": "林・清木ゼミ",
+                "priority": 1,
+                "reason": "データマイニングを研究したいため。",
+            },
+            {
+                "seminar": "福原ゼミ",
+                "priority": 2,
+                "reason": "データ基盤も学びたいため。",
+            },
+        ],
+    },
+    {
+        "name": "応募葵",
+        "grade": "B4",
+        "research_theme": "",
+        "interest_tags": ["制御", "エッジAI"],
+        "choices": [
+            {
+                "seminar": "岡ゼミ",
+                "priority": 1,
+                "reason": "制御工学を研究したいため。",
+            },
+            {
+                "seminar": "高橋・浦木ゼミ",
+                "priority": 3,
+                "reason": "組込みにも興味があるため。",
             },
         ],
     },
@@ -358,6 +575,34 @@ async def _get_or_create_user(
     session.add(user)
     await session.flush()
     return user, True
+
+
+async def _link_interest_tags(
+    session: AsyncSession, *, user: User, tag_names: list[str]
+) -> int:
+    """ユーザーに興味分野タグ(research_tagsマスタ)を紐付ける。追加した数を返す。
+
+    マスタに無い名前は無視する(タグマスタはmigrationで投入済みの想定)。
+    """
+    linked = 0
+    for name in tag_names:
+        tag = (
+            await session.execute(select(ResearchTag).where(ResearchTag.name == name))
+        ).scalar_one_or_none()
+        if tag is None:
+            continue
+        exists = (
+            await session.execute(
+                select(UserInterestTag).where(
+                    UserInterestTag.user_id == user.id,
+                    UserInterestTag.tag_id == tag.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if exists is None:
+            session.add(UserInterestTag(user_id=user.id, tag_id=tag.id))
+            linked += 1
+    return linked
 
 
 async def seed_all() -> None:
@@ -425,6 +670,7 @@ async def seed_all() -> None:
 
         student_created = 0
         member_created = 0
+        tag_link_created = 0
         for i, student_data in enumerate(STUDENTS):
             student, created = await _get_or_create_user(
                 session,
@@ -434,6 +680,9 @@ async def seed_all() -> None:
                 research_theme=student_data["research_theme"],
             )
             student_created += created
+            tag_link_created += await _link_interest_tags(
+                session, user=student, tag_names=student_data["interest_tags"]
+            )
 
             seminar = seminars_by_name[student_data["seminar"]]
             member_term = terms_by_year[student_data["academic_year"]]
@@ -530,8 +779,11 @@ async def seed_all() -> None:
                 key=f"applicant-{i}",
                 name=app_data["name"],
                 role=UserRole.student,
-                research_theme=None,
+                research_theme=app_data["research_theme"],
                 grade=app_data["grade"],
+            )
+            tag_link_created += await _link_interest_tags(
+                session, user=applicant, tag_names=app_data["interest_tags"]
             )
             form_result = await session.execute(
                 select(ApplicationForm).where(
@@ -578,7 +830,7 @@ async def seed_all() -> None:
         f"(links +{link_created}), students: +{student_created} "
         f"(memberships +{member_created}), materials: +{material_created}, "
         f"questions: +{qa_created}, applications: +{application_created} "
-        f"(choices +{choice_created})"
+        f"(choices +{choice_created}), interest_tags: +{tag_link_created}"
     )
 
 

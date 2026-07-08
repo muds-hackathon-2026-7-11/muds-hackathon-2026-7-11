@@ -159,6 +159,7 @@ async def seminar_stats(
                 applicant_count=0,
                 priority_counts=PriorityCounts(first=0, second=0, third=0),
                 grade_counts={},
+                priority_grade_counts={"1": {}, "2": {}, "3": {}},
                 ratio=None,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
                 target_grades=None,
@@ -197,13 +198,18 @@ async def seminar_stats(
     applicant_count: dict[uuid.UUID, int] = {}
     priority_by_seminar: dict[uuid.UUID, dict[int, int]] = {}
     grade_by_seminar: dict[uuid.UUID, dict[str, int]] = {}
+    # ゼミ→志望順位→学年→人数(応募状況グラフの積み上げ用)。
+    priority_grade_by_seminar: dict[uuid.UUID, dict[int, dict[str, int]]] = {}
     for seminar_id, priority, grade in choice_rows.all():
         applicant_count[seminar_id] = applicant_count.get(seminar_id, 0) + 1
         priorities = priority_by_seminar.setdefault(seminar_id, {1: 0, 2: 0, 3: 0})
         priorities[priority] = priorities.get(priority, 0) + 1
-        grades = grade_by_seminar.setdefault(seminar_id, {})
         grade_key = grade or "不明"
+        grades = grade_by_seminar.setdefault(seminar_id, {})
         grades[grade_key] = grades.get(grade_key, 0) + 1
+        by_priority = priority_grade_by_seminar.setdefault(seminar_id, {})
+        by_grade = by_priority.setdefault(priority, {})
+        by_grade[grade_key] = by_grade.get(grade_key, 0) + 1
 
     # 継続者数は term is None の分岐前(現在の年度ベース)で算出済みの
     # continuing_by_seminar をそのまま使う。
@@ -214,6 +220,7 @@ async def seminar_stats(
         count = applicant_count.get(s.id, 0)
         ratio = round(count / capacity, 2) if capacity else None
         priorities = priority_by_seminar.get(s.id, {1: 0, 2: 0, 3: 0})
+        by_priority = priority_grade_by_seminar.get(s.id, {})
         stats.append(
             SeminarStatsOut(
                 id=s.id,
@@ -226,6 +233,9 @@ async def seminar_stats(
                     third=priorities.get(3, 0),
                 ),
                 grade_counts=grade_by_seminar.get(s.id, {}),
+                priority_grade_counts={
+                    str(p): by_priority.get(p, {}) for p in (1, 2, 3)
+                },
                 ratio=ratio,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
                 target_grades=target_grades_by_seminar.get(s.id),
