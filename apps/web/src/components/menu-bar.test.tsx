@@ -28,6 +28,10 @@ describe("MenuBar", () => {
       "href",
       "/assignment",
     );
+    expect(screen.getByRole("link", { name: "AIゼミ相談" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
   });
 
   it("marks the current page as active", () => {
