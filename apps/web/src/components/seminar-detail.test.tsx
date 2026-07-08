@@ -13,6 +13,7 @@ const seminar: SeminarDetail = {
       id: "teacher-1",
       name: "山田教授",
       photo_url: null,
+      research_title: "深層学習モデルの研究",
       research_theme: "深層学習",
       interest_tags: [
         { id: "tag-1", name: "深層学習", category: "AI・機械学習" },
@@ -27,6 +28,7 @@ const seminar: SeminarDetail = {
       id: "member-1",
       name: "学生A",
       grade: "B3",
+      research_title: "画像認識の精度向上",
       research_theme: "画像認識",
       interest_tags: [
         { id: "tag-2", name: "画像認識", category: "画像・映像" },
@@ -36,6 +38,7 @@ const seminar: SeminarDetail = {
       id: "member-2",
       name: "学生B",
       grade: "B4",
+      research_title: null,
       research_theme: "自然言語処理",
       interest_tags: [
         { id: "tag-2", name: "画像認識", category: "画像・映像" },
@@ -59,10 +62,18 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("機械学習の研究をします。")).toBeInTheDocument();
     expect(screen.getByText("山田教授")).toBeInTheDocument();
+    expect(screen.getByText("深層学習モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("PDF")).toBeInTheDocument();
-    // 学年を名前の前に付けて表示する。
+    // 学年を名前の前に付けて表示し、その下に研究タイトルを出す。
     expect(screen.getByText("B3 学生A")).toBeInTheDocument();
+    expect(screen.getByText("画像認識の精度向上")).toBeInTheDocument();
     expect(screen.getByText("B4 学生B")).toBeInTheDocument();
+  });
+
+  it("falls back to a placeholder when a member's research title is unset", () => {
+    render(<SeminarDetailView seminar={seminar} />);
+
+    expect(screen.getByText("研究タイトル未設定")).toBeInTheDocument();
   });
 
   it("shows the teacher's initial when neither teacher nor seminar photo is set", () => {

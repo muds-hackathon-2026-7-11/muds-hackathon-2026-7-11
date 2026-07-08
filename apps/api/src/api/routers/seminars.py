@@ -19,6 +19,7 @@ from api.models import (
     SeminarTeacher,
     User,
     UserInterestTag,
+    UserRole,
 )
 from api.schemas import (
     PriorityCounts,
@@ -30,7 +31,7 @@ from api.schemas import (
     SeminarStatsOut,
     TeacherOut,
 )
-from api.services import current_academic_year, get_current_term
+from api.services import current_academic_year, get_current_term, normalize_grade
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
 
@@ -55,7 +56,17 @@ async def _interest_tags_by_user(
 
 
 @router.get("", response_model=list[SeminarOut])
-async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
+async def list_seminars(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[SeminarOut]:
+    """ゼミ一覧を返す。
+
+    学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
+    ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
+    そもそも選べないようにするため #103)。教員・admin等、学生以外には
+    絞り込みをかけない。
+    """
     term = await get_current_term(db)
 
     if term is None:
@@ -74,7 +85,7 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
         ]
 
     result = await db.execute(
-        select(Seminar, SeminarRecruitment.capacity)
+        select(Seminar, SeminarRecruitment.capacity, SeminarRecruitment.target_grades)
         .outerjoin(
             SeminarRecruitment,
             (SeminarRecruitment.seminar_id == Seminar.id)
@@ -82,18 +93,28 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[SeminarOut]:
         )
         .order_by(Seminar.name)
     )
-    return [
-        SeminarOut(
-            id=seminar.id,
-            name=seminar.name,
-            description=seminar.description,
-            photo_url=seminar.photo_url,
-            capacity=capacity,
-            recruitment_start=term.starts_at,
-            recruitment_end=term.ends_at,
+    student_grade = (
+        normalize_grade(user.grade) if user.role == UserRole.student else None
+    )
+
+    seminars: list[SeminarOut] = []
+    for seminar, capacity, target_grades in result.all():
+        if user.role == UserRole.student and (
+            target_grades is None or student_grade not in target_grades
+        ):
+            continue
+        seminars.append(
+            SeminarOut(
+                id=seminar.id,
+                name=seminar.name,
+                description=seminar.description,
+                photo_url=seminar.photo_url,
+                capacity=capacity,
+                recruitment_start=term.starts_at,
+                recruitment_end=term.ends_at,
+            )
         )
-        for seminar, capacity in result.all()
-    ]
+    return seminars
 
 
 @router.get("/stats", response_model=list[SeminarStatsOut])
@@ -138,21 +159,27 @@ async def seminar_stats(
                 applicant_count=0,
                 priority_counts=PriorityCounts(first=0, second=0, third=0),
                 grade_counts={},
+                priority_grade_counts={"1": {}, "2": {}, "3": {}},
                 ratio=None,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                target_grades=None,
             )
             for s in seminars
         ]
 
-    # ゼミごとの定員
+    # ゼミごとの定員・対象学年
     capacity_rows = await db.execute(
-        select(SeminarRecruitment.seminar_id, SeminarRecruitment.capacity).where(
-            SeminarRecruitment.term_id == term.id
-        )
+        select(
+            SeminarRecruitment.seminar_id,
+            SeminarRecruitment.capacity,
+            SeminarRecruitment.target_grades,
+        ).where(SeminarRecruitment.term_id == term.id)
     )
-    capacity_by_seminar: dict[uuid.UUID, int] = {
-        sid: cap for sid, cap in capacity_rows.all()
-    }
+    capacity_by_seminar: dict[uuid.UUID, int] = {}
+    target_grades_by_seminar: dict[uuid.UUID, list[str]] = {}
+    for sid, cap, target_grades in capacity_rows.all():
+        capacity_by_seminar[sid] = cap
+        target_grades_by_seminar[sid] = target_grades
 
     # 志望内容（当該ラウンドの提出済み・在籍学生のみ）
     choice_rows = await db.execute(
@@ -171,13 +198,18 @@ async def seminar_stats(
     applicant_count: dict[uuid.UUID, int] = {}
     priority_by_seminar: dict[uuid.UUID, dict[int, int]] = {}
     grade_by_seminar: dict[uuid.UUID, dict[str, int]] = {}
+    # ゼミ→志望順位→学年→人数(応募状況グラフの積み上げ用)。
+    priority_grade_by_seminar: dict[uuid.UUID, dict[int, dict[str, int]]] = {}
     for seminar_id, priority, grade in choice_rows.all():
         applicant_count[seminar_id] = applicant_count.get(seminar_id, 0) + 1
         priorities = priority_by_seminar.setdefault(seminar_id, {1: 0, 2: 0, 3: 0})
         priorities[priority] = priorities.get(priority, 0) + 1
-        grades = grade_by_seminar.setdefault(seminar_id, {})
         grade_key = grade or "不明"
+        grades = grade_by_seminar.setdefault(seminar_id, {})
         grades[grade_key] = grades.get(grade_key, 0) + 1
+        by_priority = priority_grade_by_seminar.setdefault(seminar_id, {})
+        by_grade = by_priority.setdefault(priority, {})
+        by_grade[grade_key] = by_grade.get(grade_key, 0) + 1
 
     # 継続者数は term is None の分岐前(現在の年度ベース)で算出済みの
     # continuing_by_seminar をそのまま使う。
@@ -188,6 +220,7 @@ async def seminar_stats(
         count = applicant_count.get(s.id, 0)
         ratio = round(count / capacity, 2) if capacity else None
         priorities = priority_by_seminar.get(s.id, {1: 0, 2: 0, 3: 0})
+        by_priority = priority_grade_by_seminar.get(s.id, {})
         stats.append(
             SeminarStatsOut(
                 id=s.id,
@@ -200,8 +233,12 @@ async def seminar_stats(
                     third=priorities.get(3, 0),
                 ),
                 grade_counts=grade_by_seminar.get(s.id, {}),
+                priority_grade_counts={
+                    str(p): by_priority.get(p, {}) for p in (1, 2, 3)
+                },
                 ratio=ratio,
                 continuing_count=continuing_by_seminar.get(s.id, 0),
+                target_grades=target_grades_by_seminar.get(s.id),
             )
         )
     return stats
@@ -241,6 +278,7 @@ async def get_seminar(
             id=u.id,
             name=u.name,
             photo_url=u.photo_url,
+            research_title=u.research_title,
             research_theme=u.research_theme,
             interest_tags=teacher_tags.get(u.id, []),
         )
@@ -279,6 +317,7 @@ async def get_seminar(
                 id=u.id,
                 name=u.name,
                 grade=u.grade,
+                research_title=u.research_title,
                 research_theme=u.research_theme,
                 interest_tags=member_tags.get(u.id, []),
             )

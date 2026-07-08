@@ -24,13 +24,16 @@ def _unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
-async def _make_student(db_session, *, is_active: bool = True) -> User:
+async def _make_student(
+    db_session, *, is_active: bool = True, grade: str | None = "B1"
+) -> User:
     user = User(
         google_id=_unique("google"),
         email=f"{_unique('student')}@example.com",
         name="テスト学生",
         role=UserRole.student,
         is_active=is_active,
+        grade=grade,
     )
     db_session.add(user)
     await db_session.flush()
@@ -91,10 +94,19 @@ async def _close_all_open_terms(db_session) -> None:
 
 
 async def _make_recruitment(
-    db_session, *, term: RecruitmentTerm, seminar: Seminar, is_recruiting: bool = True
+    db_session,
+    *,
+    term: RecruitmentTerm,
+    seminar: Seminar,
+    target_grades: list[str] | None = None,
 ) -> SeminarRecruitment:
     recruitment = SeminarRecruitment(
-        term_id=term.id, seminar_id=seminar.id, capacity=10, is_recruiting=is_recruiting
+        term_id=term.id,
+        seminar_id=seminar.id,
+        capacity=10,
+        target_grades=(
+            target_grades if target_grades is not None else ["B1", "B2", "B3", "B4"]
+        ),
     )
     db_session.add(recruitment)
     await db_session.flush()
@@ -279,6 +291,28 @@ async def test_get_rejects_inactive_student(client, db_session) -> None:
     resp = await client.get("/applications/me", headers=_auth_headers(student.email))
 
     assert resp.status_code == 403
+
+
+async def test_get_allows_admin_who_is_also_a_student(client, db_session) -> None:
+    # role=adminでも実際には在学中の学生であるユーザーがいるため、
+    # self-serviceな/me系エンドポイントはadminも許可する。
+    await _close_all_open_terms(db_session)
+    admin = User(
+        google_id=_unique("google"),
+        email=f"{_unique('admin')}@example.com",
+        name="テスト管理者",
+        role=UserRole.admin,
+        grade="B3",
+    )
+    db_session.add(admin)
+    await db_session.flush()
+
+    resp = await client.get(
+        "/applications/me",
+        headers={"X-Dev-User-Email": admin.email, "X-Dev-User-Role": "admin"},
+    )
+
+    assert resp.status_code == 200
 
 
 # --- PUT /applications/me ---
@@ -498,7 +532,73 @@ async def test_put_rejects_non_recruiting_seminar(client, db_session) -> None:
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar, is_recruiting=False)
+    await _make_recruitment(db_session, term=term, seminar=seminar, target_grades=[])
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    assert resp.status_code == 400
+
+
+async def test_put_rejects_seminar_not_targeting_students_grade(
+    client, db_session
+) -> None:
+    student = await _make_student(db_session, grade="B2")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    assert resp.status_code == 400
+
+
+async def test_put_accepts_seminar_targeting_students_grade_via_mids_suffix(
+    client, db_session
+) -> None:
+    # "MIDS/B1"のような学生も、末尾のB1として学年別募集の対象に含める(#99)。
+    student = await _make_student(db_session, grade="MIDS/B1")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    assert resp.status_code == 200
+
+
+async def test_put_rejects_seminar_for_student_with_ungraded_grade(
+    client, db_session
+) -> None:
+    # M1/M2/D1/guest/空文字はB1〜B4のどれにも一致しないため、target_gradesが
+    # 全学年を含んでいても常に対象外(#99)。
+    student = await _make_student(db_session, grade="M1")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1", "B2", "B3", "B4"]
+    )
 
     resp = await client.put(
         "/applications/me",
@@ -644,7 +744,7 @@ async def test_submit_rejects_seminar_that_stopped_recruiting_after_draft_saved(
         select(SeminarRecruitment).where(SeminarRecruitment.seminar_id == seminar.id)
     )
     recruitment = result.scalar_one()
-    recruitment.is_recruiting = False
+    recruitment.target_grades = []
     await db_session.flush()
 
     resp = await client.post(

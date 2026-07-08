@@ -22,6 +22,7 @@ type Teacher = {
   id: string;
   name: string;
   photo_url: string | null;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -36,6 +37,7 @@ type Member = {
   id: string;
   name: string;
   grade: string | null;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -172,6 +174,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 />
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-800">{teacher.name}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-700">
+                    {teacher.research_title ?? "研究タイトル未設定"}
+                  </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">
                     {teacher.research_theme ?? "未設定"}
                   </p>
@@ -299,9 +304,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                     : member.name}
                 </span>
                 {/* 研究タイトルは研究概要(research_theme)とは別項目。
-                    まだデータが無いので暫定で固定表示する。 */}
+                    詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
                 <span className="mt-0.5 block truncate text-xs text-zinc-400">
-                  研究タイトル
+                  {member.research_title ?? "研究タイトル未設定"}
                 </span>
               </button>
             ))}
@@ -332,6 +337,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   {openMember.grade
                     ? `${openMember.grade} ${openMember.name}`
                     : openMember.name}
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-700">
+                  {openMember.research_title ?? "研究タイトル未設定"}
                 </p>
               </div>
               <button

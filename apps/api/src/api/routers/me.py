@@ -64,6 +64,7 @@ def _me_out(
         role=user.role,
         student_id=user.student_id,
         grade=user.grade,
+        research_title=user.research_title,
         research_theme=user.research_theme,
         interest_tags=[ResearchTagOut.model_validate(tag) for tag in tags],
         slack_user_id=user.slack_user_id,
@@ -94,7 +95,7 @@ async def update_me(
         require_role(UserRole.student, UserRole.teacher, UserRole.admin)
     ),
 ) -> MeOut:
-    """本人の研究概要・興味分野タグを更新する。"""
+    """本人の研究タイトル・研究概要・興味分野タグを更新する。"""
     # 同じタグIDが複数回送られても1件として扱う(順序は維持)。
     tag_ids = list(dict.fromkeys(payload.interest_tag_ids))
 
@@ -111,6 +112,7 @@ async def update_me(
                 detail=f"存在しない研究分野タグが含まれています: {ids_label}",
             )
 
+    user.research_title = payload.research_title
     user.research_theme = payload.research_theme
 
     await db.execute(delete(UserInterestTag).where(UserInterestTag.user_id == user.id))

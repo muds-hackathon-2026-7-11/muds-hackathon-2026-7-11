@@ -30,6 +30,9 @@ class User(IDMixin, TimestampMixin, Base):
         SAEnum(UserRole, native_enum=False, length=20, create_constraint=True)
     )
     grade: Mapped[str | None] = mapped_column(String, nullable=True)
+    # 研究タイトル(#112)。research_theme(長文の概要)とは別に、一覧等で
+    # ひと目で分かる短いタイトルを持たせる。
+    research_title: Mapped[str | None] = mapped_column(String, nullable=True)
     research_theme: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

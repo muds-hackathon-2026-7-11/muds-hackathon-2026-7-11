@@ -27,12 +27,13 @@ afterEach(() => {
 });
 
 describe("ProfileCard", () => {
-  it("renders the name, email, grade, and research theme", () => {
+  it("renders the name, email, grade, research title, and research theme", () => {
     render(
       <ProfileCard
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
       />,
     );
@@ -42,6 +43,7 @@ describe("ProfileCard", () => {
       screen.getByText("s2300000@stu.musashino-u.ac.jp"),
     ).toBeInTheDocument();
     expect(screen.getByText("B3")).toBeInTheDocument();
+    expect(screen.getByText("音声認識モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("音声処理の研究")).toBeInTheDocument();
   });
 
@@ -51,6 +53,7 @@ describe("ProfileCard", () => {
         name="佐藤 花子"
         email="s2300001@stu.musashino-u.ac.jp"
         grade="MIDS/B1"
+        researchTitle={null}
         researchTheme={null}
       />,
     );
@@ -58,17 +61,19 @@ describe("ProfileCard", () => {
     expect(screen.getByText("MIDS/B1")).toBeInTheDocument();
   });
 
-  it("falls back to a placeholder when grade or researchTheme is missing", () => {
+  it("falls back to a placeholder when grade, researchTitle, or researchTheme is missing", () => {
     render(
       <ProfileCard
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade={null}
+        researchTitle={null}
         researchTheme={null}
       />,
     );
 
     expect(screen.getAllByText("未設定")).toHaveLength(2);
+    expect(screen.getByText("研究タイトル未設定")).toBeInTheDocument();
   });
 
   it("renders the currently set interest tags", () => {
@@ -77,6 +82,7 @@ describe("ProfileCard", () => {
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
         interestTags={[allTags[0]]}
         allTags={allTags}
@@ -87,11 +93,12 @@ describe("ProfileCard", () => {
     expect(screen.queryByText("画像処理")).not.toBeInTheDocument();
   });
 
-  it("enters edit mode and saves the updated research theme and tags", async () => {
+  it("enters edit mode and saves the updated research title, theme, and tags", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
+          research_title: "新しいタイトル",
           research_theme: "新しい研究テーマ",
           interest_tags: [allTags[1]],
         }),
@@ -104,6 +111,7 @@ describe("ProfileCard", () => {
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
         interestTags={[allTags[0]]}
         allTags={allTags}
@@ -113,6 +121,11 @@ describe("ProfileCard", () => {
     await user.click(screen.getByRole("button", { name: "編集" }));
 
     const dialog = within(screen.getByRole("dialog"));
+    const titleInput = dialog.getByPlaceholderText(
+      "研究タイトルを入力してください",
+    );
+    await user.clear(titleInput);
+    await user.type(titleInput, "新しいタイトル");
     const textarea = dialog.getByPlaceholderText("研究概要を入力してください");
     await user.clear(textarea);
     await user.type(textarea, "新しい研究テーマ");
@@ -121,8 +134,9 @@ describe("ProfileCard", () => {
     await user.click(dialog.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
-      expect(screen.getByText("新しい研究テーマ")).toBeInTheDocument();
+      expect(screen.getByText("新しいタイトル")).toBeInTheDocument();
     });
+    expect(screen.getByText("新しい研究テーマ")).toBeInTheDocument();
     expect(screen.getByText("画像処理")).toBeInTheDocument();
     expect(screen.queryByText("機械学習")).not.toBeInTheDocument();
 
@@ -130,6 +144,7 @@ describe("ProfileCard", () => {
     expect(url).toContain("/me");
     expect(init.method).toBe("PATCH");
     const body = JSON.parse(init.body as string);
+    expect(body.research_title).toBe("新しいタイトル");
     expect(body.research_theme).toBe("新しい研究テーマ");
     expect(body.interest_tag_ids).toEqual(["tag-2"]);
   });
@@ -143,17 +158,24 @@ describe("ProfileCard", () => {
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
         allTags={allTags}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "編集" }));
+    const titleInput = screen.getByPlaceholderText(
+      "研究タイトルを入力してください",
+    );
+    await user.clear(titleInput);
+    await user.type(titleInput, "書きかけのタイトル");
     const textarea = screen.getByPlaceholderText("研究概要を入力してください");
     await user.clear(textarea);
     await user.type(textarea, "書きかけの内容");
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
 
+    expect(screen.getByText("音声認識モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("音声処理の研究")).toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText("研究概要を入力してください"),
@@ -169,6 +191,7 @@ describe("ProfileCard", () => {
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
         allTags={allTags}
       />,
@@ -193,6 +216,7 @@ describe("ProfileCard", () => {
         name="山田 太郎"
         email="s2300000@stu.musashino-u.ac.jp"
         grade="B3"
+        researchTitle="音声認識モデルの研究"
         researchTheme="音声処理の研究"
         allTags={allTags}
       />,
