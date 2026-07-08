@@ -406,6 +406,126 @@ async def test_delete_teacher_on_non_teacher_returns_404(client, db_session) -> 
     assert resp.status_code == 404
 
 
+# --- 管理者管理(#134) ---
+
+
+async def test_lookup_admin_candidate_returns_existing_user(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.get(
+        "/admin/admins/lookup", params={"email": teacher.email.upper()}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == str(teacher.id)
+    assert body["name"] == teacher.name
+    assert body["role"] == "teacher"
+
+
+async def test_lookup_admin_candidate_returns_404_when_not_found(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.get(
+        "/admin/admins/lookup", params={"email": "unknown@example.com"}
+    )
+    assert resp.status_code == 404
+
+
+async def test_create_admin_promotes_existing_user(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.post("/admin/admins", json={"email": teacher.email.upper()})
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["id"] == str(teacher.id)
+    assert body["name"] == teacher.name
+
+    await db_session.refresh(teacher)
+    assert teacher.role == UserRole.admin
+
+
+async def test_create_admin_returns_404_when_email_not_registered(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.post("/admin/admins", json={"email": "unknown@example.com"})
+    assert resp.status_code == 404
+
+
+async def test_create_admin_conflict_when_already_admin(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    other = await _make_admin(db_session)
+
+    resp = await client.post("/admin/admins", json={"email": other.email})
+
+    assert resp.status_code == 409
+
+
+async def test_create_admin_rejects_inactive_user(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher, is_active=False)
+
+    resp = await client.post("/admin/admins", json={"email": teacher.email})
+
+    assert resp.status_code == 400
+    await db_session.refresh(teacher)
+    assert teacher.role == UserRole.teacher
+
+
+async def test_create_admin_requires_admin(client, db_session) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.teacher))
+    resp = await client.post("/admin/admins", json={"email": "x@example.com"})
+    assert resp.status_code == 403
+
+
+async def test_list_admins_returns_only_admins(client, db_session) -> None:
+    admin_user = await _make_admin(db_session)
+    _authenticate_as(admin_user)
+    await _make_user(db_session, UserRole.teacher)
+
+    resp = await client.get("/admin/admins")
+    assert resp.status_code == 200
+    ids = {a["id"] for a in resp.json()}
+    assert str(admin_user.id) in ids
+    assert all("email" in a and "is_active" in a for a in resp.json())
+
+
+async def test_remove_admin_reverts_to_student(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    other = await _make_admin(db_session)
+
+    resp = await client.delete(f"/admin/admins/{other.id}")
+
+    assert resp.status_code == 204
+    await db_session.refresh(other)
+    assert other.role == UserRole.student
+    assert other.is_active is True
+    assert await db_session.get(User, other.id) is not None
+
+
+async def test_remove_admin_cannot_remove_self(client, db_session) -> None:
+    admin_user = await _make_admin(db_session)
+    _authenticate_as(admin_user)
+
+    resp = await client.delete(f"/admin/admins/{admin_user.id}")
+
+    assert resp.status_code == 403
+    await db_session.refresh(admin_user)
+    assert admin_user.role == UserRole.admin
+
+
+async def test_remove_admin_on_non_admin_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher = await _make_user(db_session, UserRole.teacher)
+    resp = await client.delete(f"/admin/admins/{teacher.id}")
+    assert resp.status_code == 404
+
+
 # --- 認可 ---
 
 

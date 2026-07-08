@@ -116,6 +116,89 @@ describe("AdminTeachersView", () => {
     );
   });
 
+  it("adds a new teacher", async () => {
+    const user = userEvent.setup();
+    const created = makeTeacher({
+      id: "teacher-2",
+      name: "新任先生",
+      email: "new@example.com",
+      research_title: null,
+      research_theme: null,
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify(created), { status: 201 }),
+      );
+
+    render(<AdminTeachersView initialTeachers={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "+ 教員を追加" }));
+    await user.type(screen.getByPlaceholderText("名前"), "新任先生");
+    await user.type(
+      screen.getByPlaceholderText("メールアドレス"),
+      "new@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "追加する" }));
+
+    expect(await screen.findByText("新任先生")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/teachers"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "新任先生", email: "new@example.com" }),
+      }),
+    );
+  });
+
+  it("shows an error when adding a teacher without a name or email", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<AdminTeachersView initialTeachers={[]} />);
+
+    await user.click(screen.getByRole("button", { name: "+ 教員を追加" }));
+    await user.click(screen.getByRole("button", { name: "追加する" }));
+
+    expect(
+      await screen.findByText("名前とメールアドレスを入力してください。"),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("deletes (deactivates) a teacher after confirmation", async () => {
+    const user = userEvent.setup();
+    const teacher = makeTeacher();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    render(<AdminTeachersView initialTeachers={[teacher]} />);
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+
+    expect(await screen.findByText("(無効)")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/teachers/${teacher.id}`),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("does not delete a teacher when the confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const teacher = makeTeacher();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<AdminTeachersView initialTeachers={[teacher]} />);
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText("(無効)")).not.toBeInTheDocument();
+  });
+
   it("shows an error when the name is cleared before saving", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
