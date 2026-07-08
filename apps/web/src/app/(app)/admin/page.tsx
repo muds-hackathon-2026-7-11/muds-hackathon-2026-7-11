@@ -18,6 +18,12 @@ export default function AdminIndexPage() {
         >
           教員管理
         </Link>
+        <Link
+          href="/admin/recruitment-terms"
+          className="rounded-lg border border-black/[.08] p-4 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+        >
+          募集ラウンド管理
+        </Link>
       </div>
     </main>
   );

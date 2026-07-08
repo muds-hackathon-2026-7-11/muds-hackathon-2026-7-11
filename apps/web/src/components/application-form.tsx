@@ -123,6 +123,9 @@ function formatDateTime(value: string | null): string {
   return new Date(value).toLocaleString("ja-JP", {
     dateStyle: "medium",
     timeStyle: "short",
+    // サーバー(コンテナ)とブラウザでデフォルトタイムゾーンが異なると
+    // SSRとハイドレーション時で表示がずれるため、明示的に固定する。
+    timeZone: "Asia/Tokyo",
   });
 }
 

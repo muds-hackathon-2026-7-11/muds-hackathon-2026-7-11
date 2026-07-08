@@ -4,9 +4,7 @@ import { useSession } from "next-auth/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AdminSeminarsView,
-  type AdminRecruitmentTerm,
   type AdminSeminar,
-  type AdminSeminarRecruitment,
   type AdminTeacherOption,
 } from "./admin-seminars-view";
 
@@ -46,24 +44,9 @@ function makeTeacher(
   };
 }
 
-function makeTerm(
-  overrides: Partial<AdminRecruitmentTerm> = {},
-): AdminRecruitmentTerm {
-  return {
-    id: "term-1",
-    academic_year: 2027,
-    starts_at: "2026-07-07",
-    ends_at: "2027-04-03",
-    status: "open",
-    ...overrides,
-  };
-}
-
 type RenderOverrides = {
   seminars?: AdminSeminar[];
   teachers?: AdminTeacherOption[];
-  latestTerm?: AdminRecruitmentTerm | null;
-  recruitments?: AdminSeminarRecruitment[];
 };
 
 function renderView(overrides: RenderOverrides = {}) {
@@ -71,8 +54,6 @@ function renderView(overrides: RenderOverrides = {}) {
     <AdminSeminarsView
       initialSeminars={overrides.seminars ?? []}
       teacherOptions={overrides.teachers ?? []}
-      latestTerm={overrides.latestTerm ?? null}
-      recruitments={overrides.recruitments ?? []}
     />,
   );
 }
@@ -92,6 +73,14 @@ describe("AdminSeminarsView", () => {
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     const checkbox = screen.getByRole("checkbox", { name: /山田先生/ });
     expect(checkbox).toBeChecked();
+  });
+
+  it("links to the recruitment term management screen", () => {
+    renderView();
+
+    expect(
+      screen.getByRole("link", { name: "募集ラウンド管理" }),
+    ).toHaveAttribute("href", "/admin/recruitment-terms");
   });
 
   it("does not show the create form until the toggle button is clicked", async () => {
@@ -302,217 +291,6 @@ describe("AdminSeminarsView", () => {
       ),
       expect.objectContaining({ method: "POST" }),
     );
-  });
-
-  it("shows a message instead of capacity inputs when there is no recruitment term", () => {
-    const seminar = makeSeminar();
-    renderView({ seminars: [seminar], latestTerm: null });
-
-    expect(
-      screen.getByText("募集ラウンドがまだ作成されていません。"),
-    ).toBeInTheDocument();
-  });
-
-  it("saves the recruitment capacity and target grades for the latest term", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          seminar_id: seminar.id,
-          seminar_name: seminar.name,
-          capacity: 5,
-          target_grades: ["B1", "B2", "B3", "B4"],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    renderView({ seminars: [seminar], latestTerm: term });
-
-    await user.type(screen.getByPlaceholderText("人数"), "5");
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
-        ),
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({
-            capacity: 5,
-            target_grades: ["B1", "B2", "B3", "B4"],
-          }),
-        }),
-      );
-    });
-  });
-
-  it("excludes an unchecked grade from target_grades on save", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          seminar_id: seminar.id,
-          seminar_name: seminar.name,
-          capacity: 5,
-          target_grades: ["B2", "B3", "B4"],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    renderView({ seminars: [seminar], latestTerm: term });
-
-    await user.type(screen.getByPlaceholderText("人数"), "5");
-    await user.click(screen.getByRole("checkbox", { name: "B1" }));
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
-        ),
-        expect.objectContaining({
-          body: expect.stringContaining(JSON.stringify(["B2", "B3", "B4"])),
-        }),
-      );
-    });
-  });
-
-  it("keeps target_grades in B1〜B4 order regardless of check order", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          seminar_id: seminar.id,
-          seminar_name: seminar.name,
-          capacity: 5,
-          target_grades: ["B1", "B4"],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    // 先にB4だけをチェックした状態から始め、後からB1をチェックする
-    // (チェックした順ではなくB1〜B4順で保存されることを確認する)。
-    renderView({
-      seminars: [seminar],
-      latestTerm: term,
-      recruitments: [
-        {
-          seminar_id: seminar.id,
-          seminar_name: seminar.name,
-          capacity: 5,
-          target_grades: ["B4"],
-        },
-      ],
-    });
-
-    await user.click(screen.getByRole("checkbox", { name: "B1" }));
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
-        ),
-        expect.objectContaining({
-          body: expect.stringContaining(JSON.stringify(["B1", "B4"])),
-        }),
-      );
-    });
-  });
-
-  it("asks for confirmation before saving with no grades selected", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar({
-      name: "AIゼミ",
-    });
-    const term = makeTerm();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          seminar_id: seminar.id,
-          seminar_name: seminar.name,
-          capacity: 5,
-          target_grades: [],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    renderView({ seminars: [seminar], latestTerm: term });
-
-    await user.type(screen.getByPlaceholderText("人数"), "5");
-    for (const grade of ["B1", "B2", "B3", "B4"]) {
-      await user.click(screen.getByRole("checkbox", { name: grade }));
-    }
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("AIゼミ"));
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `/admin/recruitment-terms/${term.id}/seminars/${seminar.id}`,
-        ),
-        expect.objectContaining({
-          body: expect.stringContaining(JSON.stringify([])),
-        }),
-      );
-    });
-  });
-
-  it("does not save when the no-grades confirmation is cancelled", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-
-    renderView({ seminars: [seminar], latestTerm: term });
-
-    await user.type(screen.getByPlaceholderText("人数"), "5");
-    for (const grade of ["B1", "B2", "B3", "B4"]) {
-      await user.click(screen.getByRole("checkbox", { name: grade }));
-    }
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("shows a hint that unchecking all grades closes recruiting", () => {
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    renderView({ seminars: [seminar], latestTerm: term });
-
-    expect(
-      screen.getByText(
-        "対象学年をすべて外すと、このゼミは募集していない扱いになります。",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("shows an error and does not call the API when capacity is empty", async () => {
-    const user = userEvent.setup();
-    const seminar = makeSeminar();
-    const term = makeTerm();
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-
-    renderView({ seminars: [seminar], latestTerm: term });
-    await user.click(screen.getByRole("button", { name: "保存する" }));
-
-    expect(
-      await screen.findByText("募集人数を入力してください。"),
-    ).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("adds a material and shows it in the list", async () => {
