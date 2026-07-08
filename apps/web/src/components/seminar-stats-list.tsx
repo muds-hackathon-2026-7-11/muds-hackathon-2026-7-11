@@ -21,9 +21,15 @@ export type SeminarStats = {
     second: number;
     third: number;
   };
+  // 学年(users.grade)別の志望人数(累計)。キーは "B1"〜"B4"、未設定は "不明"。
+  grade_counts: Record<string, number>;
+  // 志望順位(1〜3)ごとの学年別人数。キーは "1"/"2"/"3" → 学年 → 人数。
+  priority_grade_counts: Record<string, Record<string, number>>;
   ratio: number | null;
   // 対象学年(#99/#103)。募集ラウンドの設定が無ければnull。
   target_grades: string[] | null;
+  // 現在の所属ゼミ生数(継続者)。
+  continuing_count?: number;
 };
 
 // 保存順のままだと"B2・B3・B1"のような並びになりうるため、表示前に
@@ -50,6 +56,15 @@ function targetGradesLabel(targetGrades: string[] | null): string {
   return sortByGradeOrder(targetGrades).join("・");
 }
 
+// 学年ごとの表示色。既存UIの水色(#add8e6)に合わせた淡いパステルトーンで、
+// 学年ごとに色を分ける: 1年=黄・2年=赤・3年=緑・4年=青紫。
+const GRADES = [
+  { key: "B1", label: "1年", color: "#f5df8e" },
+  { key: "B2", label: "2年", color: "#f2a6a6" },
+  { key: "B3", label: "3年", color: "#a6dcb0" },
+  { key: "B4", label: "4年", color: "#b3a7e6" },
+] as const;
+
 type SeminarStatsListProps = {
   stats: SeminarStats[];
 };
@@ -73,12 +88,22 @@ export function SeminarStatsList({ stats }: SeminarStatsListProps) {
 }
 
 function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
-  const chartData = [
-    { label: "累計", count: seminar.applicant_count },
-    { label: "第1志望", count: seminar.priority_counts.first },
-    { label: "第2志望", count: seminar.priority_counts.second },
-    { label: "第3志望", count: seminar.priority_counts.third },
+  // 横軸は 累計/第1〜第3志望。各棒はその人数を学年で積み上げて色分けする。
+  const categories: { label: string; counts: Record<string, number> }[] = [
+    { label: "累計", counts: seminar.grade_counts ?? {} },
+    { label: "第1志望", counts: seminar.priority_grade_counts?.["1"] ?? {} },
+    { label: "第2志望", counts: seminar.priority_grade_counts?.["2"] ?? {} },
+    { label: "第3志望", counts: seminar.priority_grade_counts?.["3"] ?? {} },
   ];
+  const chartData = categories.map((category) => {
+    const row: { label: string } & Record<string, number | string> = {
+      label: category.label,
+    };
+    for (const grade of GRADES) {
+      row[grade.key] = category.counts[grade.key] ?? 0;
+    }
+    return row;
+  });
 
   return (
     <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
@@ -112,7 +137,10 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
         <dd>{seminar.ratio ?? "-"}</dd>
       </dl>
 
-      <div className="mt-4 h-40">
+      <p className="mt-4 text-xs font-medium text-zinc-500">
+        志望者数(学年別の内訳)
+      </p>
+      <div className="mt-1 h-40">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
@@ -136,10 +164,36 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
                 fontSize: 12,
               }}
             />
-            <Bar dataKey="count" fill="#add8e6" radius={[4, 4, 0, 0]} />
+            {GRADES.map((grade, index) => (
+              <Bar
+                key={grade.key}
+                dataKey={grade.key}
+                name={grade.label}
+                stackId="grade"
+                fill={grade.color}
+                // 積み上げの最上段(最後の学年)だけ角丸にする。
+                radius={
+                  index === GRADES.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]
+                }
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* 色分けの凡例(1年=黄・2年=赤・3年=緑・4年=青紫)。 */}
+      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600">
+        {GRADES.map((grade) => (
+          <li key={grade.key} className="flex items-center gap-1">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ backgroundColor: grade.color }}
+              aria-hidden
+            />
+            {grade.label}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

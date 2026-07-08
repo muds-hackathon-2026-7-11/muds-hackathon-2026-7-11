@@ -9,6 +9,12 @@ const stats: SeminarStats[] = [
     capacity: 10,
     applicant_count: 5,
     priority_counts: { first: 2, second: 2, third: 1 },
+    grade_counts: { B1: 1, B2: 1, B3: 2, B4: 1 },
+    priority_grade_counts: {
+      "1": { B3: 1, B4: 1 },
+      "2": { B1: 1, B3: 1 },
+      "3": { B2: 1 },
+    },
     ratio: 0.5,
     target_grades: ["B1", "B2", "B3", "B4"],
   },
@@ -18,6 +24,8 @@ const stats: SeminarStats[] = [
     capacity: null,
     applicant_count: 0,
     priority_counts: { first: 0, second: 0, third: 0 },
+    grade_counts: {},
+    priority_grade_counts: { "1": {}, "2": {}, "3": {} },
     ratio: null,
     target_grades: null,
   },
@@ -51,6 +59,15 @@ describe("SeminarStatsList", () => {
       "href",
       "/seminars/seminar-2",
     );
+  });
+
+  it("shows a per-grade legend (1年〜4年) on each card", () => {
+    render(<SeminarStatsList stats={stats} />);
+
+    // 2ゼミ分 × 学年ラベル(凡例 + X軸)。少なくとも各学年が描画される。
+    for (const label of ["1年", "2年", "3年", "4年"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
   });
 
   it("shows a message when there are no stats", () => {

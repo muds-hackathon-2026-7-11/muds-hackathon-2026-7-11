@@ -116,8 +116,12 @@ class SeminarStatsOut(BaseModel):
     capacity: int | None
     applicant_count: int
     priority_counts: PriorityCounts
-    # 学年(users.grade)別の志望人数。grade未設定は "不明"。
+    # 学年(users.grade)別の志望人数(累計)。grade未設定は "不明"。
     grade_counts: dict[str, int]
+    # 志望順位(1〜3)ごとの学年別人数。キーは "1"/"2"/"3"、内側は学年→人数。
+    # 例: {"1": {"B3": 2, "B4": 1}, "2": {"B3": 1}, "3": {}}
+    # 応募状況グラフで「各志望順位の人数を学年で積み上げる」ために使う。
+    priority_grade_counts: dict[str, dict[str, int]]
     # 倍率 = applicant_count / capacity。定員が未設定/0 の場合は null。
     ratio: float | None
     # 現在の所属ゼミ生数（継続者）。
