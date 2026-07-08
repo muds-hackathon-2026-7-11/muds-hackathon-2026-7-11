@@ -27,22 +27,23 @@ async function extractErrorDetail(res: Response): Promise<string> {
 export function AdminAssignmentImportView() {
   const { data: session } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<AssignmentImportResult | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  async function handleUpload(): Promise<void> {
-    setErrorMessage(null);
-    if (!selectedFile) {
-      setErrorMessage("CSVファイルを選択してください。");
+  async function handleFileSelected(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = e.target.files?.[0];
+    if (!file) {
       return;
     }
-    setIsUploading(true);
+    setErrorMessage(null);
     setResult(null);
+    setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", file);
       // multipart/form-dataのboundaryはfetchが自動付与するため、
       // Content-Typeは明示的に指定しない。
       const res = await apiFetch("/admin/assignments/import", session, {
@@ -55,14 +56,13 @@ export function AdminAssignmentImportView() {
       }
       const body = (await res.json()) as AssignmentImportResult;
       setResult(body);
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   }
 
@@ -74,23 +74,24 @@ export function AdminAssignmentImportView() {
           列: student_id(学籍番号), seminar_id, term_id(募集ラウンドのUUID)。
           既に存在する組み合わせはスキップされます(再アップロードしても重複しません)。
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-            className="text-sm"
-          />
-          <button
-            type="button"
-            onClick={handleUpload}
-            disabled={isUploading}
-            className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isUploading ? "アップロード中..." : "アップロードする"}
-          </button>
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={handleFileSelected}
+          disabled={isUploading}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="mt-3 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isUploading
+            ? "アップロード中..."
+            : "CSVファイルを選択してアップロード"}
+        </button>
       </section>
 
       {errorMessage && (

@@ -22,25 +22,24 @@ function makeCsvFile(): File {
   );
 }
 
+function getFileInput(): HTMLInputElement {
+  return document.querySelector('input[type="file"]') as HTMLInputElement;
+}
+
 describe("AdminAssignmentImportView", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("shows an error when uploading without selecting a file", async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-
+  it("shows a single button that opens the file picker", () => {
     render(<AdminAssignmentImportView />);
-    await user.click(screen.getByRole("button", { name: "アップロードする" }));
 
     expect(
-      await screen.findByText("CSVファイルを選択してください。"),
+      screen.getByRole("button", { name: "CSVファイルを選択してアップロード" }),
     ).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("uploads the selected CSV as multipart form data and shows the result", async () => {
+  it("uploads the CSV as multipart form data as soon as it is selected", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ created: 2, existing: 1, errors: [] }), {
@@ -49,11 +48,7 @@ describe("AdminAssignmentImportView", () => {
     );
 
     render(<AdminAssignmentImportView />);
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await user.upload(fileInput, makeCsvFile());
-    await user.click(screen.getByRole("button", { name: "アップロードする" }));
+    await user.upload(getFileInput(), makeCsvFile());
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -80,11 +75,8 @@ describe("AdminAssignmentImportView", () => {
     );
 
     render(<AdminAssignmentImportView />);
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
+    const fileInput = getFileInput();
     await user.upload(fileInput, makeCsvFile());
-    await user.click(screen.getByRole("button", { name: "アップロードする" }));
 
     await screen.findByText("1");
     expect(fileInput.value).toBe("");
@@ -104,11 +96,7 @@ describe("AdminAssignmentImportView", () => {
     );
 
     render(<AdminAssignmentImportView />);
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await user.upload(fileInput, makeCsvFile());
-    await user.click(screen.getByRole("button", { name: "アップロードする" }));
+    await user.upload(getFileInput(), makeCsvFile());
 
     expect(
       await screen.findByText("2行目: 学生が見つかりません: s9999999"),
@@ -124,11 +112,7 @@ describe("AdminAssignmentImportView", () => {
     );
 
     render(<AdminAssignmentImportView />);
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await user.upload(fileInput, makeCsvFile());
-    await user.click(screen.getByRole("button", { name: "アップロードする" }));
+    await user.upload(getFileInput(), makeCsvFile());
 
     expect(await screen.findByText("権限がありません。")).toBeInTheDocument();
   });
