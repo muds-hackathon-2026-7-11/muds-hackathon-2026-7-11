@@ -59,6 +59,10 @@ export function AdminAssignmentImportView({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<AssignmentImportResult | null>(null);
+  // 結果がどの募集ラウンドに対するものかを表示するため、
+  // アップロード時点で選択されていたラウンドを結果と一緒に保持する
+  // (selectedTermIdはこの後も変更されうるため、結果表示には使えない)。
+  const [resultTerm, setResultTerm] = useState<AdminTermOption | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -106,8 +110,10 @@ export function AdminAssignmentImportView({
       setErrorMessage("CSVファイルを選択してください。");
       return;
     }
+    const uploadTerm = terms.find((term) => term.id === selectedTermId) ?? null;
     setIsUploading(true);
     setResult(null);
+    setResultTerm(null);
     try {
       const formData = new FormData();
       formData.append("term_id", selectedTermId);
@@ -124,6 +130,7 @@ export function AdminAssignmentImportView({
       }
       const body = (await res.json()) as AssignmentImportResult;
       setResult(body);
+      setResultTerm(uploadTerm);
       setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -231,6 +238,11 @@ export function AdminAssignmentImportView({
       {result && (
         <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
           <h2 className="font-semibold">結果</h2>
+          {resultTerm && (
+            <p className="mt-1 text-sm text-foreground/60">
+              対象ラウンド: {termLabel(resultTerm)}
+            </p>
+          )}
           <dl className="mt-2 flex flex-col gap-1 text-sm">
             <div className="flex gap-2">
               <dt className="text-foreground/60">作成件数</dt>

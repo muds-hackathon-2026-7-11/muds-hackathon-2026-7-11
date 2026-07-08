@@ -168,6 +168,48 @@ describe("AdminAssignmentImportView", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
+  it("shows which term the result applies to", async () => {
+    const user = userEvent.setup();
+    const term = makeTerm({ id: "term-1", academic_year: 2027 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ created: 1, existing: 0, errors: [] }), {
+        status: 200,
+      }),
+    );
+
+    render(<AdminAssignmentImportView terms={[term]} />);
+    await selectTerm(user, term);
+    await user.upload(getFileInput(), makeCsvFile());
+    await user.click(screen.getByRole("button", { name: "アップロードする" }));
+
+    expect(
+      await screen.findByText(/対象ラウンド: 2027年度/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps showing the result for the term it was uploaded to, even after switching the dropdown afterward", async () => {
+    const user = userEvent.setup();
+    const termA = makeTerm({ id: "term-a", academic_year: 2027 });
+    const termB = makeTerm({ id: "term-b", academic_year: 2028 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ created: 1, existing: 0, errors: [] }), {
+        status: 200,
+      }),
+    );
+
+    render(<AdminAssignmentImportView terms={[termA, termB]} />);
+    await selectTerm(user, termA);
+    await user.upload(getFileInput(), makeCsvFile());
+    await user.click(screen.getByRole("button", { name: "アップロードする" }));
+    await screen.findByText(/対象ラウンド: 2027年度/);
+
+    // アップロード後もラウンドの選択は残る(連続で同じラウンドへ
+    // アップロードする運用のため)が、結果表示はアップロード時点の
+    // ラウンドを指したままにする。
+    await selectTerm(user, termB);
+    expect(screen.getByText(/対象ラウンド: 2027年度/)).toBeInTheDocument();
+  });
+
   it("clears the file input after a successful upload", async () => {
     const user = userEvent.setup();
     const term = makeTerm();
