@@ -101,6 +101,20 @@ function tagChartData(members: Member[]): { name: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
+// タグ名 -> そのタグを持つゼミ生の名前一覧。グラフのバーをクリックした時に
+// 「誰がその分野をやっているか」を表示するために使う。
+function membersByTag(members: Member[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const member of members) {
+    for (const tag of member.interest_tags) {
+      const names = map.get(tag.name) ?? [];
+      names.push(member.name);
+      map.set(tag.name, names);
+    }
+  }
+  return map;
+}
+
 type SeminarDetailViewProps = {
   seminar: SeminarDetail;
 };
@@ -114,6 +128,14 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
   const openMember =
     seminar.current_members.find((m) => m.id === openMemberId) ?? null;
+
+  // グラフのバーをクリックした時に開く「その分野をやっているゼミ生」モーダル。
+  const membersByTagMap = useMemo(
+    () => membersByTag(seminar.current_members),
+    [seminar.current_members],
+  );
+  const [openTag, setOpenTag] = useState<string | null>(null);
+  const openTagMembers = openTag ? (membersByTagMap.get(openTag) ?? []) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -241,7 +263,17 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                     fontSize: 12,
                   }}
                 />
-                <Bar dataKey="count" fill="#add8e6" radius={[0, 4, 4, 0]} />
+                <Bar
+                  dataKey="count"
+                  fill="#add8e6"
+                  radius={[0, 4, 4, 0]}
+                  cursor="pointer"
+                  onClick={(data: { name?: string }) => {
+                    if (data?.name) {
+                      setOpenTag(data.name);
+                    }
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -343,6 +375,64 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {openTag && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: 背景クリックで閉じるための領域
+        // biome-ignore lint/a11y/useKeyWithClickEvents: 閉じるボタンで代替する
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setOpenTag(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${openTag}の研究をしているゼミ生`}
+            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-xl font-bold text-zinc-800">{openTag}</p>
+              <button
+                type="button"
+                onClick={() => setOpenTag(null)}
+                aria-label="閉じる"
+                className="shrink-0 rounded-full p-1 text-zinc-400 transition-colors hover:bg-[#e6e6e6]/60 hover:text-zinc-700"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              この分野のゼミ生 ({openTagMembers.length}人)
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {openTagMembers.map((name) => (
+                <li
+                  key={name}
+                  className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-sm text-zinc-700"
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
