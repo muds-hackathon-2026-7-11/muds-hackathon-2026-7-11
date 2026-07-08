@@ -453,17 +453,17 @@ async def test_delete_teacher_on_non_teacher_returns_404(client, db_session) -> 
 
 async def test_lookup_admin_candidate_returns_existing_user(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
-    teacher = await _make_user(db_session, UserRole.teacher)
+    student = await _make_user(db_session, UserRole.student)
 
     resp = await client.get(
-        "/admin/admins/lookup", params={"email": teacher.email.upper()}
+        "/admin/admins/lookup", params={"email": student.email.upper()}
     )
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["id"] == str(teacher.id)
-    assert body["name"] == teacher.name
-    assert body["role"] == "teacher"
+    assert body["id"] == str(student.id)
+    assert body["name"] == student.name
+    assert body["role"] == "student"
 
 
 async def test_lookup_admin_candidate_returns_404_when_not_found(
@@ -476,19 +476,28 @@ async def test_lookup_admin_candidate_returns_404_when_not_found(
     assert resp.status_code == 404
 
 
-async def test_create_admin_promotes_existing_user(client, db_session) -> None:
+async def test_lookup_admin_candidate_rejects_teacher(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     teacher = await _make_user(db_session, UserRole.teacher)
 
-    resp = await client.post("/admin/admins", json={"email": teacher.email.upper()})
+    resp = await client.get("/admin/admins/lookup", params={"email": teacher.email})
+
+    assert resp.status_code == 400
+
+
+async def test_create_admin_promotes_existing_user(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    student = await _make_user(db_session, UserRole.student)
+
+    resp = await client.post("/admin/admins", json={"email": student.email.upper()})
 
     assert resp.status_code == 201
     body = resp.json()
-    assert body["id"] == str(teacher.id)
-    assert body["name"] == teacher.name
+    assert body["id"] == str(student.id)
+    assert body["name"] == student.name
 
-    await db_session.refresh(teacher)
-    assert teacher.role == UserRole.admin
+    await db_session.refresh(student)
+    assert student.role == UserRole.admin
 
 
 async def test_create_admin_returns_404_when_email_not_registered(
@@ -508,15 +517,26 @@ async def test_create_admin_conflict_when_already_admin(client, db_session) -> N
     assert resp.status_code == 409
 
 
-async def test_create_admin_rejects_inactive_user(client, db_session) -> None:
+async def test_create_admin_rejects_teacher(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
-    teacher = await _make_user(db_session, UserRole.teacher, is_active=False)
+    teacher = await _make_user(db_session, UserRole.teacher)
 
     resp = await client.post("/admin/admins", json={"email": teacher.email})
 
     assert resp.status_code == 400
     await db_session.refresh(teacher)
     assert teacher.role == UserRole.teacher
+
+
+async def test_create_admin_rejects_inactive_user(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    student = await _make_user(db_session, UserRole.student, is_active=False)
+
+    resp = await client.post("/admin/admins", json={"email": student.email})
+
+    assert resp.status_code == 400
+    await db_session.refresh(student)
+    assert student.role == UserRole.student
 
 
 async def test_create_admin_requires_admin(client, db_session) -> None:

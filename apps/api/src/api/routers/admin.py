@@ -339,6 +339,9 @@ async def deactivate_teacher(
 
 # --- 管理者管理(#134) ---
 # 管理者は教員とは独立したユーザー(role=admin)として追加・削除する。
+# 昇格候補はrole=studentのみ許可する。教員は対象外(role=teacherが
+# role=adminへ書き換わると、担当ゼミの一覧・ドロップダウン等の
+# role==teacher基準のクエリから消えてしまうため)。
 
 
 @router.get("/admins/lookup", response_model=AdminUserLookupOut)
@@ -357,6 +360,11 @@ async def lookup_admin_candidate(
         raise HTTPException(
             status_code=404, detail="登録されているユーザーが見つかりません。"
         )
+    if user.role == UserRole.teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="教員は管理者に選べません。",
+        )
     return user
 
 
@@ -366,7 +374,7 @@ async def create_admin(
 ) -> User:
     """既存ユーザーを管理者に昇格させる。
 
-    管理者は新規に作らず、既にusers(学生・教員として登録済み)にいる
+    管理者は新規に作らず、既にusers(学生として登録済み)にいる
     ユーザーのroleをadminへ変更する形で追加する(#134)。
     """
     result = await db.execute(select(User).where(User.email == payload.email))
@@ -378,6 +386,11 @@ async def create_admin(
     if user.role == UserRole.admin:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="既に管理者です。"
+        )
+    if user.role == UserRole.teacher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="教員は管理者に選べません。",
         )
     if not user.is_active:
         raise HTTPException(

@@ -171,7 +171,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
           >
             <h2 className="text-lg font-bold text-zinc-900">管理者を追加</h2>
             <p className="mt-1 text-sm text-zinc-600">
-              既に登録されている学生・教員のメールアドレスを入力してください。
+              既に登録されている学生のメールアドレスを入力してください(教員は選べません)。
             </p>
             {errorMessage && (
               <p className="mt-3 rounded-lg border border-[#add8e6]/60 bg-white p-3 text-sm">
