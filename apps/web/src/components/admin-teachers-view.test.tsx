@@ -44,12 +44,14 @@ describe("AdminTeachersView", () => {
   it("edits a teacher's research title", async () => {
     const user = userEvent.setup();
     const teacher = makeTeacher();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ...teacher, research_title: "新しいタイトル" }),
-        { status: 200 },
-      ),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...teacher, research_title: "新しいタイトル" }),
+          { status: 200 },
+        ),
+      );
 
     render(<AdminTeachersView initialTeachers={[teacher]} />);
 
@@ -60,6 +62,13 @@ describe("AdminTeachersView", () => {
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
     expect(await screen.findByText("新しいタイトル")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/teachers/${teacher.id}`),
+      expect.objectContaining({
+        method: "PATCH",
+        body: expect.stringContaining('"research_title":"新しいタイトル"'),
+      }),
+    );
   });
 
   it("edits a teacher's name and research theme", async () => {
