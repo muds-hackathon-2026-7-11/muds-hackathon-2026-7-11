@@ -20,6 +20,13 @@ type Me = {
   current_seminar: CurrentSeminar | null;
 };
 
+type MyApplication = {
+  id: string | null;
+  status: "draft" | "submitted";
+  submitted_at: string | null;
+  is_editable: boolean;
+};
+
 async function getMe(session: Session | null): Promise<Me | null> {
   try {
     const res = await serverApiFetch("/me", session, { cache: "no-store" });
@@ -30,6 +37,51 @@ async function getMe(session: Session | null): Promise<Me | null> {
   } catch {
     return null;
   }
+}
+
+async function getMyApplication(
+  session: Session | null,
+): Promise<MyApplication | null> {
+  try {
+    const res = await serverApiFetch("/applications/me", session, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return null;
+    }
+    return (await res.json()) as MyApplication;
+  } catch {
+    return null;
+  }
+}
+
+// #137: マイページの「Application Status」カードの文言・ボタンを、
+// 実際の志望提出状況(募集期間外/未提出/下書き/提出済み)に応じて出し分ける。
+function applicationStatusView(application: MyApplication | null): {
+  label: string;
+  buttonLabel: string | null;
+} {
+  if (application === null) {
+    return { label: "取得できませんでした", buttonLabel: null };
+  }
+  if (!application.is_editable) {
+    if (application.id === null) {
+      // 現在募集中の期間が無く、過去の提出も無い(preparing/closed/未設定)。
+      return { label: "準備中", buttonLabel: null };
+    }
+    return {
+      label:
+        application.status === "submitted" ? "提出済み(前回)" : "下書き(前回)",
+      buttonLabel: "内容を確認",
+    };
+  }
+  if (application.id === null) {
+    return { label: "未提出", buttonLabel: "志望を提出" };
+  }
+  return {
+    label: application.status === "submitted" ? "提出済み" : "下書き保存中",
+    buttonLabel: "内容を編集",
+  };
 }
 
 async function getResearchTags(
@@ -53,10 +105,12 @@ export default async function Home() {
   if (!session) {
     redirect("/login");
   }
-  const [me, researchTags] = await Promise.all([
+  const [me, researchTags, myApplication] = await Promise.all([
     getMe(session),
     getResearchTags(session),
+    getMyApplication(session),
   ]);
+  const applicationStatus = applicationStatusView(myApplication);
 
   return (
     <main className="page-canvas relative flex flex-1 flex-col">
@@ -94,16 +148,20 @@ export default async function Home() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Application Status
               </p>
-              <p className="mt-2 text-lg font-semibold text-zinc-800">準備中</p>
-              <div className="mt-4">
-                <Link
-                  href="/apply"
-                  className="flex items-center justify-center gap-2 rounded-full bg-[#add8e6] px-4 py-2.5 text-center text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
-                >
-                  志望を提出
-                  <span aria-hidden>›</span>
-                </Link>
-              </div>
+              <p className="mt-2 text-lg font-semibold text-zinc-800">
+                {applicationStatus.label}
+              </p>
+              {applicationStatus.buttonLabel && (
+                <div className="mt-4">
+                  <Link
+                    href="/apply"
+                    className="flex items-center justify-center gap-2 rounded-full bg-[#add8e6] px-4 py-2.5 text-center text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
+                  >
+                    {applicationStatus.buttonLabel}
+                    <span aria-hidden>›</span>
+                  </Link>
+                </div>
+              )}
             </section>
           </div>
         </div>
