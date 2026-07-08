@@ -7,6 +7,8 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
+  usePlotArea,
+  useXAxisScale,
   XAxis,
   YAxis,
 } from "recharts";
@@ -85,6 +87,44 @@ function StatsTooltip({
   );
 }
 
+// 各バー(カテゴリ)の境目に点線を引く。CartesianGridの縦線はバーの
+// 中心(目盛りの位置)を通ってしまうため、バンドスケールの右端を
+// 明示的に取得して境界線として描画する(Recharts 3のuseXAxisScale/
+// usePlotAreaはCustomized無しでチャート内に直接置いて使える)。
+function CategoryDividers({ categories }: { categories: string[] }) {
+  const xScale = useXAxisScale();
+  const plotArea = usePlotArea();
+  if (!xScale || !plotArea) {
+    return null;
+  }
+  const innerBoundaries = categories
+    .slice(0, -1)
+    .map((category) => xScale(category, { position: "end" }))
+    .filter((x): x is number => x !== undefined);
+  // プロット領域の左端・右端(両端のバーの外側)にも枠線を引く。
+  const boundaries = [
+    plotArea.x,
+    ...innerBoundaries,
+    plotArea.x + plotArea.width,
+  ];
+
+  return (
+    <>
+      {boundaries.map((x) => (
+        <line
+          key={x}
+          x1={x}
+          x2={x}
+          y1={plotArea.y}
+          y2={plotArea.y + plotArea.height}
+          stroke="#d4d4d8"
+          strokeDasharray="3 3"
+        />
+      ))}
+    </>
+  );
+}
+
 type SeminarStatsListProps = {
   stats: SeminarStats[];
 };
@@ -124,6 +164,7 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
     }
     return row;
   });
+  const categoryLabels = categories.map((category) => category.label);
   // 縦軸の最大値: 累計志望者数を5の倍数へ繰り上げる(最低5)。
   const yAxisMax = Math.max(5, Math.ceil(seminar.applicant_count / 5) * 5);
   // 目盛りは0,5,10,...を明示し、recharts任せの自動目盛り(2や4等)を防ぐ。
@@ -146,20 +187,20 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
 
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600 sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-zinc-400">上限人数</dt>
-          <dd className="text-base text-zinc-700">
+          <dt className="text-xs text-zinc-600">上限人数</dt>
+          <dd className="text-base font-medium text-zinc-900">
             {seminar.capacity ?? "未設定"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-zinc-400">第1志望</dt>
-          <dd className="text-base text-zinc-700">
+          <dt className="text-xs text-zinc-600">第1志望</dt>
+          <dd className="text-base font-medium text-zinc-900">
             {seminar.priority_counts.first}人
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-zinc-400">継続希望人数</dt>
-          <dd className="text-base text-zinc-700">
+          <dt className="text-xs text-zinc-600">継続希望人数</dt>
+          <dd className="text-base font-medium text-zinc-900">
             {seminar.continuing_first_choice_count}人
           </dd>
         </div>
@@ -170,8 +211,15 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
           <BarChart
             data={chartData}
             margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+            // バーの太さ(帯のうち隙間にしない割合)。値が小さいほど太くなる。
+            barCategoryGap="25%"
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
+            <CartesianGrid
+              vertical={false}
+              strokeDasharray="3 3"
+              stroke="#e6e6e6"
+            />
+            <CategoryDividers categories={categoryLabels} />
             <XAxis
               dataKey="label"
               tick={{ fill: "#71717a", fontSize: 13 }}
