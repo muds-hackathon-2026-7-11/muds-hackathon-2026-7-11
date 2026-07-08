@@ -1,7 +1,7 @@
 """add seminar knowledge and chat_logs
 
 Revision ID: d72867c83af0
-Revises: 171bf2f71d97
+Revises: bbddcd18973e
 Create Date: 2026-07-07 17:45:32.542034
 
 """
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d72867c83af0"
-down_revision: Union[str, Sequence[str], None] = "171bf2f71d97"
+down_revision: Union[str, Sequence[str], None] = "bbddcd18973e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -22,6 +22,7 @@ type Teacher = {
   id: string;
   name: string;
   photo_url: string | null;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -35,6 +36,7 @@ type Material = {
 type Member = {
   id: string;
   name: string;
+  research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
 };
@@ -82,7 +84,7 @@ function TeacherAvatar({
     );
   }
   return (
-    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-black/[.06] text-lg font-medium text-foreground/60 dark:bg-white/[.08]">
+    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#add8e6]/20 text-lg font-bold text-sky-900">
       {Array.from(name)[0] ?? "?"}
     </div>
   );
@@ -114,26 +116,26 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
     <div className="flex flex-col gap-6">
       <Link
         href="/assignment"
-        className="self-start text-sm underline hover:opacity-70"
+        className="self-start text-sm text-zinc-500 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
       >
         ← 応募状況に戻る
       </Link>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h1 className="text-xl font-semibold">{seminar.name}</h1>
-        <p className="mt-2 whitespace-pre-wrap text-foreground/70">
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+        <h1 className="text-2xl font-bold text-zinc-800">{seminar.name}</h1>
+        <p className="mt-2 whitespace-pre-wrap text-zinc-700">
           {seminar.description ?? "研究内容は未設定です。"}
         </p>
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-foreground/70 sm:w-64">
+        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-zinc-600 sm:w-64">
           <dt>募集人数</dt>
           <dd>{seminar.capacity ?? "未設定"}</dd>
         </dl>
       </section>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h2 className="font-semibold">教員紹介</h2>
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+        <h2 className="text-lg font-bold text-zinc-800">教員紹介</h2>
         {seminar.teachers.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground/60">未設定です。</p>
+          <p className="mt-2 text-sm text-zinc-500">未設定です。</p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-6">
             {seminar.teachers.map((teacher) => (
@@ -144,8 +146,11 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   seminarPhotoUrl={seminar.photo_url}
                 />
                 <div className="min-w-0">
-                  <p className="font-medium">{teacher.name}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
+                  <p className="font-semibold text-zinc-800">{teacher.name}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-700">
+                    {teacher.research_title ?? "研究タイトル未設定"}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">
                     {teacher.research_theme ?? "未設定"}
                   </p>
                   {teacher.interest_tags.length > 0 && (
@@ -153,7 +158,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                       {teacher.interest_tags.map((tag) => (
                         <span
                           key={tag.id}
-                          className="rounded-full border border-black/[.08] px-3 py-1 text-xs text-foreground/70 dark:border-white/[.145]"
+                          className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-sky-900/70"
                         >
                           {tag.name}
                         </span>
@@ -167,12 +172,10 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         )}
       </section>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h2 className="font-semibold">紹介資料</h2>
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+        <h2 className="text-lg font-bold text-zinc-800">紹介資料</h2>
         {seminar.materials.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground/60">
-            資料はまだありません。
-          </p>
+          <p className="mt-2 text-sm text-zinc-500">資料はまだありません。</p>
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
             {seminar.materials.map((material) => (
@@ -181,7 +184,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   href={material.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm underline hover:opacity-70"
+                  className="text-sm text-zinc-700 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
                 >
                   {MATERIAL_TYPE_LABEL[material.type]}
                 </a>
@@ -191,58 +194,61 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         )}
       </section>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h2 className="font-semibold">現在のゼミ生の研究分野</h2>
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+        <h2 className="text-lg font-bold text-zinc-800">
+          現在のゼミ生の研究分野
+        </h2>
         {chartData.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground/60">
+          <p className="mt-2 text-sm text-zinc-500">
             集計できるデータがありません。
           </p>
         ) : (
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical">
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="currentColor"
-                  opacity={0.15}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e6e6" />
                 <XAxis
                   type="number"
                   allowDecimals={false}
-                  tick={{ fill: "currentColor", fontSize: 12 }}
-                  stroke="currentColor"
+                  tick={{ fill: "#71717a", fontSize: 12 }}
+                  stroke="#e6e6e6"
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
                   width={100}
-                  tick={{ fill: "currentColor", fontSize: 12 }}
-                  stroke="currentColor"
+                  tick={{ fill: "#71717a", fontSize: 12 }}
+                  stroke="#e6e6e6"
                 />
                 <Tooltip
+                  cursor={{ fill: "#add8e6", opacity: 0.15 }}
                   contentStyle={{
-                    background: "var(--background)",
-                    color: "var(--foreground)",
-                    border: "1px solid currentColor",
+                    background: "#ffffff",
+                    color: "#3f3f46",
+                    border: "1px solid #add8e6",
+                    borderRadius: 8,
                     fontSize: 12,
                   }}
                 />
-                <Bar dataKey="count" fill="currentColor" />
+                <Bar dataKey="count" fill="#add8e6" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
       </section>
 
-      <section className="rounded-lg border border-black/[.08] p-6 dark:border-white/[.145]">
-        <h2 className="font-semibold">現在のゼミ生</h2>
+      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+        <h2 className="text-lg font-bold text-zinc-800">現在のゼミ生</h2>
         {seminar.current_members.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground/60">未設定です。</p>
+          <p className="mt-2 text-sm text-zinc-500">未設定です。</p>
         ) : (
           <div className="mt-3 flex flex-col gap-4">
             {seminar.current_members.map((member) => (
               <div key={member.id}>
-                <p className="font-medium">{member.name}</p>
+                <p className="font-semibold text-zinc-800">{member.name}</p>
+                <p className="mt-1 text-sm font-medium text-foreground/80">
+                  {member.research_title ?? "研究タイトル未設定"}
+                </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/70">
                   {member.research_theme ?? "未設定"}
                 </p>
@@ -251,7 +257,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                     {member.interest_tags.map((tag) => (
                       <span
                         key={tag.id}
-                        className="rounded-full border border-black/[.08] px-3 py-1 text-xs text-foreground/70 dark:border-white/[.145]"
+                        className="rounded-full border border-[#add8e6]/60 bg-[#add8e6]/10 px-3 py-1 text-xs text-sky-900/70"
                       >
                         {tag.name}
                       </span>
@@ -266,7 +272,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
 
       <Link
         href={`/seminars/${seminar.id}/questions`}
-        className="self-start rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+        className="self-start rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
       >
         FAQ
       </Link>

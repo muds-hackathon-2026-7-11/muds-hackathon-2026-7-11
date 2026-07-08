@@ -47,9 +47,18 @@ async def _make_seminar(db_session) -> Seminar:
     return seminar
 
 
-async def _set_capacity(db_session, term, seminar, capacity: int) -> None:
+async def _set_capacity(
+    db_session, term, seminar, capacity: int, target_grades: list[str] | None = None
+) -> None:
     db_session.add(
-        SeminarRecruitment(term_id=term.id, seminar_id=seminar.id, capacity=capacity)
+        SeminarRecruitment(
+            term_id=term.id,
+            seminar_id=seminar.id,
+            capacity=capacity,
+            target_grades=(
+                target_grades if target_grades is not None else ["B1", "B2", "B3", "B4"]
+            ),
+        )
     )
     await db_session.flush()
 
@@ -159,6 +168,8 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert a["applicant_count"] == 3
     assert a["priority_counts"] == {"first": 2, "second": 1, "third": 0}
     assert a["grade_counts"] == {"B3": 2, "B4": 1}
+    # s1(B3)/s2(B3)がa@1、s3(B4)がa@2。
+    assert a["priority_grade_counts"] == {"1": {"B3": 2}, "2": {"B4": 1}, "3": {}}
     assert a["ratio"] == 0.3
     assert a["continuing_count"] == 1
 
@@ -166,6 +177,8 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert b["capacity"] == 4
     assert b["applicant_count"] == 2
     assert b["priority_counts"] == {"first": 1, "second": 1, "third": 0}
+    # s3(B4)がb@1、s1(B3)がb@2。
+    assert b["priority_grade_counts"] == {"1": {"B4": 1}, "2": {"B3": 1}, "3": {}}
     assert b["ratio"] == 0.5
     assert b["continuing_count"] == 0
 
@@ -231,6 +244,44 @@ async def test_seminar_stats_ratio_null_when_no_capacity(client, db_session) -> 
     assert stats["capacity"] is None
     assert stats["applicant_count"] == 1
     assert stats["ratio"] is None
+    assert stats["target_grades"] is None
+
+
+async def test_seminar_stats_includes_target_grades(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10, target_grades=["B1", "B2"])
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["target_grades"] == ["B1", "B2"]
+
+
+async def test_seminar_stats_target_grades_null_without_an_active_term(
+    client, db_session
+) -> None:
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=60),
+        ends_at=date.today() - timedelta(days=30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    student = await _make_student(db_session)
+
+    _authenticate_as(student)
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["target_grades"] is None
 
 
 async def test_seminar_stats_continuing_count_without_an_active_term(

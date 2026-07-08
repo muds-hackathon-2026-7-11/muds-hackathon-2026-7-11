@@ -140,7 +140,7 @@ async def test_update_recruitment_term(client, db_session) -> None:
     assert resp.json()["ends_at"] == "4103-12-01"
 
 
-# --- ゼミ別 定員・is_recruiting ---
+# --- ゼミ別 定員・対象学年 ---
 
 
 async def test_upsert_and_list_seminar_recruitment(client, db_session) -> None:
@@ -151,17 +151,18 @@ async def test_upsert_and_list_seminar_recruitment(client, db_session) -> None:
 
     create = await client.put(
         f"/admin/recruitment-terms/{term.id}/seminars/{seminar.id}",
-        json={"capacity": 10, "is_recruiting": True},
+        json={"capacity": 10, "target_grades": ["B1", "B2"]},
     )
     assert create.status_code == 200
     assert create.json()["capacity"] == 10
+    assert create.json()["target_grades"] == ["B1", "B2"]
 
     update = await client.put(
         f"/admin/recruitment-terms/{term.id}/seminars/{seminar.id}",
-        json={"capacity": 5, "is_recruiting": False},
+        json={"capacity": 5, "target_grades": []},
     )
     assert update.json()["capacity"] == 5
-    assert update.json()["is_recruiting"] is False
+    assert update.json()["target_grades"] == []
 
     listed = await client.get(f"/admin/recruitment-terms/{term.id}/seminars")
     assert listed.status_code == 200
@@ -169,7 +170,18 @@ async def test_upsert_and_list_seminar_recruitment(client, db_session) -> None:
     assert by_id[str(seminar.id)]["capacity"] == 5
     # 未設定のゼミも一覧に含まれ、値は null
     assert by_id[str(other.id)]["capacity"] is None
-    assert by_id[str(other.id)]["is_recruiting"] is None
+    assert by_id[str(other.id)]["target_grades"] is None
+
+
+async def test_upsert_rejects_unknown_grade(client, db_session) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4107)
+    seminar = await _make_seminar(db_session)
+    resp = await client.put(
+        f"/admin/recruitment-terms/{term.id}/seminars/{seminar.id}",
+        json={"capacity": 10, "target_grades": ["M1"]},
+    )
+    assert resp.status_code == 422
 
 
 async def test_upsert_rejects_negative_capacity(client, db_session) -> None:
@@ -188,9 +200,22 @@ async def test_upsert_unknown_seminar_is_404(client, db_session) -> None:
     term = await _make_term(db_session, academic_year=4106)
     resp = await client.put(
         f"/admin/recruitment-terms/{term.id}/seminars/{uuid.uuid4()}",
-        json={"capacity": 10},
+        json={"capacity": 10, "target_grades": ["B1"]},
     )
     assert resp.status_code == 404
+
+
+async def test_upsert_requires_target_grades(client, db_session) -> None:
+    # このエンドポイントは全置換のため、target_gradesの省略時に暗黙で
+    # 閉じる/開くどちらかにフォールバックさせず、明示必須にしている。
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4108)
+    seminar = await _make_seminar(db_session)
+    resp = await client.put(
+        f"/admin/recruitment-terms/{term.id}/seminars/{seminar.id}",
+        json={"capacity": 10},
+    )
+    assert resp.status_code == 422
 
 
 # --- 認可 ---

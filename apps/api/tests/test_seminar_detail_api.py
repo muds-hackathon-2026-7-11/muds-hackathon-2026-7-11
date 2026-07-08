@@ -170,6 +170,64 @@ async def test_get_seminar_detail_shows_current_members_without_an_active_term(
     assert {m["name"] for m in body["current_members"]} == {student.name}
 
 
+async def test_get_seminar_detail_ignores_a_newer_preparing_term_for_current_members(
+    client, db_session
+) -> None:
+    # 運営が来年度分のラウンドをstatus=preparingで前倒しに作っただけの
+    # 段階では、それを「現在の年度」にしてしまうと在籍ゼミ生が誰も
+    # 表示されなくなってしまっていた(実際の不具合)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、準備段階の次年度ラウンド。
+    next_term = RecruitmentTerm(
+        academic_year=academic_year + 1,
+        starts_at=date.today() + timedelta(days=300),
+        ends_at=date.today() + timedelta(days=330),
+        status=RecruitmentTermStatus.preparing,
+    )
+    db_session.add(next_term)
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
+
+
+async def test_get_seminar_detail_ignores_a_term_opened_before_it_starts(
+    client, db_session
+) -> None:
+    # status=preparingを除くだけでは不十分: 運営がまだ始まっていない
+    # 来年度分のラウンドを(準備目的で)早めにstatus=openにしただけでも、
+    # 在籍ゼミ生が消えないことを確認する。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(db_session, UserRole.student, "現役の研究テーマ")
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
+    # まだ何の配属も行われていない、始まる前の次年度ラウンド(status=open)。
+    next_term = RecruitmentTerm(
+        academic_year=academic_year + 1,
+        starts_at=date.today() + timedelta(days=30),
+        ends_at=date.today() + timedelta(days=60),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(next_term)
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
+
+
 async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(
     client, db_session
 ) -> None:

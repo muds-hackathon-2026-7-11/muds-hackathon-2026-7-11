@@ -272,10 +272,11 @@ async def test_set_own_seminar_recruitment(client, db_session) -> None:
     _authenticate_as(teacher)
     resp = await client.patch(
         f"/teacher/seminars/{seminar.id}/recruitment",
-        json={"capacity": 12, "is_recruiting": True},
+        json={"capacity": 12, "target_grades": ["B1", "B2"]},
     )
     assert resp.status_code == 200
     assert resp.json()["capacity"] == 12
+    assert resp.json()["target_grades"] == ["B1", "B2"]
 
     result = await db_session.execute(
         select(SeminarRecruitment).where(
@@ -284,6 +285,30 @@ async def test_set_own_seminar_recruitment(client, db_session) -> None:
         )
     )
     assert result.scalar_one().capacity == 12
+
+
+async def test_set_own_seminar_recruitment_keeps_target_grades_when_omitted(
+    client, db_session
+) -> None:
+    await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    await client.patch(
+        f"/teacher/seminars/{seminar.id}/recruitment",
+        json={"capacity": 12, "target_grades": ["B1"]},
+    )
+
+    # target_gradesを送らない更新は、既存の値を据え置く。
+    resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}/recruitment",
+        json={"capacity": 20},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["capacity"] == 20
+    assert resp.json()["target_grades"] == ["B1"]
 
 
 async def test_set_recruitment_forbidden_for_other_teachers_seminar(

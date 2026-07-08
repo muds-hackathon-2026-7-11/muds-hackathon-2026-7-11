@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+from api.auth import get_current_user
+from api.main import app
 from api.models import AnswerSource, Question, Seminar, User, UserRole
 from api.services import record_answer
 
@@ -10,6 +12,10 @@ pytestmark = pytest.mark.asyncio
 
 def _unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+def _authenticate_as(user: User) -> None:
+    app.dependency_overrides[get_current_user] = lambda: user
 
 
 async def _make_seminar(db_session) -> Seminar:
@@ -32,6 +38,8 @@ async def _make_user(db_session, role: UserRole = UserRole.student) -> User:
 
 
 async def test_list_seminars(client, db_session) -> None:
+    # 教員は学年別募集(#99/#103)の絞り込みを受けないため認証はteacherにする。
+    _authenticate_as(await _make_user(db_session, UserRole.teacher))
     seminar = await _make_seminar(db_session)
 
     resp = await client.get("/seminars")

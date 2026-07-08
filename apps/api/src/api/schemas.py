@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api.models import (
     ApplicationStatus,
@@ -38,6 +39,7 @@ class MeOut(BaseModel):
     role: UserRole
     student_id: str | None
     grade: str | None
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
@@ -46,8 +48,9 @@ class MeOut(BaseModel):
 
 
 class MeUpdateIn(BaseModel):
-    """本人の研究概要・興味分野タグの更新(PATCH /me)。"""
+    """本人の研究タイトル・研究概要・興味分野タグの更新(PATCH /me)。"""
 
+    research_title: str | None = Field(default=None, max_length=200)
     research_theme: str | None = Field(default=None, max_length=2000)
     interest_tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
 
@@ -74,6 +77,7 @@ class TeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     photo_url: str | None
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 
@@ -89,6 +93,7 @@ class SeminarMaterialOut(BaseModel):
 class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
+    research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
 
@@ -115,12 +120,18 @@ class SeminarStatsOut(BaseModel):
     capacity: int | None
     applicant_count: int
     priority_counts: PriorityCounts
-    # 学年(users.grade)別の志望人数。grade未設定は "不明"。
+    # 学年(users.grade)別の志望人数(累計)。grade未設定は "不明"。
     grade_counts: dict[str, int]
+    # 志望順位(1〜3)ごとの学年別人数。キーは "1"/"2"/"3"、内側は学年→人数。
+    # 例: {"1": {"B3": 2, "B4": 1}, "2": {"B3": 1}, "3": {}}
+    # 応募状況グラフで「各志望順位の人数を学年で積み上げる」ために使う。
+    priority_grade_counts: dict[str, dict[str, int]]
     # 倍率 = applicant_count / capacity。定員が未設定/0 の場合は null。
     ratio: float | None
     # 現在の所属ゼミ生数（継続者）。
     continuing_count: int
+    # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
+    target_grades: list[str] | None
 
 
 class QuestionCreate(BaseModel):
@@ -208,7 +219,11 @@ class RecruitmentTermOut(BaseModel):
 
 class SeminarRecruitmentUpsert(BaseModel):
     capacity: int = Field(ge=0)
-    is_recruiting: bool = True
+    # 募集対象学年(#99)。空リストは「募集していない」を意味する。
+    # このエンドポイントは全置換なので必須にする(省略時に暗黙で
+    # 閉じる/開くのどちらかにフォールバックすると、teacher.py側の
+    # 「省略時は既存値据え置き」という別の省略時挙動と食い違うため)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]]
 
 
 class SeminarRecruitmentOut(BaseModel):
@@ -217,7 +232,7 @@ class SeminarRecruitmentOut(BaseModel):
     seminar_id: uuid.UUID
     seminar_name: str
     capacity: int | None
-    is_recruiting: bool | None
+    target_grades: list[str] | None
 
 
 # --- 教員向け応募者管理 (#58) ---
@@ -245,14 +260,15 @@ class SeminarApplicantsOut(BaseModel):
 
 class TeacherRecruitmentUpdate(BaseModel):
     capacity: int = Field(ge=0)
-    is_recruiting: bool | None = None
+    # Noneなら据え置き(現状の対象学年を変更しない)。
+    target_grades: list[Literal["B1", "B2", "B3", "B4"]] | None = None
 
 
 class TeacherRecruitmentOut(BaseModel):
     seminar_id: uuid.UUID
     seminar_name: str
     capacity: int | None
-    is_recruiting: bool | None
+    target_grades: list[str] | None
 
 
 # --- マッチ度診断 (#59) ---
@@ -284,6 +300,18 @@ class AdminSeminarUpdate(BaseModel):
     photo_url: str | None = None
 
 
+class AdminSeminarTeacherOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
+class SeminarMaterialCreate(BaseModel):
+    url: str = Field(min_length=1)
+    type: MaterialType
+
+
 class AdminSeminarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -291,10 +319,31 @@ class AdminSeminarOut(BaseModel):
     name: str
     description: str | None
     photo_url: str | None
+    teachers: list[AdminSeminarTeacherOut]
+    materials: list[SeminarMaterialOut]
+
+
+class AdminTeacherCreate(BaseModel):
+    # 教員ユーザーを1名追加する(作成はここ、一括はCSV #40)。
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=3, max_length=255)
+    research_title: str | None = None
+    research_theme: str | None = None
+    photo_url: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        # import系と揃えて小文字正規化し、最低限の形式チェックを行う。
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
 
 
 class AdminTeacherUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    research_title: str | None = None
     research_theme: str | None = None
     photo_url: str | None = None
     is_active: bool | None = None
@@ -306,6 +355,7 @@ class AdminTeacherOut(BaseModel):
     id: uuid.UUID
     name: str
     email: str
+    research_title: str | None
     research_theme: str | None
     photo_url: str | None
     is_active: bool

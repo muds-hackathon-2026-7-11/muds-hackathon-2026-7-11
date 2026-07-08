@@ -50,16 +50,19 @@ export default async function ApplyPage() {
   ]);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">志望提出</h1>
-
-      {application ? (
-        <ApplicationForm seminars={seminars} initialApplication={application} />
-      ) : (
-        <section className="rounded-lg border border-black/[.08] p-6 text-foreground/60 dark:border-white/[.145]">
-          志望情報を取得できませんでした。時間をおいて再度お試しください。
-        </section>
-      )}
+    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        {application ? (
+          <ApplicationForm
+            seminars={seminars}
+            initialApplication={application}
+          />
+        ) : (
+          <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+            志望情報を取得できませんでした。時間をおいて再度お試しください。
+          </section>
+        )}
+      </div>
     </main>
   );
 }
