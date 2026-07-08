@@ -85,8 +85,7 @@ export default async function Home() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Current Assignment
               </p>
-              <p className="mt-2 text-xs text-zinc-400">所属ゼミ</p>
-              <p className="mt-0.5 text-lg font-semibold text-zinc-800">
+              <p className="mt-2 text-lg font-semibold text-zinc-800">
                 {me?.current_seminar?.name ?? "未配属"}
               </p>
             </section>
@@ -95,10 +94,7 @@ export default async function Home() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Application Status
               </p>
-              <p className="mt-2 text-xs text-zinc-400">志望提出状況</p>
-              <p className="mt-0.5 text-lg font-semibold text-zinc-800">
-                準備中
-              </p>
+              <p className="mt-2 text-lg font-semibold text-zinc-800">準備中</p>
               <div className="mt-4">
                 <Link
                   href="/apply"
