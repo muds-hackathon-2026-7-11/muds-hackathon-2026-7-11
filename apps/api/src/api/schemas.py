@@ -374,3 +374,28 @@ class AssignmentImportResult(BaseModel):
     created: int  # 新規に作成した配属レコード数
     existing: int  # 既に存在していた(スキップした)数
     errors: list[AssignmentImportError]
+
+
+# --- AIゼミ相談アシスタント (requirements §2 / chat_logs) ---
+
+
+class ConsultTurnIn(BaseModel):
+    # 会話履歴の1発話。role は "user" / "assistant"。
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ConsultIn(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    # 継続会話用。直近の履歴(なければ空)。長すぎる分はサーバ側で切り詰める。
+    history: list[ConsultTurnIn] = Field(default_factory=list, max_length=20)
+
+
+class ConsultRecommendation(BaseModel):
+    seminar_name: str
+    reason: str
+
+
+class ConsultOut(BaseModel):
+    reply: str
+    recommendations: list[ConsultRecommendation]

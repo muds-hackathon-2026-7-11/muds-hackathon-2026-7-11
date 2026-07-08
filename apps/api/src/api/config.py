@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str | None = None
     match_model: str = "gpt-4o-mini"
+    # ゼミ資料PDFの要約に使うモデル。スクショ/スライドの画像ページを読むため
+    # Vision対応が必須(gpt-4o-mini はVision対応)。
+    doc_summary_model: str = "gpt-4o-mini"
 
 
 settings = Settings()

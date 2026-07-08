@@ -8,6 +8,7 @@ from api.routers import (
     admin,
     applications,
     assignments,
+    consult,
     match,
     me,
     questions,
@@ -45,6 +46,7 @@ app.include_router(match.router)
 app.include_router(admin.router)
 app.include_router(assignments.router)
 app.include_router(research_tags.router)
+app.include_router(consult.router)
 
 
 @app.get("/health")

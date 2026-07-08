@@ -5,7 +5,7 @@ import pytest
 from api import auth
 from api.auth import get_current_user
 from api.main import app
-from api.models import Seminar, User, UserRole
+from api.models import ResearchTag, Seminar, User, UserInterestTag, UserRole
 
 pytestmark = pytest.mark.asyncio
 
@@ -101,3 +101,48 @@ async def test_match_requires_authentication(client, monkeypatch) -> None:
     monkeypatch.setattr(auth.settings, "auth_dev_mode", False)
     resp = await client.get(f"/seminars/{uuid.uuid4()}/match")
     assert resp.status_code == 401
+
+
+async def test_match_enriches_with_interest_tags_and_knowledge(
+    client, db_session, fake_match_client
+) -> None:
+    # 学生側は研究概要+興味タグ、ゼミ側は紹介文+資料要約(PDF由来)が渡る。
+    user = await _make_user(db_session, research_theme="推薦システム")
+    tag = ResearchTag(name="自然言語処理", category="AI", sort_order=1)
+    db_session.add(tag)
+    await db_session.flush()
+    db_session.add(UserInterestTag(user_id=user.id, tag_id=tag.id))
+    seminar = await _make_seminar(db_session, description="AIのゼミ")
+    seminar.knowledge = "深層学習と推薦を扱う研究室"
+    await db_session.flush()
+    _authenticate_as(user)
+
+    resp = await client.get(f"/seminars/{seminar.id}/match")
+
+    assert resp.status_code == 200
+    student_text, seminar_text = fake_match_client.calls[0]
+    assert "推薦システム" in student_text
+    assert "自然言語処理" in student_text  # 興味タグ
+    assert "AIのゼミ" in seminar_text
+    assert "深層学習と推薦を扱う研究室" in seminar_text  # 資料要約
+
+
+async def test_match_returns_message_when_llm_fails(
+    client, db_session, fake_match_client, monkeypatch
+) -> None:
+    user = await _make_user(db_session, research_theme="分散システム")
+    seminar = await _make_seminar(db_session, description="DBのゼミ")
+    _authenticate_as(user)
+
+    async def _boom(*, student_text: str, seminar_text: str):
+        raise RuntimeError("OpenAI down (429)")
+
+    monkeypatch.setattr(fake_match_client, "evaluate", _boom)
+
+    resp = await client.get(f"/seminars/{seminar.id}/match")
+
+    # LLM失敗でも500にせず、算出不可メッセージを返す
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["score"] is None
+    assert body["message"]

@@ -22,6 +22,9 @@ class Seminar(IDMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # ゼミ資料(PDF)から生成したAI用の要約知識。マッチ度診断・相談チャットの
+    # 文脈として使う。import_seminar_docs で投入する(未投入なら NULL)。
+    knowledge: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SeminarTeacher(IDMixin, Base):

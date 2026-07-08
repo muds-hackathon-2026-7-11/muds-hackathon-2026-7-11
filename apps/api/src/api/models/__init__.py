@@ -1,4 +1,5 @@
 from api.models.application import ApplicationChoice, ApplicationForm, ApplicationStatus
+from api.models.chat_log import ChatLog
 from api.models.match_evaluation import MatchEvaluation
 from api.models.notification import Notification, NotificationType
 from api.models.question import (
@@ -32,6 +33,7 @@ __all__ = [
     "ApplicationChoice",
     "ApplicationForm",
     "ApplicationStatus",
+    "ChatLog",
     "MaterialType",
     "MatchEvaluation",
     "Notification",
