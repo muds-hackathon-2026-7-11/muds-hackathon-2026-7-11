@@ -39,7 +39,7 @@ describe("SeminarStatsList", () => {
 
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("Webゼミ")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("10人")).toBeInTheDocument();
 
     const labels = screen.getAllByText("第1志望");
     expect(labels[0].nextElementSibling).toHaveTextContent("2人");

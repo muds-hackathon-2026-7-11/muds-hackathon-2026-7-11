@@ -185,11 +185,11 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
         </Link>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600 sm:grid-cols-3">
+      <dl className="mt-4 ml-2 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600 sm:grid-cols-3">
         <div>
           <dt className="text-xs text-zinc-600">上限人数</dt>
           <dd className="text-base font-medium text-zinc-900">
-            {seminar.capacity ?? "未設定"}
+            {seminar.capacity != null ? `${seminar.capacity}人` : "未設定"}
           </dd>
         </div>
         <div>
