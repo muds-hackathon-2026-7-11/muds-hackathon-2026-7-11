@@ -11,10 +11,12 @@ from api.models import (
     AnswerRequest,
     AnswerRequestStatus,
     AnswerSource,
+    ApplicationChoice,
     Question,
     QuestionStatus,
     RecruitmentTerm,
     RecruitmentTermStatus,
+    Seminar,
     SeminarMember,
     SeminarTeacher,
     User,
@@ -401,3 +403,61 @@ async def record_answer_and_notify(
 
     await db.flush()
     return answer
+
+
+def _submission_confirmation_blocks(
+    choices: list[ApplicationChoice], seminar_names: dict[uuid.UUID, str]
+) -> list[dict]:
+    lines = "\n".join(
+        f"第{c.priority}志望: {seminar_names.get(c.seminar_id, '不明')}"
+        for c in sorted(choices, key=lambda c: c.priority)
+    )
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": ":white_check_mark: *志望を提出しました*",
+            },
+        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": lines}},
+    ]
+
+
+async def notify_submission(
+    db: AsyncSession,
+    slack_client: SlackClient,
+    *,
+    user: User,
+    choices: list[ApplicationChoice],
+) -> None:
+    """志望提出時に、提出した本人へSlackで確認通知を送る(#153)。
+
+    Slack API呼び出しの失敗は他の通知系と同じく個別に握りつぶし、
+    提出処理自体を失敗させない。締切前の上書き(再提出)でも都度送ってよい。
+    """
+    if user.slack_user_id is None or not choices:
+        return
+
+    seminar_ids = [c.seminar_id for c in choices]
+    result = await db.execute(
+        select(Seminar.id, Seminar.name).where(Seminar.id.in_(seminar_ids))
+    )
+    seminar_names: dict[uuid.UUID, str] = {row.id: row.name for row in result.all()}
+
+    text = "志望を提出しました: " + ", ".join(
+        f"第{c.priority}志望 {seminar_names.get(c.seminar_id, '不明')}"
+        for c in sorted(choices, key=lambda c: c.priority)
+    )
+    try:
+        await slack_client.send_dm(
+            slack_user_id=user.slack_user_id,
+            text=text,
+            blocks=_submission_confirmation_blocks(choices, seminar_names),
+        )
+    except Exception:
+        logger.warning(
+            "提出確認通知の送信に失敗しました: user_id=%s",
+            user.id,
+            exc_info=True,
+        )

@@ -25,7 +25,11 @@ def _unique(prefix: str) -> str:
 
 
 async def _make_student(
-    db_session, *, is_active: bool = True, grade: str | None = "B1"
+    db_session,
+    *,
+    is_active: bool = True,
+    grade: str | None = "B1",
+    slack_user_id: str | None = None,
 ) -> User:
     user = User(
         google_id=_unique("google"),
@@ -34,6 +38,7 @@ async def _make_student(
         role=UserRole.student,
         is_active=is_active,
         grade=grade,
+        slack_user_id=slack_user_id,
     )
     db_session.add(user)
     await db_session.flush()
@@ -685,6 +690,83 @@ async def test_submit_moves_draft_to_submitted(client, db_session) -> None:
     body = resp.json()
     assert body["status"] == "submitted"
     assert body["submitted_at"] is not None
+
+
+async def test_submit_sends_slack_confirmation(
+    client, db_session, fake_slack_client
+) -> None:
+    student = await _make_student(db_session, slack_user_id=_unique("U"))
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 200
+    assert len(fake_slack_client.sent) == 1
+    sent = fake_slack_client.sent[0]
+    assert sent.slack_user_id == student.slack_user_id
+    assert seminar.name in sent.text
+
+
+async def test_submit_skips_slack_notification_without_slack_link(
+    client, db_session, fake_slack_client
+) -> None:
+    student = await _make_student(db_session, slack_user_id=None)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 200
+    assert fake_slack_client.sent == []
+
+
+async def test_submit_succeeds_even_if_slack_notification_fails(
+    client, db_session, fake_slack_client, monkeypatch
+) -> None:
+    student = await _make_student(db_session, slack_user_id=_unique("U"))
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    async def _boom(*, slack_user_id: str, text: str, blocks=None):
+        raise RuntimeError("Slack API is down")
+
+    monkeypatch.setattr(fake_slack_client, "send_dm", _boom)
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "submitted"
 
 
 async def test_submit_without_draft_returns_404(client, db_session) -> None:

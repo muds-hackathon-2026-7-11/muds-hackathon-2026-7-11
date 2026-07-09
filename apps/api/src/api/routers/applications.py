@@ -34,7 +34,8 @@ from api.schemas import (
     ApplicationFormOut,
     ApplicationUpsertIn,
 )
-from api.services import get_current_term, normalize_grade
+from api.services import get_current_term, normalize_grade, notify_submission
+from api.slack_client import SlackClient, get_slack_client
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -244,6 +245,7 @@ async def upsert_my_application(
 async def submit_my_application(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(UserRole.student, UserRole.admin)),
+    slack_client: SlackClient = Depends(get_slack_client),
 ) -> ApplicationFormOut:
     term = await _require_current_term(db)
 
@@ -272,5 +274,7 @@ async def submit_my_application(
     form.status = ApplicationStatus.submitted
     form.submitted_at = datetime.now(timezone.utc)
     await db.flush()
+
+    await notify_submission(db, slack_client, user=user, choices=choices)
 
     return _form_out(form, choices, is_editable=True)
