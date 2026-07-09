@@ -32,6 +32,10 @@ describe("MenuBar", () => {
       "href",
       "/assignment",
     );
+    expect(screen.getByRole("link", { name: "AIゼミ相談" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
   });
 
   it("does not show the applicants link for non-teachers", () => {
