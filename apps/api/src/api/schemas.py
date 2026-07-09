@@ -276,6 +276,8 @@ class ApplicantOut(BaseModel):
     grade: str | None
     priority: int
     reason: str
+    research_title: str | None
+    research_theme: str | None
     past_seminars: list[PastSeminarOut]
 
 
@@ -296,6 +298,14 @@ class TeacherRecruitmentOut(BaseModel):
     seminar_name: str
     capacity: int | None
     target_grades: list[str] | None
+
+
+class TeacherSeminarUpdate(BaseModel):
+    """教員が自分の担当ゼミの紹介内容を編集する(#149)。名称変更・削除・担当の
+    付け外しはadmin専用のまま(AdminSeminarUpdateとは別スキーマ)。"""
+
+    description: str | None = None
+    photo_url: str | None = None
 
 
 # --- マッチ度診断 (#59) ---

@@ -18,7 +18,7 @@ describe("MenuBar", () => {
   });
 
   it("renders the logo and nav items with correct links", () => {
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     expect(screen.getByRole("link", { name: "Zemi-Match" })).toHaveAttribute(
       "href",
@@ -32,11 +32,75 @@ describe("MenuBar", () => {
       "href",
       "/assignment",
     );
+    expect(screen.getByRole("link", { name: "AIゼミ相談" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
+  });
+
+  it("does not show the applicants link for non-teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.queryByRole("link", { name: "応募者一覧" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the applicants link for teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={true} />);
+
+    expect(screen.getByRole("link", { name: "応募者一覧" })).toHaveAttribute(
+      "href",
+      "/teacher/applicants",
+    );
+  });
+
+  it("does not show the seminar settings link for non-teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.queryByRole("link", { name: "ゼミ設定" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the seminar settings link for teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={true} />);
+
+    expect(screen.getByRole("link", { name: "ゼミ設定" })).toHaveAttribute(
+      "href",
+      "/teacher/seminar",
+    );
+  });
+
+  it("hides マイページ and 志望理由提出 for teachers but keeps 応募状況", () => {
+    render(<MenuBar isAdmin={false} isTeacher={true} />);
+
+    expect(
+      screen.queryByRole("link", { name: "マイページ" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "志望理由提出" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
+      "href",
+      "/assignment",
+    );
+  });
+
+  it("shows マイページ and 志望理由提出 for non-teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.getByRole("link", { name: "マイページ" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "志望理由提出" }),
+    ).toBeInTheDocument();
   });
 
   it("marks the current page as active", () => {
     vi.mocked(usePathname).mockReturnValue("/assignment");
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
       "aria-current",
@@ -49,7 +113,7 @@ describe("MenuBar", () => {
 
   it("does not show the admin link in the settings menu for non-admins", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     await user.click(screen.getByRole("button", { name: "設定" }));
 
@@ -64,7 +128,7 @@ describe("MenuBar", () => {
 
   it("shows the admin link in the settings menu for admins", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={true} />);
+    render(<MenuBar isAdmin={true} isTeacher={false} />);
 
     await user.click(screen.getByRole("button", { name: "設定" }));
 
@@ -76,7 +140,7 @@ describe("MenuBar", () => {
 
   it("opens the settings menu with a logout option when the gear is clicked", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     // 初期状態ではログアウトは表示されていない。
     expect(
@@ -92,7 +156,7 @@ describe("MenuBar", () => {
 
   it("toggles the mobile menu open and closed", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     const toggle = screen.getByRole("button", { name: "メニューを開閉する" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -106,7 +170,7 @@ describe("MenuBar", () => {
 
   it("shows logout inside the mobile menu", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     // メニューを開く前はログアウトは出ていない。
     expect(
@@ -124,7 +188,7 @@ describe("MenuBar", () => {
 
   it("shows the admin link inside the mobile menu for admins", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={true} />);
+    render(<MenuBar isAdmin={true} isTeacher={false} />);
 
     await user.click(
       screen.getByRole("button", { name: "メニューを開閉する" }),
@@ -136,7 +200,7 @@ describe("MenuBar", () => {
 
   it("closes the mobile menu after selecting a nav item", async () => {
     const user = userEvent.setup();
-    render(<MenuBar isAdmin={false} />);
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
 
     const toggle = screen.getByRole("button", { name: "メニューを開閉する" });
     await user.click(toggle);

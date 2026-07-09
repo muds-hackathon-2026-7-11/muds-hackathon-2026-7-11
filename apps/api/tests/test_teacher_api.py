@@ -11,9 +11,11 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    MaterialType,
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
+    SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
@@ -56,6 +58,8 @@ async def _make_user(
     grade: str | None = None,
     is_active: bool = True,
     student_id: str | None = None,
+    research_title: str | None = None,
+    research_theme: str | None = None,
 ) -> User:
     user = User(
         google_id=_unique("google"),
@@ -65,6 +69,8 @@ async def _make_user(
         grade=grade,
         is_active=is_active,
         student_id=student_id,
+        research_title=research_title,
+        research_theme=research_theme,
     )
     db_session.add(user)
     await db_session.flush()
@@ -238,7 +244,12 @@ async def test_applicants_csv(client, db_session) -> None:
     seminar = await _make_seminar(db_session)
     await _link_teacher(db_session, seminar, teacher)
     student = await _make_user(
-        db_session, UserRole.student, grade="B3", student_id="s2311777"
+        db_session,
+        UserRole.student,
+        grade="B3",
+        student_id="s2311777",
+        research_title="推薦システムの研究",
+        research_theme="協調フィルタリングによる推薦精度の向上について研究しています。",
     )
     await _apply(
         db_session,
@@ -256,8 +267,294 @@ async def test_applicants_csv(client, db_session) -> None:
     assert "attachment" in resp.headers["content-disposition"]
     text = resp.text
     assert "学籍番号" in text
+    assert "研究タイトル" in text
+    assert "研究概要" in text
+    assert "前回所属ゼミ" in text
+    assert "過去の所属ゼミ" not in text
     assert "s2311777" in text
     assert student.name in text
+    assert "推薦システムの研究" in text
+    assert "協調フィルタリングによる推薦精度の向上について研究しています。" in text
+
+
+async def test_applicants_csv_shows_only_the_most_recent_past_seminar(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    old_seminar = await _make_seminar(db_session)
+    older_seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+    student = await _make_user(db_session, UserRole.student, grade="B4")
+    await _apply(
+        db_session,
+        term=term,
+        student=student,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1, "志望します")],
+    )
+
+    recent_term = RecruitmentTerm(
+        academic_year=term.academic_year - 1,
+        starts_at=date(term.academic_year - 1, 4, 1),
+        ends_at=date(term.academic_year - 1, 9, 30),
+        status=RecruitmentTermStatus.closed,
+    )
+    older_term = RecruitmentTerm(
+        academic_year=term.academic_year - 2,
+        starts_at=date(term.academic_year - 2, 4, 1),
+        ends_at=date(term.academic_year - 2, 9, 30),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add_all([recent_term, older_term])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            SeminarMember(
+                seminar_id=old_seminar.id,
+                student_id=student.id,
+                term_id=recent_term.id,
+            ),
+            SeminarMember(
+                seminar_id=older_seminar.id,
+                student_id=student.id,
+                term_id=older_term.id,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/applicants.csv")
+
+    assert resp.status_code == 200
+    text = resp.text
+    assert old_seminar.name in text
+    assert older_seminar.name not in text
+
+
+async def test_all_applicants_csv_includes_other_teachers_seminars(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other_teacher = await _make_user(db_session, UserRole.teacher)
+    my_seminar = await _make_seminar(db_session)
+    other_seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, my_seminar, teacher)
+    await _link_teacher(db_session, other_seminar, other_teacher)
+
+    my_student = await _make_user(
+        db_session, UserRole.student, grade="B3", student_id="s2311001"
+    )
+    other_student = await _make_user(
+        db_session, UserRole.student, grade="B4", student_id="s2311002"
+    )
+    await _apply(
+        db_session,
+        term=term,
+        student=my_student,
+        status=ApplicationStatus.submitted,
+        choices=[(my_seminar, 1, "自ゼミへの志望理由")],
+    )
+    await _apply(
+        db_session,
+        term=term,
+        student=other_student,
+        status=ApplicationStatus.submitted,
+        choices=[(other_seminar, 1, "他ゼミへの志望理由")],
+    )
+
+    # 自分の担当ではないother_seminarの応募者を含め、"全体"扱いで担当していない
+    # 教員として参照する(#146: 教員向けCSV出力「自分のゼミ、全体csv」)。
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/applicants/all.csv")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    text = resp.text
+    assert my_seminar.name in text
+    assert other_seminar.name in text
+    assert my_student.name in text
+    assert other_student.name in text
+
+
+async def test_all_applicants_csv_requires_teacher_role(client, db_session) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.student))
+    resp = await client.get("/teacher/applicants/all.csv")
+    assert resp.status_code == 403
+
+
+# --- 自ゼミの紹介内容編集 ---
+
+
+async def test_list_own_seminars_includes_materials_and_excludes_others(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other_teacher = await _make_user(db_session, UserRole.teacher)
+    my_seminar = await _make_seminar(db_session)
+    my_seminar.description = "紹介文"
+    other_seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, my_seminar, teacher)
+    await _link_teacher(db_session, other_seminar, other_teacher)
+    db_session.add(
+        SeminarMaterial(
+            seminar_id=my_seminar.id,
+            url="https://example.com/slide.pdf",
+            type=MaterialType.pdf,
+        )
+    )
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/seminars")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [s["id"] for s in body] == [str(my_seminar.id)]
+    assert body[0]["description"] == "紹介文"
+    assert [m["url"] for m in body[0]["materials"]] == ["https://example.com/slide.pdf"]
+
+
+async def test_update_own_seminar(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}",
+        json={
+            "description": "新しい紹介文",
+            "photo_url": "https://example.com/lab.jpg",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["description"] == "新しい紹介文"
+    assert body["photo_url"] == "https://example.com/lab.jpg"
+    assert body["name"] == seminar.name  # 名称は変更されない
+
+    await db_session.refresh(seminar)
+    assert seminar.description == "新しい紹介文"
+
+
+async def test_update_own_seminar_keeps_omitted_fields(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    seminar.description = "元の紹介文"
+    await db_session.flush()
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}",
+        json={"photo_url": "https://example.com/lab.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["description"] == "元の紹介文"
+
+
+async def test_update_seminar_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{not_mine.id}", json={"description": "勝手に編集"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_create_own_seminar_material(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{seminar.id}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "pdf"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["url"] == "https://example.com/slide.pdf"
+
+    result = await db_session.execute(
+        select(SeminarMaterial).where(SeminarMaterial.seminar_id == seminar.id)
+    )
+    assert result.scalar_one().url == "https://example.com/slide.pdf"
+
+
+async def test_create_material_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{not_mine.id}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "pdf"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_delete_own_seminar_material(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+    material = SeminarMaterial(
+        seminar_id=seminar.id, url="https://example.com/old.pdf", type=MaterialType.pdf
+    )
+    db_session.add(material)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{seminar.id}/materials/{material.id}"
+    )
+
+    assert resp.status_code == 204
+    assert await db_session.get(SeminarMaterial, material.id) is None
+
+
+async def test_delete_material_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other_teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+    await _link_teacher(db_session, not_mine, other_teacher)
+    material = SeminarMaterial(
+        seminar_id=not_mine.id, url="https://example.com/old.pdf", type=MaterialType.pdf
+    )
+    db_session.add(material)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{not_mine.id}/materials/{material.id}"
+    )
+    assert resp.status_code == 403
+
+
+async def test_delete_material_unknown_id_returns_404(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{seminar.id}/materials/{uuid.uuid4()}"
+    )
+    assert resp.status_code == 404
 
 
 # --- 自ゼミ定員設定 ---

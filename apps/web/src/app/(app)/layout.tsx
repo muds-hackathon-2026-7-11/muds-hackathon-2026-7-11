@@ -10,7 +10,7 @@ export default async function AppLayout({
 
   return (
     <>
-      <MenuBar isAdmin={role === "admin"} />
+      <MenuBar isAdmin={role === "admin"} isTeacher={role === "teacher"} />
       {children}
     </>
   );
