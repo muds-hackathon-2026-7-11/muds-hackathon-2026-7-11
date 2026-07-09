@@ -1,17 +1,22 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import Image from "next/image";
+import logo from "@/app/logo.png";
 
 export function LoginButton() {
   return (
-    <section className="flex w-full max-w-lg flex-col items-center gap-12 rounded-2xl border border-[#e6e6e6] bg-white p-12 shadow-sm">
+    <section className="flex w-full max-w-lg flex-col items-center gap-6 rounded-2xl border border-[#e6e6e6] bg-white p-12 shadow-sm">
       <div className="flex flex-col items-center gap-3 text-center">
-        <h1 className="whitespace-nowrap text-6xl font-bold tracking-tight text-zinc-900 sm:text-7xl">
-          Zemi-Match
-        </h1>
-        <p className="text-base text-zinc-500">
-          ゼミ選択・配属支援プラットフォーム
-        </p>
+        <Image
+          src={logo}
+          alt="ロゴ"
+          width={882}
+          height={369}
+          priority
+          className="h-16 w-auto sm:h-20"
+        />
+        <p className="text-base text-zinc-500">ゼミ選択・配属支援システム</p>
       </div>
 
       <button
