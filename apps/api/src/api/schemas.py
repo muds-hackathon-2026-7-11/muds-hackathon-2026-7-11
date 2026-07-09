@@ -276,6 +276,8 @@ class ApplicantOut(BaseModel):
     grade: str | None
     priority: int
     reason: str
+    research_title: str | None
+    research_theme: str | None
     past_seminars: list[PastSeminarOut]
 
 
