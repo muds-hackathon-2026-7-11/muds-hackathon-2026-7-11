@@ -1,10 +1,20 @@
 import uuid
+from datetime import date, timedelta
 
 import pytest
 
 from api.auth import get_current_user
 from api.main import app
-from api.models import AnswerSource, Question, Seminar, User, UserRole
+from api.models import (
+    AnswerSource,
+    Question,
+    RecruitmentTerm,
+    RecruitmentTermStatus,
+    Seminar,
+    SeminarMember,
+    User,
+    UserRole,
+)
 from api.services import record_answer
 
 pytestmark = pytest.mark.asyncio
@@ -25,12 +35,31 @@ async def _make_seminar(db_session) -> Seminar:
     return seminar
 
 
-async def _make_user(db_session, role: UserRole = UserRole.student) -> User:
+async def _make_open_term(db_session) -> RecruitmentTerm:
+    today = date.today()
+    term = RecruitmentTerm(
+        academic_year=3000 + int(uuid.uuid4().int % 1000),
+        starts_at=today - timedelta(days=1),
+        ends_at=today + timedelta(days=30),
+        status=RecruitmentTermStatus.open,
+    )
+    db_session.add(term)
+    await db_session.flush()
+    return term
+
+
+async def _make_user(
+    db_session,
+    role: UserRole = UserRole.student,
+    *,
+    slack_user_id: str | None = None,
+) -> User:
     user = User(
         google_id=_unique("google"),
         email=f"{_unique('user')}@example.com",
         name=_unique("name"),
         role=role,
+        slack_user_id=slack_user_id,
     )
     db_session.add(user)
     await db_session.flush()
@@ -170,8 +199,33 @@ async def test_create_question_web_success(
     assert created is not None
     assert created.user_id == student.id
 
-    # 最重要: Web経由の投稿ではSlack通知を送らない。
+    # 回答候補者がいない(在籍ゼミ生・教員なし)ため、通知は0件。
     assert fake_slack_client.sent == []
+
+
+async def test_create_question_web_notifies_answer_candidates(
+    client, db_session, fake_slack_client
+) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    asker = await _make_user(db_session, UserRole.student)
+    member = await _make_user(
+        db_session, UserRole.student, slack_user_id=_unique("U-member")
+    )
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=member.id, term_id=term.id)
+    )
+    await db_session.flush()
+    _authenticate_as(asker)
+
+    resp = await client.post(
+        "/questions/me",
+        json={"seminar_id": str(seminar.id), "content": "質問です"},
+    )
+
+    assert resp.status_code == 201
+    notified_slack_ids = {sent.slack_user_id for sent in fake_slack_client.sent}
+    assert notified_slack_ids == {member.slack_user_id}
 
 
 async def test_create_question_web_unknown_seminar_returns_404(

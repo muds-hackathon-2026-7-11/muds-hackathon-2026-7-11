@@ -64,14 +64,14 @@ async def create_question_web(
     payload: QuestionCreateWeb,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(UserRole.student, UserRole.admin)),
+    slack_client: SlackClient = Depends(get_slack_client),
 ) -> Question:
     """Web(FAQ画面)から質問を投稿する(#141)。
 
     Slack Bot経由のcreate_question(POST /questions)とは別経路。
     投稿者はWeb認証済みユーザーで特定し、slack_user_idは不要。
-    注意: ここではnotify_answer_candidates(Slack通知)を意図的に
-    呼ばない。呼び出すとSlack Botの通知が二重に発火しかねないため、
-    このエンドポイントを変更する際は呼び出さないことを維持すること。
+    回答候補者へのSlack通知はcreate_questionと同じnotify_answer_candidates
+    を使う(#143)。
     """
     seminar = await db.get(Seminar, payload.seminar_id)
     if seminar is None:
@@ -84,6 +84,11 @@ async def create_question_web(
     )
     db.add(question)
     await db.flush()
+
+    await notify_answer_candidates(
+        db, slack_client, question=question, seminar_name=seminar.name
+    )
+
     return question
 
 
