@@ -168,7 +168,9 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
 
       {/* ゼミ名は枠外に大きく表示し、その横にFAQボタンを置く。 */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-zinc-900">{seminar.name}</h1>
+        <h1 className="border-l-4 border-[#add8e6] pl-3 text-3xl font-bold text-zinc-900">
+          {seminar.name}
+        </h1>
         <Link
           href={`/seminars/${seminar.id}/questions`}
           className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
