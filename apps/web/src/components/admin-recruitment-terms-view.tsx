@@ -169,7 +169,7 @@ export function AdminRecruitmentTermsView({
   const [recruitmentInputs, setRecruitmentInputs] = useState<
     Record<string, RecruitmentInput>
   >({});
-  const [savingSeminarId, setSavingSeminarId] = useState<string | null>(null);
+  const [isSavingRecruitments, setIsSavingRecruitments] = useState(false);
 
   function openCreateForm(): void {
     setIsCreateFormOpen(true);
@@ -390,65 +390,113 @@ export function AdminRecruitmentTermsView({
     updateRecruitmentInput(seminarId, { targetGrades });
   }
 
-  async function handleSaveRecruitment(seminarId: string): Promise<void> {
+  async function handleSaveAllRecruitments(): Promise<void> {
     if (!selectedTermId) {
       return;
     }
-    const input = recruitmentInputs[seminarId] ?? defaultRecruitmentInput();
     setErrorMessage(null);
-    if (input.capacity.trim() === "") {
-      setErrorMessage("募集人数を入力してください。");
-      return;
+
+    // 送信前に全ゼミの定員をまとめて検証する。1件でも不正なら送信しない。
+    const payloads: { seminarId: string; capacity: number; grades: string[] }[] =
+      [];
+    for (const r of recruitments) {
+      const input = recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput();
+      if (input.capacity.trim() === "") {
+        setErrorMessage(`「${r.seminar_name}」の募集人数を入力してください。`);
+        return;
+      }
+      const capacity = Number(input.capacity);
+      if (!Number.isInteger(capacity) || capacity < 0) {
+        setErrorMessage(
+          `「${r.seminar_name}」の募集人数は0以上の整数で入力してください。`,
+        );
+        return;
+      }
+      payloads.push({
+        seminarId: r.seminar_id,
+        capacity,
+        grades: input.targetGrades,
+      });
     }
-    const capacity = Number(input.capacity);
-    if (!Number.isInteger(capacity) || capacity < 0) {
-      setErrorMessage("募集人数は0以上の整数で入力してください。");
-      return;
-    }
-    if (input.targetGrades.length === 0) {
-      const seminarName =
-        recruitments.find((r) => r.seminar_id === seminarId)?.seminar_name ??
-        "このゼミ";
+
+    // 対象学年が未選択のゼミがあれば、まとめて1回だけ確認する。
+    const emptyGradeNames = recruitments
+      .filter(
+        (r) =>
+          (recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput())
+            .targetGrades.length === 0,
+      )
+      .map((r) => r.seminar_name);
+    if (emptyGradeNames.length > 0) {
       const confirmed = window.confirm(
-        `対象学年が1つも選択されていません。「${seminarName}」を募集していない状態にして保存します。よろしいですか?`,
+        `対象学年が1つも選択されていないゼミがあります(${emptyGradeNames.join(
+          "、",
+        )})。これらを募集していない状態にして保存します。よろしいですか?`,
       );
       if (!confirmed) {
         return;
       }
     }
-    setSavingSeminarId(seminarId);
+
+    setIsSavingRecruitments(true);
     try {
-      const res = await apiFetch(
-        `/admin/recruitment-terms/${selectedTermId}/seminars/${seminarId}`,
-        session,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            capacity,
-            target_grades: input.targetGrades,
-          }),
-        },
+      const results = await Promise.all(
+        payloads.map(async ({ seminarId, capacity, grades }) => {
+          const res = await apiFetch(
+            `/admin/recruitment-terms/${selectedTermId}/seminars/${seminarId}`,
+            session,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                capacity,
+                target_grades: grades,
+              }),
+            },
+          );
+          if (!res.ok) {
+            return { seminarId, ok: false as const };
+          }
+          const updated = (await res.json()) as AdminSeminarRecruitment;
+          return { seminarId, ok: true as const, updated };
+        }),
       );
-      if (!res.ok) {
-        setErrorMessage(await extractErrorDetail(res));
-        return;
+
+      // 成功したゼミの結果だけ反映する。
+      const succeeded = results.filter(
+        (
+          r,
+        ): r is { seminarId: string; ok: true; updated: AdminSeminarRecruitment } =>
+          r.ok,
+      );
+      if (succeeded.length > 0) {
+        const updatedById = new Map(
+          succeeded.map((r) => [r.seminarId, r.updated]),
+        );
+        setRecruitments((prev) =>
+          prev.map((r) => updatedById.get(r.seminar_id) ?? r),
+        );
+        setRecruitmentInputs((prev) => {
+          const next = { ...prev };
+          for (const { seminarId, updated } of succeeded) {
+            next[seminarId] = {
+              capacity:
+                updated.capacity === null ? "" : String(updated.capacity),
+              targetGrades: updated.target_grades ?? [...GRADE_OPTIONS],
+            };
+          }
+          return next;
+        });
       }
-      const updated = (await res.json()) as AdminSeminarRecruitment;
-      setRecruitments((prev) =>
-        prev.map((r) => (r.seminar_id === seminarId ? updated : r)),
-      );
-      setRecruitmentInputs((prev) => ({
-        ...prev,
-        [seminarId]: {
-          capacity: updated.capacity === null ? "" : String(updated.capacity),
-          targetGrades: updated.target_grades ?? [...GRADE_OPTIONS],
-        },
-      }));
+
+      const failedCount = results.length - succeeded.length;
+      if (failedCount > 0) {
+        setErrorMessage(`${failedCount}件のゼミの保存に失敗しました。`);
+      }
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
-      setSavingSeminarId(null);
+      setIsSavingRecruitments(false);
     }
   }
 
@@ -721,18 +769,6 @@ export function AdminRecruitmentTermsView({
                                   {grade}
                                 </label>
                               ))}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleSaveRecruitment(r.seminar_id)
-                                }
-                                disabled={savingSeminarId === r.seminar_id}
-                                className="rounded-full bg-[#add8e6] px-3 py-1.5 text-xs font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
-                              >
-                                {savingSeminarId === r.seminar_id
-                                  ? "保存中..."
-                                  : "保存する"}
-                              </button>
                             </div>
                           </div>
                         );
@@ -741,6 +777,18 @@ export function AdminRecruitmentTermsView({
                     <p className="text-xs text-zinc-400">
                       対象学年をすべて外すと、そのゼミは募集していない扱いになります。
                     </p>
+                    {!isLoadingRecruitments && recruitments.length > 0 && (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={handleSaveAllRecruitments}
+                          disabled={isSavingRecruitments}
+                          className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
+                        >
+                          {isSavingRecruitments ? "保存中..." : "保存する"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
