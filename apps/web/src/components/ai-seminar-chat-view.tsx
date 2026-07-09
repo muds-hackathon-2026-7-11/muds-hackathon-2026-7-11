@@ -31,6 +31,8 @@ const ERROR_REPLY =
 const MAX_HISTORY = 20;
 // 入力欄の最大の高さ(px)。これを超えたら内部スクロール。
 const INPUT_MAX_HEIGHT = 160;
+// 送信できる1メッセージの最大文字数(バックエンド ConsultIn の上限に合わせる)。
+const MESSAGE_MAX_LENGTH = 4000;
 
 export function AiSeminarChatView() {
   const { data: session } = useSession();
@@ -178,6 +180,7 @@ export function AiSeminarChatView() {
           onKeyDown={handleKeyDown}
           disabled={isSending}
           rows={1}
+          maxLength={MESSAGE_MAX_LENGTH}
           placeholder="やりたいことを入力"
           className="max-h-40 flex-1 resize-none rounded-2xl border border-[#add8e6]/60 bg-white px-4 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50 disabled:bg-[#e6e6e6]/40"
         />
@@ -190,8 +193,14 @@ export function AiSeminarChatView() {
           送信
         </button>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-400">
-        Enterで送信・Shift+Enterで改行
+      <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-400">
+        <span>Enterで送信・Shift+Enterで改行</span>
+        <span className="tabular-nums">
+          {input.length}/{MESSAGE_MAX_LENGTH}
+        </span>
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        ※ 会話内容は保存されません。ページを更新・移動すると消えます。
       </p>
     </section>
   );
