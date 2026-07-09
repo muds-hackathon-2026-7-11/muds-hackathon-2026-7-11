@@ -51,6 +51,49 @@ describe("MenuBar", () => {
     );
   });
 
+  it("does not show the seminar settings link for non-teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.queryByRole("link", { name: "ゼミ設定" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the seminar settings link for teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={true} />);
+
+    expect(screen.getByRole("link", { name: "ゼミ設定" })).toHaveAttribute(
+      "href",
+      "/teacher/seminar",
+    );
+  });
+
+  it("hides マイページ and 志望理由提出 for teachers but keeps 応募状況", () => {
+    render(<MenuBar isAdmin={false} isTeacher={true} />);
+
+    expect(
+      screen.queryByRole("link", { name: "マイページ" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "志望理由提出" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "応募状況" })).toHaveAttribute(
+      "href",
+      "/assignment",
+    );
+  });
+
+  it("shows マイページ and 志望理由提出 for non-teachers", () => {
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.getByRole("link", { name: "マイページ" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "志望理由提出" }),
+    ).toBeInTheDocument();
+  });
+
   it("marks the current page as active", () => {
     vi.mocked(usePathname).mockReturnValue("/assignment");
     render(<MenuBar isAdmin={false} isTeacher={false} />);

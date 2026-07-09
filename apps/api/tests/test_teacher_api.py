@@ -11,9 +11,11 @@ from api.models import (
     ApplicationChoice,
     ApplicationForm,
     ApplicationStatus,
+    MaterialType,
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
+    SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
@@ -382,6 +384,177 @@ async def test_all_applicants_csv_requires_teacher_role(client, db_session) -> N
     _authenticate_as(await _make_user(db_session, UserRole.student))
     resp = await client.get("/teacher/applicants/all.csv")
     assert resp.status_code == 403
+
+
+# --- 自ゼミの紹介内容編集 ---
+
+
+async def test_list_own_seminars_includes_materials_and_excludes_others(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other_teacher = await _make_user(db_session, UserRole.teacher)
+    my_seminar = await _make_seminar(db_session)
+    my_seminar.description = "紹介文"
+    other_seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, my_seminar, teacher)
+    await _link_teacher(db_session, other_seminar, other_teacher)
+    db_session.add(
+        SeminarMaterial(
+            seminar_id=my_seminar.id,
+            url="https://example.com/slide.pdf",
+            type=MaterialType.pdf,
+        )
+    )
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/seminars")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [s["id"] for s in body] == [str(my_seminar.id)]
+    assert body[0]["description"] == "紹介文"
+    assert [m["url"] for m in body[0]["materials"]] == ["https://example.com/slide.pdf"]
+
+
+async def test_update_own_seminar(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}",
+        json={
+            "description": "新しい紹介文",
+            "photo_url": "https://example.com/lab.jpg",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["description"] == "新しい紹介文"
+    assert body["photo_url"] == "https://example.com/lab.jpg"
+    assert body["name"] == seminar.name  # 名称は変更されない
+
+    await db_session.refresh(seminar)
+    assert seminar.description == "新しい紹介文"
+
+
+async def test_update_own_seminar_keeps_omitted_fields(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    seminar.description = "元の紹介文"
+    await db_session.flush()
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}",
+        json={"photo_url": "https://example.com/lab.jpg"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["description"] == "元の紹介文"
+
+
+async def test_update_seminar_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+
+    _authenticate_as(teacher)
+    resp = await client.patch(
+        f"/teacher/seminars/{not_mine.id}", json={"description": "勝手に編集"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_create_own_seminar_material(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{seminar.id}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "pdf"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["url"] == "https://example.com/slide.pdf"
+
+    result = await db_session.execute(
+        select(SeminarMaterial).where(SeminarMaterial.seminar_id == seminar.id)
+    )
+    assert result.scalar_one().url == "https://example.com/slide.pdf"
+
+
+async def test_create_material_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{not_mine.id}/materials",
+        json={"url": "https://example.com/slide.pdf", "type": "pdf"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_delete_own_seminar_material(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+    material = SeminarMaterial(
+        seminar_id=seminar.id, url="https://example.com/old.pdf", type=MaterialType.pdf
+    )
+    db_session.add(material)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{seminar.id}/materials/{material.id}"
+    )
+
+    assert resp.status_code == 204
+    assert await db_session.get(SeminarMaterial, material.id) is None
+
+
+async def test_delete_material_forbidden_for_other_teachers_seminar(
+    client, db_session
+) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    other_teacher = await _make_user(db_session, UserRole.teacher)
+    not_mine = await _make_seminar(db_session)
+    await _link_teacher(db_session, not_mine, other_teacher)
+    material = SeminarMaterial(
+        seminar_id=not_mine.id, url="https://example.com/old.pdf", type=MaterialType.pdf
+    )
+    db_session.add(material)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{not_mine.id}/materials/{material.id}"
+    )
+    assert resp.status_code == 403
+
+
+async def test_delete_material_unknown_id_returns_404(client, db_session) -> None:
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.delete(
+        f"/teacher/seminars/{seminar.id}/materials/{uuid.uuid4()}"
+    )
+    assert resp.status_code == 404
 
 
 # --- 自ゼミ定員設定 ---

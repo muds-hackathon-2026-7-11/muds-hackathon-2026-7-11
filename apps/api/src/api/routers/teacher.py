@@ -14,6 +14,7 @@ from api.models import (
     ApplicationStatus,
     RecruitmentTerm,
     Seminar,
+    SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
@@ -21,11 +22,16 @@ from api.models import (
     UserRole,
 )
 from api.schemas import (
+    AdminSeminarOut,
+    AdminSeminarTeacherOut,
     ApplicantOut,
     PastSeminarOut,
     SeminarApplicantsOut,
+    SeminarMaterialCreate,
+    SeminarMaterialOut,
     TeacherRecruitmentOut,
     TeacherRecruitmentUpdate,
+    TeacherSeminarUpdate,
 )
 from api.services import GRADE_OPTIONS, get_current_term
 
@@ -48,6 +54,57 @@ async def _teacher_seminars(db: AsyncSession, teacher: User) -> list[Seminar]:
 async def _all_seminars(db: AsyncSession) -> list[Seminar]:
     result = await db.execute(select(Seminar).order_by(Seminar.name))
     return list(result.scalars().all())
+
+
+async def _require_own_seminar(
+    db: AsyncSession, *, seminar_id: uuid.UUID, teacher: User
+) -> Seminar:
+    """指定ゼミが自分の担当かを確認し、Seminarを返す(自分の担当ゼミの
+    紹介文・資料・定員設定を編集する各エンドポイント共通の所有権チェック)。"""
+    seminar = await db.get(Seminar, seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+
+    link = await db.execute(
+        select(SeminarTeacher).where(
+            SeminarTeacher.seminar_id == seminar_id,
+            SeminarTeacher.teacher_id == teacher.id,
+        )
+    )
+    if link.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="担当していないゼミは操作できません。",
+        )
+    return seminar
+
+
+async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> AdminSeminarOut:
+    teachers_result = await db.execute(
+        select(User)
+        .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
+        .where(SeminarTeacher.seminar_id == seminar.id)
+        .order_by(User.name)
+    )
+    teachers = [
+        AdminSeminarTeacherOut.model_validate(u) for u in teachers_result.scalars()
+    ]
+
+    materials_result = await db.execute(
+        select(SeminarMaterial).where(SeminarMaterial.seminar_id == seminar.id)
+    )
+    materials = [
+        SeminarMaterialOut.model_validate(m) for m in materials_result.scalars()
+    ]
+
+    return AdminSeminarOut(
+        id=seminar.id,
+        name=seminar.name,
+        description=seminar.description,
+        photo_url=seminar.photo_url,
+        teachers=teachers,
+        materials=materials,
+    )
 
 
 async def _gather_applicants_for_seminars(
@@ -235,21 +292,7 @@ async def set_own_seminar_recruitment(
     db: AsyncSession = Depends(get_db),
 ) -> TeacherRecruitmentOut:
     """自分の担当ゼミの定員・募集対象学年を現ラウンドに対して設定する。"""
-    seminar = await db.get(Seminar, seminar_id)
-    if seminar is None:
-        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
-
-    link = await db.execute(
-        select(SeminarTeacher).where(
-            SeminarTeacher.seminar_id == seminar_id,
-            SeminarTeacher.teacher_id == teacher.id,
-        )
-    )
-    if link.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="担当していないゼミは操作できません。",
-        )
+    seminar = await _require_own_seminar(db, seminar_id=seminar_id, teacher=teacher)
 
     term = await get_current_term(db)
     if term is None:
@@ -289,3 +332,72 @@ async def set_own_seminar_recruitment(
         capacity=recruitment.capacity,
         target_grades=recruitment.target_grades,
     )
+
+
+# --- 自分の担当ゼミの紹介内容 (#149) ---
+# ゼミ名の変更・削除、担当教員の付け外しはadmin専用のまま。
+
+
+@router.get("/seminars", response_model=list[AdminSeminarOut])
+async def list_own_seminars(
+    teacher: User = Depends(require_teacher), db: AsyncSession = Depends(get_db)
+) -> list[AdminSeminarOut]:
+    """自分の担当ゼミを、編集フォームの初期値用に詳細(紹介文・資料)込みで返す。"""
+    seminars = await _teacher_seminars(db, teacher)
+    return [await _to_seminar_out(db, s) for s in seminars]
+
+
+@router.patch("/seminars/{seminar_id}", response_model=AdminSeminarOut)
+async def update_own_seminar(
+    seminar_id: uuid.UUID,
+    payload: TeacherSeminarUpdate,
+    teacher: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+) -> AdminSeminarOut:
+    """自分の担当ゼミの紹介文・写真を編集する。"""
+    seminar = await _require_own_seminar(db, seminar_id=seminar_id, teacher=teacher)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(seminar, field, value)
+    await db.flush()
+    return await _to_seminar_out(db, seminar)
+
+
+@router.post(
+    "/seminars/{seminar_id}/materials",
+    response_model=SeminarMaterialOut,
+    status_code=201,
+)
+async def create_own_seminar_material(
+    seminar_id: uuid.UUID,
+    payload: SeminarMaterialCreate,
+    teacher: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+) -> SeminarMaterial:
+    """自分の担当ゼミへ紹介資料を追加する。"""
+    await _require_own_seminar(db, seminar_id=seminar_id, teacher=teacher)
+    material = SeminarMaterial(
+        seminar_id=seminar_id, url=payload.url, type=payload.type
+    )
+    db.add(material)
+    await db.flush()
+    return material
+
+
+@router.delete(
+    "/seminars/{seminar_id}/materials/{material_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_own_seminar_material(
+    seminar_id: uuid.UUID,
+    material_id: uuid.UUID,
+    teacher: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """自分の担当ゼミから紹介資料を削除する。"""
+    await _require_own_seminar(db, seminar_id=seminar_id, teacher=teacher)
+    material = await db.get(SeminarMaterial, material_id)
+    if material is None or material.seminar_id != seminar_id:
+        raise HTTPException(status_code=404, detail="資料が見つかりません。")
+    await db.delete(material)
+    await db.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
