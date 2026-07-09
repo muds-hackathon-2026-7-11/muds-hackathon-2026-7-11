@@ -153,8 +153,8 @@ class QuestionCreateWeb(BaseModel):
     """Web(FAQ画面)からの質問投稿(#141)。
 
     Slack Bot経由のQuestionCreateとは別経路。投稿者はslack_user_idではなく
-    Web認証済みユーザーで特定し、投稿時にSlack通知(notify_answer_candidates)
-    は送らない(通知機能は別issueで対応予定)。
+    Web認証済みユーザーで特定する。投稿時のSlack通知はQuestionCreateと同じ
+    notify_answer_candidatesを使う(#143)。
     """
 
     seminar_id: uuid.UUID
@@ -180,6 +180,12 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+class AnswerCreate(BaseModel):
+    question_id: uuid.UUID
+    slack_user_id: str
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class ApplicationChoiceIn(BaseModel):

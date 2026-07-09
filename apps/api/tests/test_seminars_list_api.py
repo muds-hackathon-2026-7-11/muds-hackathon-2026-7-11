@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import update
 
+from api import auth
 from api.auth import get_current_user
 from api.main import app
 from api.models import (
@@ -234,3 +235,29 @@ async def test_no_filtering_when_there_is_no_active_term(client, db_session) -> 
 async def test_list_seminars_requires_auth(client) -> None:
     resp = await client.get("/seminars")
     assert resp.status_code == 401
+
+
+_SECRET = "test-internal-secret"
+
+
+async def test_for_slack_bot_ignores_target_grades(
+    client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+
+    resp = await client.get(
+        "/seminars/for-slack-bot", headers={"X-Internal-Secret": _SECRET}
+    )
+
+    assert resp.status_code == 200
+    assert seminar.name in _names(resp)
+
+
+async def test_for_slack_bot_rejects_missing_secret(client, db_session) -> None:
+    resp = await client.get("/seminars/for-slack-bot")
+    assert resp.status_code == 403

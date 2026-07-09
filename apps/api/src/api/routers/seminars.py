@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
+from api.auth import get_current_user, require_internal_secret
 from api.db import get_db
 from api.models import (
     ApplicationChoice,
@@ -55,17 +55,15 @@ async def _interest_tags_by_user(
     return tags_by_user
 
 
-@router.get("", response_model=list[SeminarOut])
-async def list_seminars(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+async def _list_seminars_for_grade(
+    db: AsyncSession, *, student_grade: str | None, apply_grade_filter: bool
 ) -> list[SeminarOut]:
-    """ゼミ一覧を返す。
+    """現在の募集ラウンド基準でゼミ一覧を返す(学年フィルタは呼び出し側で指定)。
 
-    学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
-    ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
-    そもそも選べないようにするため #103)。教員・admin等、学生以外には
-    絞り込みをかけない。
+    apply_grade_filter=Trueの場合、student_gradeが対象学年に含まれない
+    ゼミ(#99の学年別募集)を除外する。Falseの場合は絞り込みをかけない
+    (教員・admin向け、およびSlack Bot #33のようにログイン中の学生の
+    セッションを持たない呼び出し元向け)。
     """
     term = await get_current_term(db)
 
@@ -93,13 +91,10 @@ async def list_seminars(
         )
         .order_by(Seminar.name)
     )
-    student_grade = (
-        normalize_grade(user.grade) if user.role == UserRole.student else None
-    )
 
     seminars: list[SeminarOut] = []
     for seminar, capacity, target_grades in result.all():
-        if user.role == UserRole.student and (
+        if apply_grade_filter and (
             target_grades is None or student_grade not in target_grades
         ):
             continue
@@ -115,6 +110,47 @@ async def list_seminars(
             )
         )
     return seminars
+
+
+@router.get("", response_model=list[SeminarOut])
+async def list_seminars(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[SeminarOut]:
+    """ゼミ一覧を返す。
+
+    学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
+    ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
+    そもそも選べないようにするため #103)。教員・admin等、学生以外には
+    絞り込みをかけない。
+    """
+    return await _list_seminars_for_grade(
+        db,
+        student_grade=normalize_grade(user.grade)
+        if user.role == UserRole.student
+        else None,
+        apply_grade_filter=user.role == UserRole.student,
+    )
+
+
+@router.get(
+    "/for-slack-bot",
+    response_model=list[SeminarOut],
+    dependencies=[Depends(require_internal_secret)],
+)
+async def list_seminars_for_slack_bot(
+    db: AsyncSession = Depends(get_db),
+) -> list[SeminarOut]:
+    """Slack Botの「質問する」モーダル用のゼミ一覧(#33)。
+
+    Slack Botはログイン中の学生セッションを持たないため、get_current_user
+    (JWT)ではなくrequire_internal_secretで認証する。学年別募集(#99)による
+    絞り込みは行わない — 質問は志望提出と違い、対象学年外のゼミについて
+    尋ねることも正当な利用のため。
+    """
+    return await _list_seminars_for_grade(
+        db, student_grade=None, apply_grade_filter=False
+    )
 
 
 @router.get("/stats", response_model=list[SeminarStatsOut])
