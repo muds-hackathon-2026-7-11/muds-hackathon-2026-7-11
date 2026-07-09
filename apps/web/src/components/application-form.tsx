@@ -94,6 +94,27 @@ export type ApplicationFormData = {
   is_editable: boolean;
 };
 
+// 志望理由ごとのマッチ度診断(#119, POST /seminars/reason-matches)の応答。
+type ReasonMatchRecommendation = {
+  seminar_id: string;
+  seminar_name: string;
+  score: number;
+};
+
+type ReasonMatchResult = {
+  seminar_id: string;
+  seminar_name: string;
+  selected_score: number | null;
+  rubric: Record<string, number>;
+  summary: string;
+  recommendations: ReasonMatchRecommendation[];
+};
+
+type ReasonMatchesResponse = {
+  results: ReasonMatchResult[];
+  message: string | null;
+};
+
 type Slot = {
   seminarId: string;
   reason: string;
@@ -189,6 +210,13 @@ export function ApplicationForm({
   // PUTが完了してから次のPUTを送るようにする。
   const persistQueue = useRef<Promise<void>>(Promise.resolve());
 
+  // 志望理由ごとのマッチ度診断結果。キーは選んだゼミのseminar_id。
+  const [matchBySeminarId, setMatchBySeminarId] = useState<
+    Record<string, ReasonMatchResult>
+  >({});
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [matchMessage, setMatchMessage] = useState<string | null>(null);
+
   function selectedSeminarIdsExcept(index: number): Set<string> {
     return new Set(
       slots
@@ -204,6 +232,65 @@ export function ApplicationForm({
       next[index] = { ...next[index], ...patch };
       return next;
     });
+    // 内容が変わったら古い診断結果は無効。表示を消す。
+    setMatchBySeminarId({});
+    setMatchMessage(null);
+  }
+
+  // 志望理由ごとのマッチ度診断。targetIndex を渡すとその志望だけ採点する
+  // (未指定なら理由が入っている全志望)。第1〜3志望のゼミは常に「他ゼミTop3」
+  // から除外するため、採点対象でなくても選択済みゼミは全てリクエストに含める。
+  async function handleMatchDiagnose(targetIndex?: number): Promise<void> {
+    setMatchMessage(null);
+    const filled = slots
+      .map((slot, index) => ({ slot, index }))
+      .filter(({ slot }) => slot.seminarId !== "");
+    const targetIdx = new Set(
+      filled
+        .filter(
+          ({ slot, index }) =>
+            slot.reason.trim() !== "" &&
+            (targetIndex === undefined || index === targetIndex),
+        )
+        .map(({ index }) => index),
+    );
+    if (targetIdx.size === 0) {
+      setMatchMessage("ゼミと志望理由を入力してから診断してください。");
+      return;
+    }
+
+    const choices = filled.map(({ slot, index }) => ({
+      seminar_id: slot.seminarId,
+      // 採点対象の志望だけ理由を送る。他は除外目的でゼミIDのみ。
+      reason: targetIdx.has(index) ? slot.reason : "",
+    }));
+
+    setIsDiagnosing(true);
+    try {
+      const res = await apiFetch("/seminars/reason-matches", session, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choices }),
+      });
+      if (!res.ok) {
+        throw new Error(`reason-matches failed: ${res.status}`);
+      }
+      const data = (await res.json()) as ReasonMatchesResponse;
+      setMatchBySeminarId((prev) => {
+        const next = { ...prev };
+        for (const result of data.results) {
+          next[result.seminar_id] = result;
+        }
+        return next;
+      });
+      if (data.results.length === 0 && data.message) {
+        setMatchMessage(data.message);
+      }
+    } catch {
+      setMatchMessage("診断に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setIsDiagnosing(false);
+    }
   }
 
   function buildPayloadChoices() {
@@ -570,7 +657,25 @@ export function ApplicationForm({
                     placeholder="このゼミを志望する理由を入力してください"
                     className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void handleMatchDiagnose(index)}
+                      disabled={
+                        isBusy ||
+                        isDiagnosing ||
+                        slot.seminarId === "" ||
+                        slot.reason.trim() === ""
+                      }
+                      className="rounded-full border border-[#add8e6] bg-white px-3 py-1 text-xs font-semibold text-sky-900 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDiagnosing ? "診断中..." : "◎ マッチ度診断"}
+                    </button>
+                  </div>
                 </div>
+                {slot.seminarId !== "" && matchBySeminarId[slot.seminarId] && (
+                  <ReasonMatchPanel result={matchBySeminarId[slot.seminarId]} />
+                )}
               </section>
             );
           })}
@@ -583,6 +688,14 @@ export function ApplicationForm({
               className="rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
             >
               {isSubmitting ? "提出中..." : "提出する"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleMatchDiagnose()}
+              disabled={isBusy || isDiagnosing}
+              className="rounded-full border border-[#add8e6] bg-white px-5 py-2 text-sm font-medium text-sky-900 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDiagnosing ? "診断中..." : "マッチ度診断（まとめて）"}
             </button>
             {snapshotSlots && (
               <button
@@ -600,7 +713,97 @@ export function ApplicationForm({
               {autosaveState === "error" && "自動保存に失敗しました"}
             </span>
           </div>
+          {matchMessage && (
+            <p className="text-sm text-sky-900">{matchMessage}</p>
+          )}
         </>
+      )}
+    </div>
+  );
+}
+
+const RUBRIC_LABELS: [string, string][] = [
+  ["研究分野", "field"],
+  ["手法・技術", "method"],
+  ["興味テーマ", "interest"],
+  ["育成方針", "style"],
+];
+
+// 志望理由の直下に表示する診断結果パネル。選んだゼミのマッチ度(あれば)と、
+// その理由に相性の良い他ゼミTop3(第1〜3志望を除く)を表示する。
+function ReasonMatchPanel({ result }: { result: ReasonMatchResult }) {
+  return (
+    <div className="mt-3 rounded-xl border border-[#add8e6]/60 bg-[#add8e6]/10 p-3">
+      {result.selected_score !== null && (
+        <div>
+          <div className="flex items-end justify-between">
+            <span className="text-xs font-semibold text-zinc-500">
+              マッチ度（{result.seminar_name}）
+            </span>
+            <span className="text-2xl font-extrabold tabular-nums text-sky-900">
+              {result.selected_score}
+              <span className="text-sm">%</span>
+            </span>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#add8e6]/30">
+            <div
+              className="h-full rounded-full bg-[#add8e6]"
+              style={{ width: `${result.selected_score}%` }}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {RUBRIC_LABELS.map(([label, key]) => (
+              <span
+                key={key}
+                className="rounded border border-[#add8e6]/60 bg-white/70 px-2 py-0.5 text-[11px] tabular-nums text-zinc-600"
+              >
+                {label}
+                <b className="ml-1 text-sky-900">{result.rubric[key] ?? 0}</b>
+              </span>
+            ))}
+          </div>
+          {result.summary && (
+            <p className="mt-2 text-sm text-zinc-600">{result.summary}</p>
+          )}
+        </div>
+      )}
+
+      {result.recommendations.length > 0 && (
+        <div className="mt-3 border-t border-dashed border-[#add8e6]/60 pt-2.5">
+          <p className="text-xs font-bold text-zinc-700">
+            この志望理由に相性の良いゼミ{" "}
+            <span className="font-medium text-zinc-500">
+              （第1〜3志望を除く）
+            </span>
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {result.recommendations.map((rec, i) => (
+              <li
+                key={rec.seminar_id}
+                className="grid grid-cols-[18px_1fr_auto] items-center gap-2"
+              >
+                <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#add8e6]/60 bg-white text-[11px] font-bold text-sky-900">
+                  {i + 1}
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-zinc-700">
+                    {rec.seminar_name}
+                  </span>
+                  <span className="mt-0.5 block h-[3px] overflow-hidden rounded-full bg-[#add8e6]/30">
+                    <span
+                      className="block h-full rounded-full bg-[#add8e6]"
+                      style={{ width: `${rec.score}%` }}
+                    />
+                  </span>
+                </span>
+                <span className="text-sm font-extrabold tabular-nums text-sky-900">
+                  {rec.score}
+                  <span className="text-[11px]">%</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
