@@ -19,10 +19,8 @@ from api.match_client import (
 )
 from api.models import (
     MatchEvaluation,
-    ResearchTag,
     Seminar,
     User,
-    UserInterestTag,
 )
 from api.schemas import (
     MatchOut,
@@ -51,20 +49,12 @@ def _input_hash(student_text: str, seminar_text: str, model: str) -> str:
 
 
 async def _student_text(db: AsyncSession, user: User) -> str:
-    """学生側の入力テキスト = 研究概要 + 興味分野タグ。"""
-    parts: list[str] = []
-    if user.research_theme:
-        parts.append(user.research_theme.strip())
-    tag_rows = await db.execute(
-        select(ResearchTag.name)
-        .join(UserInterestTag, UserInterestTag.tag_id == ResearchTag.id)
-        .where(UserInterestTag.user_id == user.id)
-        .order_by(ResearchTag.sort_order)
-    )
-    tags = [name for (name,) in tag_rows.all()]
-    if tags:
-        parts.append("興味分野: " + "、".join(tags))
-    return "\n".join(parts).strip()
+    """学生側の入力テキスト = 研究概要のみ。
+
+    興味分野タグはマッチ度判定では参照しない(研究概要の自由記述だけを根拠にする)。
+    db は呼び出し側の互換のため受け取るが、タグ参照をやめたため現在は未使用。
+    """
+    return (user.research_theme or "").strip()
 
 
 def _seminar_text(seminar: Seminar) -> str:

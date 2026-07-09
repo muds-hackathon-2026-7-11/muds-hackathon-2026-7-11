@@ -84,7 +84,7 @@ async def test_matches_excludes_seminars_without_text(
     assert str(without_text.id) not in ids  # 判断材料が無いゼミは対象外
 
 
-async def test_matches_uses_interest_tags(
+async def test_matches_uses_research_theme_not_interest_tags(
     client, db_session, fake_match_client
 ) -> None:
     user = await _make_user(db_session, research_theme="推薦システム")
@@ -100,7 +100,7 @@ async def test_matches_uses_interest_tags(
     assert resp.status_code == 200
     student_text, _names = fake_match_client.bulk_calls[0]
     assert "推薦システム" in student_text
-    assert "自然言語処理" in student_text  # 興味タグが学生側に含まれる
+    assert "自然言語処理" not in student_text  # 興味タグはマッチ度判定に使わない
 
 
 async def test_matches_is_cached(client, db_session, fake_match_client) -> None:

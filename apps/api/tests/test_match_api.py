@@ -103,10 +103,11 @@ async def test_match_requires_authentication(client, monkeypatch) -> None:
     assert resp.status_code == 401
 
 
-async def test_match_enriches_with_interest_tags_and_knowledge(
+async def test_match_uses_research_theme_and_knowledge_not_tags(
     client, db_session, fake_match_client
 ) -> None:
-    # 学生側は研究概要+興味タグ、ゼミ側は紹介文+資料要約(PDF由来)が渡る。
+    # 学生側は研究概要のみ(興味タグはマッチ度判定に使わない)、
+    # ゼミ側は紹介文+資料要約(PDF由来)が渡る。
     user = await _make_user(db_session, research_theme="推薦システム")
     tag = ResearchTag(name="自然言語処理", category="AI", sort_order=1)
     db_session.add(tag)
@@ -122,7 +123,7 @@ async def test_match_enriches_with_interest_tags_and_knowledge(
     assert resp.status_code == 200
     student_text, seminar_text = fake_match_client.calls[0]
     assert "推薦システム" in student_text
-    assert "自然言語処理" in student_text  # 興味タグ
+    assert "自然言語処理" not in student_text  # 興味タグは含めない
     assert "AIのゼミ" in seminar_text
     assert "深層学習と推薦を扱う研究室" in seminar_text  # 資料要約
 
