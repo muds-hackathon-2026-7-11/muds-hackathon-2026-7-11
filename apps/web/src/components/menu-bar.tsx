@@ -11,6 +11,11 @@ const baseNavItems = [
   { label: "応募状況", href: "/assignment" },
 ] as const;
 
+const teacherNavItem = {
+  label: "応募者一覧",
+  href: "/teacher/applicants",
+} as const;
+
 const adminNavItem = { label: "管理者", href: "/admin" } as const;
 
 function isNavItemActive(pathname: string, href: string): boolean {
@@ -28,13 +33,14 @@ function navLinkClassName(isActive: boolean): string {
 
 type MenuBarProps = {
   isAdmin: boolean;
+  isTeacher: boolean;
 };
 
-export function MenuBar({ isAdmin }: MenuBarProps) {
+export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const navItems = baseNavItems;
+  const navItems = isTeacher ? [...baseNavItems, teacherNavItem] : baseNavItems;
 
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
