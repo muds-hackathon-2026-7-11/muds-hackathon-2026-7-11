@@ -397,10 +397,14 @@ export function AdminRecruitmentTermsView({
     setErrorMessage(null);
 
     // 送信前に全ゼミの定員をまとめて検証する。1件でも不正なら送信しない。
-    const payloads: { seminarId: string; capacity: number; grades: string[] }[] =
-      [];
+    const payloads: {
+      seminarId: string;
+      capacity: number;
+      grades: string[];
+    }[] = [];
     for (const r of recruitments) {
-      const input = recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput();
+      const input =
+        recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput();
       if (input.capacity.trim() === "") {
         setErrorMessage(`「${r.seminar_name}」の募集人数を入力してください。`);
         return;
@@ -466,8 +470,11 @@ export function AdminRecruitmentTermsView({
       const succeeded = results.filter(
         (
           r,
-        ): r is { seminarId: string; ok: true; updated: AdminSeminarRecruitment } =>
-          r.ok,
+        ): r is {
+          seminarId: string;
+          ok: true;
+          updated: AdminSeminarRecruitment;
+        } => r.ok,
       );
       if (succeeded.length > 0) {
         const updatedById = new Map(
