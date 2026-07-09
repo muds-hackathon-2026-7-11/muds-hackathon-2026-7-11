@@ -85,7 +85,7 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
           href="/chat"
           aria-label="AIゼミ相談"
           title="AIゼミ相談"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 hover:bg-[#e6e6e6]/60 hover:text-zinc-900"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
