@@ -53,7 +53,7 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
 
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
-      <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
+      <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6">
         <Link href="/" className="flex items-center">
           <Image
             src={logo}
