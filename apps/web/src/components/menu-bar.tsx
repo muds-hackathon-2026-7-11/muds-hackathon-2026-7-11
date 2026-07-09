@@ -11,10 +11,10 @@ const baseNavItems = [
   { label: "応募状況", href: "/assignment" },
 ] as const;
 
-const teacherNavItem = {
-  label: "応募者一覧",
-  href: "/teacher/applicants",
-} as const;
+const teacherNavItems = [
+  { label: "応募者一覧", href: "/teacher/applicants" },
+  { label: "ゼミ設定", href: "/teacher/seminar" },
+] as const;
 
 const adminNavItem = { label: "管理者", href: "/admin" } as const;
 
@@ -40,7 +40,14 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const navItems = isTeacher ? [...baseNavItems, teacherNavItem] : baseNavItems;
+  // 教員には学生向けの「マイページ」「志望理由提出」は表示せず、
+  // 「応募状況」と教員向けの項目だけを見せる。
+  const navItems = isTeacher
+    ? [
+        ...baseNavItems.filter((item) => item.href === "/assignment"),
+        ...teacherNavItems,
+      ]
+    : baseNavItems;
 
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
