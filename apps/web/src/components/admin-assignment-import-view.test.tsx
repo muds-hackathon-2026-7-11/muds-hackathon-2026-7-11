@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useSession } from "next-auth/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,7 +49,14 @@ async function selectTerm(
   user: ReturnType<typeof userEvent.setup>,
   term: AdminTermOption,
 ) {
-  await user.selectOptions(screen.getByLabelText("募集ラウンド"), term.id);
+  // SkySelect(自前ドロップダウン)を開き、年度で選択肢をクリックする。
+  await user.click(screen.getByRole("button", { name: "募集ラウンド" }));
+  await user.click(
+    within(screen.getByRole("listbox", { name: "募集ラウンド" })).getByRole(
+      "option",
+      { name: new RegExp(`${term.academic_year}年度`) },
+    ),
+  );
 }
 
 describe("AdminAssignmentImportView", () => {
