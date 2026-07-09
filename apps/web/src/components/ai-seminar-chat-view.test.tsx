@@ -113,4 +113,51 @@ describe("AiSeminarChatView", () => {
       await screen.findByText(/うまく応答できませんでした/),
     ).toBeInTheDocument();
   });
+
+  it("excludes the error notice from history on the next message", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("", { status: 500 })) // 1通目は失敗
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ reply: "返答", recommendations: [] }), {
+          status: 200,
+        }),
+      );
+    render(<AiSeminarChatView />);
+    const input = screen.getByPlaceholderText(PLACEHOLDER);
+
+    await user.type(input, "一通目");
+    await user.click(screen.getByRole("button", { name: "送信" }));
+    await screen.findByText(/うまく応答できませんでした/);
+
+    await user.type(input, "二通目");
+    await user.click(screen.getByRole("button", { name: "送信" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+
+    const body = JSON.parse(
+      (fetchSpy.mock.calls[1][1] as RequestInit).body as string,
+    );
+    // エラー通知は履歴に含めず、1通目のユーザー発話だけが残る
+    expect(body.history).toEqual([{ role: "user", content: "一通目" }]);
+  });
+
+  it("clears the conversation when 会話をリセット is clicked", async () => {
+    const user = userEvent.setup();
+    mockConsult("おすすめは中村ゼミです。");
+    render(<AiSeminarChatView />);
+
+    await user.type(screen.getByPlaceholderText(PLACEHOLDER), "こんにちは");
+    await user.click(screen.getByRole("button", { name: "送信" }));
+    await screen.findByText("おすすめは中村ゼミです。");
+
+    await user.click(screen.getByRole("button", { name: "会話をリセット" }));
+
+    expect(
+      screen.queryByText("おすすめは中村ゼミです。"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("こんにちは")).not.toBeInTheDocument();
+    // あいさつは残る
+    expect(screen.getByText(/あなたに合いそうなゼミ/)).toBeInTheDocument();
+  });
 });
