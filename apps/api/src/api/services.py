@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -12,6 +12,8 @@ from api.models import (
     AnswerRequestStatus,
     AnswerSource,
     ApplicationChoice,
+    ApplicationForm,
+    ApplicationStatus,
     Question,
     QuestionStatus,
     RecruitmentTerm,
@@ -20,6 +22,7 @@ from api.models import (
     SeminarMember,
     SeminarTeacher,
     User,
+    UserRole,
 )
 from api.slack_client import SlackClient
 
@@ -461,3 +464,87 @@ async def notify_submission(
             user.id,
             exc_info=True,
         )
+
+
+async def find_students_without_submission(
+    db: AsyncSession, *, term_id: uuid.UUID
+) -> list[User]:
+    """指定の募集期間で、まだ志望を提出していない学生(Slack連携済み)を返す。
+
+    「提出していない」は、その期間のApplication自体が無い、または
+    status=draftのまま(下書き止まり)を含む。role=adminであっても実際には
+    在学中の学生であるユーザーがいるため、applications.pyの各エンドポイント
+    と同じくstudentに加えてadminも対象にする(role=teacherは対象外)。
+    """
+    submitted_result = await db.execute(
+        select(ApplicationForm.student_id).where(
+            ApplicationForm.term_id == term_id,
+            ApplicationForm.status == ApplicationStatus.submitted,
+        )
+    )
+    submitted_student_ids = {row[0] for row in submitted_result.all()}
+
+    students_result = await db.execute(
+        select(User).where(
+            User.role.in_([UserRole.student, UserRole.admin]),
+            User.is_active.is_(True),
+            User.slack_user_id.is_not(None),
+        )
+    )
+    return [
+        student
+        for student in students_result.scalars().all()
+        if student.id not in submitted_student_ids
+    ]
+
+
+def _deadline_reminder_text(*, is_deadline_day: bool, ends_at_label: str) -> str:
+    suffix = "まだ提出していない場合はお早めにご提出ください。"
+    if is_deadline_day:
+        return f":alarm_clock: 本日{ends_at_label}が志望提出の締切です。{suffix}"
+    return (
+        f":alarm_clock: 締切まで1日です。志望提出の締切は{ends_at_label}です。{suffix}"
+    )
+
+
+async def send_deadline_reminders(db: AsyncSession, slack_client: SlackClient) -> None:
+    """締切前日・当日の昼12時に、まだ志望を提出していない学生へリマインダーDMを送る(#153)。
+
+    1日1回、締切の前日と当日それぞれの日付にだけ一致する募集期間を対象に
+    するため、この関数自体は1日1回の定期実行(main.pyのスケジューラ)を
+    前提とする(同じ学生・期間に何度も送らないための重複排除テーブルは
+    持たない)。
+    """
+    today = datetime.now(JST).date()
+    result = await db.execute(
+        select(RecruitmentTerm).where(
+            RecruitmentTerm.status == RecruitmentTermStatus.open
+        )
+    )
+    terms = list(result.scalars().all())
+
+    for term in terms:
+        is_deadline_day = term.ends_at == today
+        is_day_before = term.ends_at - timedelta(days=1) == today
+        if not is_deadline_day and not is_day_before:
+            continue
+
+        students = await find_students_without_submission(db, term_id=term.id)
+        ends_at_label = term.ends_at.strftime("%Y年%m月%d日")
+        text = _deadline_reminder_text(
+            is_deadline_day=is_deadline_day, ends_at_label=ends_at_label
+        )
+        for student in students:
+            if student.slack_user_id is None:
+                continue
+            try:
+                await slack_client.send_dm(
+                    slack_user_id=student.slack_user_id, text=text
+                )
+            except Exception:
+                logger.warning(
+                    "締切リマインダーの送信に失敗しました: term_id=%s, user_id=%s",
+                    term.id,
+                    student.id,
+                    exc_info=True,
+                )
