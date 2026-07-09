@@ -1,9 +1,11 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import logo from "@/app/logo.png";
 
 const baseNavItems = [
   { label: "マイページ", href: "/" },
@@ -52,11 +54,15 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-        <Link
-          href="/"
-          className="text-lg font-semibold tracking-tight text-zinc-900"
-        >
-          Zemi-Match
+        <Link href="/" className="flex items-center">
+          <Image
+            src={logo}
+            alt="ホーム"
+            width={882}
+            height={369}
+            priority
+            className="h-8 w-auto"
+          />
         </Link>
 
         <nav className="ml-auto hidden items-center gap-1 sm:flex">
