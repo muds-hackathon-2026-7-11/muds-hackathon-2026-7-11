@@ -46,7 +46,7 @@ async def _chat_log_count(db_session, user_id) -> int:
     return count
 
 
-async def test_consult_returns_reply_and_logs(
+async def test_consult_returns_reply_and_does_not_persist(
     client, db_session, fake_consult_client
 ) -> None:
     user = await _make_student(db_session)
@@ -61,8 +61,8 @@ async def test_consult_returns_reply_and_logs(
     assert body["recommendations"] == [
         {"seminar_name": "テストゼミ", "reason": "理由A"}
     ]
-    # 会話が chat_logs に残る
-    assert await _chat_log_count(db_session, user.id) == 1
+    # 会話は保存しない(プライバシー配慮でログを取らない)
+    assert await _chat_log_count(db_session, user.id) == 0
 
 
 async def test_consult_passes_message_history_and_context(
