@@ -10,6 +10,9 @@ export type ResearchTag = {
   category: string;
 };
 
+// api.schemas.MeUpdateIn.interest_tag_ids の max_length=20 と合わせる。
+const MAX_TAGS = 20;
+
 function groupTagsByCategory(tags: ResearchTag[]): [string, ResearchTag[]][] {
   const groups = new Map<string, ResearchTag[]>();
   for (const tag of tags) {
@@ -84,13 +87,15 @@ export function ProfileCard({
 
   function toggleTag(tagId: string): void {
     setTagIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(tagId)) {
+      if (prev.has(tagId)) {
+        const next = new Set(prev);
         next.delete(tagId);
-      } else {
-        next.add(tagId);
+        return next;
       }
-      return next;
+      if (prev.size >= MAX_TAGS) {
+        return prev;
+      }
+      return new Set(prev).add(tagId);
     });
   }
 
@@ -270,7 +275,9 @@ export function ProfileCard({
               </div>
 
               <div className="flex min-h-0 flex-col">
-                <p className="text-sm text-zinc-500">タグ</p>
+                <p className="text-sm text-zinc-500">
+                  タグ({tagIds.size}/{MAX_TAGS})
+                </p>
                 <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3">
                   {groupTagsByCategory(allTags).map(([category, tags]) => (
                     <div key={category}>
@@ -280,6 +287,8 @@ export function ProfileCard({
                       <div className="mt-1 flex flex-wrap gap-2">
                         {tags.map((tag) => {
                           const checked = tagIds.has(tag.id);
+                          const disabled =
+                            isSaving || (!checked && tagIds.size >= MAX_TAGS);
                           return (
                             <label
                               key={tag.id}
@@ -288,13 +297,16 @@ export function ProfileCard({
                                 checked
                                   ? "border-[#add8e6] bg-[#add8e6] text-sky-950"
                                   : "border-[#add8e6]/50 bg-white text-zinc-600 hover:bg-[#add8e6]/10",
+                                !checked && tagIds.size >= MAX_TAGS
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "",
                               ].join(" ")}
                             >
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleTag(tag.id)}
-                                disabled={isSaving}
+                                disabled={disabled}
                                 className="sr-only"
                               />
                               {tag.name}

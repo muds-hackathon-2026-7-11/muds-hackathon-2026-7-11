@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useSession } from "next-auth/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +56,37 @@ function renderView(overrides: RenderOverrides = {}) {
       allSeminars={overrides.seminars ?? []}
     />,
   );
+}
+
+// SkyDatePicker(自前カレンダー)で日付を選ぶ。ラベル("開始日"等)の
+// ピッカーを開き、月ヘッダー("YYYY年 M月")を読みながら目的の月まで
+// ‹/›で移動し、日をクリックする。現在日に依存せず決定的に動く。
+async function pickDate(
+  user: ReturnType<typeof userEvent.setup>,
+  pickerLabel: string,
+  value: string,
+): Promise<void> {
+  const [year, month, day] = value.split("-").map(Number);
+  await user.click(screen.getByRole("button", { name: pickerLabel }));
+  const dialog = screen.getByRole("dialog", { name: pickerLabel });
+
+  // 目的の年月(target)まで前月/次月ボタンで移動する。
+  const target = year * 12 + (month - 1);
+  for (let guard = 0; guard < 240; guard++) {
+    const header = dialog.querySelector("p")?.textContent ?? "";
+    const m = /(\d+)年\s*(\d+)月/.exec(header);
+    if (!m) {
+      break;
+    }
+    const current = Number(m[1]) * 12 + (Number(m[2]) - 1);
+    if (current === target) {
+      break;
+    }
+    const label = current < target ? "次の月" : "前の月";
+    await user.click(within(dialog).getByRole("button", { name: label }));
+  }
+
+  await user.click(within(dialog).getByRole("button", { name: String(day) }));
 }
 
 describe("AdminRecruitmentTermsView", () => {
@@ -132,10 +163,12 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(
       screen.getByRole("button", { name: "+ 新規募集ラウンドを作成" }),
     );
+    // 年度欄はフォームを開いた時点で当年がプリセットされるため、
+    // 一度クリアしてからテスト用の値を入力する。
+    await user.clear(screen.getByPlaceholderText("2027"));
     await user.type(screen.getByPlaceholderText("2027"), "2028");
-    const dateInputs = screen.getAllByDisplayValue("");
-    await user.type(dateInputs[0], "2027-04-01");
-    await user.type(dateInputs[1], "2028-03-31");
+    await pickDate(user, "開始日", "2027-04-01");
+    await pickDate(user, "終了日", "2028-03-31");
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     expect(await screen.findByText("2028年度")).toBeInTheDocument();
@@ -163,6 +196,8 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(
       screen.getByRole("button", { name: "+ 新規募集ラウンドを作成" }),
     );
+    // 年度は当年がプリセットされるので、空にしてバリデーションを確認する。
+    await user.clear(screen.getByPlaceholderText("2027"));
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     expect(
@@ -184,7 +219,14 @@ describe("AdminRecruitmentTermsView", () => {
     renderView({ terms: [term] });
 
     await user.click(screen.getByRole("button", { name: "編集" }));
-    await user.selectOptions(screen.getByLabelText("状態"), "open");
+    // SkySelect(自前ドロップダウン)を開き、選択肢をクリックする。
+    await user.click(screen.getByRole("button", { name: "状態" }));
+    await user.click(
+      within(screen.getByRole("listbox", { name: "状態" })).getByRole(
+        "option",
+        { name: "募集中" },
+      ),
+    );
     await user.click(screen.getByRole("button", { name: "保存する" }));
 
     await waitFor(() => {
@@ -355,10 +397,10 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(
       screen.getByRole("button", { name: "+ 新規募集ラウンドを作成" }),
     );
+    await user.clear(screen.getByPlaceholderText("2027"));
     await user.type(screen.getByPlaceholderText("2027"), "2028");
-    const dateInputs = screen.getAllByDisplayValue("");
-    await user.type(dateInputs[0], "2027-04-01");
-    await user.type(dateInputs[1], "2028-03-31");
+    await pickDate(user, "開始日", "2027-04-01");
+    await pickDate(user, "終了日", "2028-03-31");
     // B4(4年生)を対象外にする。
     await user.click(screen.getByRole("checkbox", { name: "B4" }));
     await user.click(screen.getByRole("button", { name: "作成する" }));
@@ -404,10 +446,10 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(
       screen.getByRole("button", { name: "+ 新規募集ラウンドを作成" }),
     );
+    await user.clear(screen.getByPlaceholderText("2027"));
     await user.type(screen.getByPlaceholderText("2027"), "2028");
-    const dateInputs = screen.getAllByDisplayValue("");
-    await user.type(dateInputs[0], "2027-04-01");
-    await user.type(dateInputs[1], "2028-03-31");
+    await pickDate(user, "開始日", "2027-04-01");
+    await pickDate(user, "終了日", "2028-03-31");
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     expect(

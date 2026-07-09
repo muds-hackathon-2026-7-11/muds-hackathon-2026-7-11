@@ -3,6 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { SkyDatePicker } from "@/components/sky-date-picker";
+import { SkySelect } from "@/components/sky-select";
 
 export type AdminRecruitmentTerm = {
   id: string;
@@ -40,6 +42,16 @@ const STATUS_LABEL: Record<AdminRecruitmentTerm["status"], string> = {
   closed: "終了",
 };
 
+// 状態セレクト(SkySelect)の選択肢。STATUS_LABELと同じ並び。
+const STATUS_OPTIONS: {
+  value: AdminRecruitmentTerm["status"];
+  label: string;
+}[] = [
+  { value: "preparing", label: STATUS_LABEL.preparing },
+  { value: "open", label: STATUS_LABEL.open },
+  { value: "closed", label: STATUS_LABEL.closed },
+];
+
 // バックエンドのget_current_term(status=open かつ starts_at<=今日<=ends_at)
 // と同じ条件。status=openのまま終了日を過ぎているだけの募集ラウンドは、
 // 実質closedと同じ(志望提出を受け付けない)なので表示上も「終了」にする。
@@ -56,6 +68,13 @@ function todayDateString(): string {
 function isWithinPeriod(term: AdminRecruitmentTerm): boolean {
   const today = todayDateString();
   return term.starts_at <= today && today <= term.ends_at;
+}
+
+// 新規作成フォームを開いた日の年度(暦年)。年度欄の初期値に使う。
+// new Date()はSSRとクライアントで値がずれ得るため、サーバー描画時ではなく
+// フォームを開く(クライアント操作)タイミングで呼ぶ。
+function currentAcademicYear(): string {
+  return String(new Date().getFullYear());
 }
 
 function statusLabel(term: AdminRecruitmentTerm): string {
@@ -150,10 +169,12 @@ export function AdminRecruitmentTermsView({
   const [recruitmentInputs, setRecruitmentInputs] = useState<
     Record<string, RecruitmentInput>
   >({});
-  const [savingSeminarId, setSavingSeminarId] = useState<string | null>(null);
+  const [isSavingRecruitments, setIsSavingRecruitments] = useState(false);
 
   function openCreateForm(): void {
     setIsCreateFormOpen(true);
+    // 年度は未入力ではなく、フォームを開いた日の年度を初期値にする。
+    setNewAcademicYear(currentAcademicYear());
     setErrorMessage(null);
   }
 
@@ -369,79 +390,134 @@ export function AdminRecruitmentTermsView({
     updateRecruitmentInput(seminarId, { targetGrades });
   }
 
-  async function handleSaveRecruitment(seminarId: string): Promise<void> {
+  async function handleSaveAllRecruitments(): Promise<void> {
     if (!selectedTermId) {
       return;
     }
-    const input = recruitmentInputs[seminarId] ?? defaultRecruitmentInput();
     setErrorMessage(null);
-    if (input.capacity.trim() === "") {
-      setErrorMessage("募集人数を入力してください。");
-      return;
+
+    // 送信前に全ゼミの定員をまとめて検証する。1件でも不正なら送信しない。
+    const payloads: {
+      seminarId: string;
+      capacity: number;
+      grades: string[];
+    }[] = [];
+    for (const r of recruitments) {
+      const input =
+        recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput();
+      if (input.capacity.trim() === "") {
+        setErrorMessage(`「${r.seminar_name}」の募集人数を入力してください。`);
+        return;
+      }
+      const capacity = Number(input.capacity);
+      if (!Number.isInteger(capacity) || capacity < 0) {
+        setErrorMessage(
+          `「${r.seminar_name}」の募集人数は0以上の整数で入力してください。`,
+        );
+        return;
+      }
+      payloads.push({
+        seminarId: r.seminar_id,
+        capacity,
+        grades: input.targetGrades,
+      });
     }
-    const capacity = Number(input.capacity);
-    if (!Number.isInteger(capacity) || capacity < 0) {
-      setErrorMessage("募集人数は0以上の整数で入力してください。");
-      return;
-    }
-    if (input.targetGrades.length === 0) {
-      const seminarName =
-        recruitments.find((r) => r.seminar_id === seminarId)?.seminar_name ??
-        "このゼミ";
+
+    // 対象学年が未選択のゼミがあれば、まとめて1回だけ確認する。
+    const emptyGradeNames = recruitments
+      .filter(
+        (r) =>
+          (recruitmentInputs[r.seminar_id] ?? defaultRecruitmentInput())
+            .targetGrades.length === 0,
+      )
+      .map((r) => r.seminar_name);
+    if (emptyGradeNames.length > 0) {
       const confirmed = window.confirm(
-        `対象学年が1つも選択されていません。「${seminarName}」を募集していない状態にして保存します。よろしいですか?`,
+        `対象学年が1つも選択されていないゼミがあります(${emptyGradeNames.join(
+          "、",
+        )})。これらを募集していない状態にして保存します。よろしいですか?`,
       );
       if (!confirmed) {
         return;
       }
     }
-    setSavingSeminarId(seminarId);
+
+    setIsSavingRecruitments(true);
     try {
-      const res = await apiFetch(
-        `/admin/recruitment-terms/${selectedTermId}/seminars/${seminarId}`,
-        session,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            capacity,
-            target_grades: input.targetGrades,
-          }),
-        },
+      const results = await Promise.all(
+        payloads.map(async ({ seminarId, capacity, grades }) => {
+          const res = await apiFetch(
+            `/admin/recruitment-terms/${selectedTermId}/seminars/${seminarId}`,
+            session,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                capacity,
+                target_grades: grades,
+              }),
+            },
+          );
+          if (!res.ok) {
+            return { seminarId, ok: false as const };
+          }
+          const updated = (await res.json()) as AdminSeminarRecruitment;
+          return { seminarId, ok: true as const, updated };
+        }),
       );
-      if (!res.ok) {
-        setErrorMessage(await extractErrorDetail(res));
-        return;
+
+      // 成功したゼミの結果だけ反映する。
+      const succeeded = results.filter(
+        (
+          r,
+        ): r is {
+          seminarId: string;
+          ok: true;
+          updated: AdminSeminarRecruitment;
+        } => r.ok,
+      );
+      if (succeeded.length > 0) {
+        const updatedById = new Map(
+          succeeded.map((r) => [r.seminarId, r.updated]),
+        );
+        setRecruitments((prev) =>
+          prev.map((r) => updatedById.get(r.seminar_id) ?? r),
+        );
+        setRecruitmentInputs((prev) => {
+          const next = { ...prev };
+          for (const { seminarId, updated } of succeeded) {
+            next[seminarId] = {
+              capacity:
+                updated.capacity === null ? "" : String(updated.capacity),
+              targetGrades: updated.target_grades ?? [...GRADE_OPTIONS],
+            };
+          }
+          return next;
+        });
       }
-      const updated = (await res.json()) as AdminSeminarRecruitment;
-      setRecruitments((prev) =>
-        prev.map((r) => (r.seminar_id === seminarId ? updated : r)),
-      );
-      setRecruitmentInputs((prev) => ({
-        ...prev,
-        [seminarId]: {
-          capacity: updated.capacity === null ? "" : String(updated.capacity),
-          targetGrades: updated.target_grades ?? [...GRADE_OPTIONS],
-        },
-      }));
+
+      const failedCount = results.length - succeeded.length;
+      if (failedCount > 0) {
+        setErrorMessage(`${failedCount}件のゼミの保存に失敗しました。`);
+      }
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
-      setSavingSeminarId(null);
+      setIsSavingRecruitments(false);
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
       {errorMessage && (
-        <p className="rounded-lg border border-black/[.08] p-4 text-sm dark:border-white/[.145]">
+        <p className="rounded-2xl border-2 border-red-300 bg-white p-4 text-sm text-red-600 shadow-sm">
           {errorMessage}
         </p>
       )}
 
       {isCreateFormOpen ? (
-        <section className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-          <h2 className="font-semibold">新規募集ラウンド作成</h2>
+        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
+          <h2 className="font-semibold text-zinc-800">新規募集ラウンド作成</h2>
           <div className="mt-3 flex flex-col gap-2">
             <label className="flex flex-col gap-1 text-sm">
               年度
@@ -450,53 +526,49 @@ export function AdminRecruitmentTermsView({
                 value={newAcademicYear}
                 onChange={(e) => setNewAcademicYear(e.target.value)}
                 placeholder="2027"
-                className="w-32 rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                className="w-32 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
               />
             </label>
             <div className="flex flex-wrap gap-2">
-              <label className="flex flex-col gap-1 text-sm">
-                開始日
-                <input
-                  type="date"
+              <div className="flex flex-col gap-1 text-sm">
+                <span>開始日</span>
+                <SkyDatePicker
                   value={newStartsAt}
-                  onChange={(e) => setNewStartsAt(e.target.value)}
-                  className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  onChange={setNewStartsAt}
+                  ariaLabel="開始日"
+                  className="w-44"
                 />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                終了日
-                <input
-                  type="date"
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span>終了日</span>
+                <SkyDatePicker
                   value={newEndsAt}
-                  onChange={(e) => setNewEndsAt(e.target.value)}
-                  className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                  onChange={setNewEndsAt}
+                  ariaLabel="終了日"
+                  className="w-44"
                 />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                状態
-                <select
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span>状態</span>
+                <SkySelect
                   value={newStatus}
-                  onChange={(e) =>
-                    setNewStatus(
-                      e.target.value as AdminRecruitmentTerm["status"],
-                    )
+                  options={STATUS_OPTIONS}
+                  onChange={(next) =>
+                    setNewStatus(next as AdminRecruitmentTerm["status"])
                   }
-                  className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-                >
-                  <option value="preparing">準備中</option>
-                  <option value="open">募集中</option>
-                  <option value="closed">終了</option>
-                </select>
-              </label>
+                  ariaLabel="状態"
+                  className="w-40"
+                />
+              </div>
             </div>
             {newStartsAt !== "" && newEndsAt !== "" && (
-              <p className="text-xs text-foreground/60">
+              <p className="text-xs text-zinc-500">
                 確認: {formatPeriod(newStartsAt, newEndsAt)}
               </p>
             )}
             {allSeminars.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-sm text-foreground/60">対象学年</p>
+                <p className="text-sm text-zinc-500">対象学年</p>
                 <div className="flex flex-wrap gap-3">
                   {GRADE_OPTIONS.map((grade) => (
                     <label
@@ -507,6 +579,7 @@ export function AdminRecruitmentTermsView({
                         type="checkbox"
                         checked={newBulkTargetGrades.includes(grade)}
                         onChange={() => toggleNewBulkTargetGrade(grade)}
+                        className="h-4 w-4 accent-[#add8e6]"
                       />
                       {grade}
                     </label>
@@ -519,7 +592,7 @@ export function AdminRecruitmentTermsView({
                 type="button"
                 onClick={handleCreate}
                 disabled={isCreating}
-                className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="self-start rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
               >
                 {isCreating ? "作成中..." : "作成する"}
               </button>
@@ -527,7 +600,7 @@ export function AdminRecruitmentTermsView({
                 type="button"
                 onClick={cancelCreate}
                 disabled={isCreating}
-                className="self-start rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                className="self-start rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 キャンセル
               </button>
@@ -538,7 +611,7 @@ export function AdminRecruitmentTermsView({
         <button
           type="button"
           onClick={openCreateForm}
-          className="self-start rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+          className="self-start rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
         >
           + 新規募集ラウンドを作成
         </button>
@@ -546,7 +619,7 @@ export function AdminRecruitmentTermsView({
 
       <div className="flex flex-col gap-4">
         {terms.length === 0 ? (
-          <p className="text-sm text-foreground/40">
+          <p className="text-sm text-zinc-400">
             募集ラウンドがまだありません。
           </p>
         ) : (
@@ -557,51 +630,49 @@ export function AdminRecruitmentTermsView({
             return (
               <section
                 key={term.id}
-                className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]"
+                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm text-foreground/60">
+                    <p className="text-sm text-zinc-500">
                       {term.academic_year}年度
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <label className="flex flex-col gap-1 text-sm">
-                        開始日
-                        <input
-                          type="date"
+                      <div className="flex flex-col gap-1 text-sm">
+                        <span>開始日</span>
+                        <SkyDatePicker
                           value={editStartsAt}
-                          onChange={(e) => setEditStartsAt(e.target.value)}
-                          className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                          onChange={setEditStartsAt}
+                          ariaLabel="開始日"
+                          className="w-44"
                         />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        終了日
-                        <input
-                          type="date"
+                      </div>
+                      <div className="flex flex-col gap-1 text-sm">
+                        <span>終了日</span>
+                        <SkyDatePicker
                           value={editEndsAt}
-                          onChange={(e) => setEditEndsAt(e.target.value)}
-                          className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
+                          onChange={setEditEndsAt}
+                          ariaLabel="終了日"
+                          className="w-44"
                         />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        状態
-                        <select
+                      </div>
+                      <div className="flex flex-col gap-1 text-sm">
+                        <span>状態</span>
+                        <SkySelect
                           value={editStatus}
-                          onChange={(e) =>
+                          options={STATUS_OPTIONS}
+                          onChange={(next) =>
                             setEditStatus(
-                              e.target.value as AdminRecruitmentTerm["status"],
+                              next as AdminRecruitmentTerm["status"],
                             )
                           }
-                          className="rounded-lg border border-black/[.08] bg-background px-3 py-2 text-sm dark:border-white/[.145]"
-                        >
-                          <option value="preparing">準備中</option>
-                          <option value="open">募集中</option>
-                          <option value="closed">終了</option>
-                        </select>
-                      </label>
+                          ariaLabel="状態"
+                          className="w-40"
+                        />
+                      </div>
                     </div>
                     {editStartsAt !== "" && editEndsAt !== "" && (
-                      <p className="text-xs text-foreground/60">
+                      <p className="text-xs text-zinc-500">
                         確認: {formatPeriod(editStartsAt, editEndsAt)}
                       </p>
                     )}
@@ -610,7 +681,7 @@ export function AdminRecruitmentTermsView({
                         type="button"
                         onClick={() => handleSaveEdit(term.id)}
                         disabled={isSavingEdit}
-                        className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
                       >
                         {isSavingEdit ? "保存中..." : "保存する"}
                       </button>
@@ -618,7 +689,7 @@ export function AdminRecruitmentTermsView({
                         type="button"
                         onClick={cancelEdit}
                         disabled={isSavingEdit}
-                        className="rounded-full border border-black/[.08] px-4 py-2 text-sm font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                        className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         キャンセル
                       </button>
@@ -627,13 +698,13 @@ export function AdminRecruitmentTermsView({
                 ) : (
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-semibold">
+                      <p className="font-semibold text-zinc-800">
                         {term.academic_year}年度
-                        <span className="ml-2 text-xs font-normal text-foreground/60">
+                        <span className="ml-2 text-xs font-normal text-zinc-500">
                           {statusLabel(term)}
                         </span>
                       </p>
-                      <p className="mt-1 text-sm text-foreground/70">
+                      <p className="mt-1 text-sm text-zinc-600">
                         {formatPeriod(term.starts_at, term.ends_at)}
                       </p>
                     </div>
@@ -641,14 +712,14 @@ export function AdminRecruitmentTermsView({
                       <button
                         type="button"
                         onClick={() => startEdit(term)}
-                        className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                        className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10"
                       >
                         編集
                       </button>
                       <button
                         type="button"
                         onClick={() => handleSelectTerm(term.id)}
-                        className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-white/[.08]"
+                        className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-[#add8e6]/10"
                       >
                         {isSelected ? "ゼミ別設定を閉じる" : "ゼミ別設定"}
                       </button>
@@ -657,14 +728,12 @@ export function AdminRecruitmentTermsView({
                 )}
 
                 {isSelected && (
-                  <div className="mt-3 flex flex-col gap-2 border-t border-black/[.08] pt-3 dark:border-white/[.145]">
-                    <p className="text-sm text-foreground/60">
+                  <div className="mt-3 flex flex-col gap-2 border-t border-[#add8e6]/40 pt-3">
+                    <p className="text-sm text-zinc-500">
                       ゼミ別の定員・対象学年
                     </p>
                     {isLoadingRecruitments ? (
-                      <p className="text-sm text-foreground/40">
-                        読み込み中...
-                      </p>
+                      <p className="text-sm text-zinc-400">読み込み中...</p>
                     ) : (
                       recruitments.map((r) => {
                         const input =
@@ -673,9 +742,9 @@ export function AdminRecruitmentTermsView({
                         return (
                           <div
                             key={r.seminar_id}
-                            className="flex flex-col gap-1 rounded-lg border border-black/[.08] p-3 dark:border-white/[.145]"
+                            className="flex flex-col gap-1 rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"
                           >
-                            <p className="text-sm font-medium">
+                            <p className="text-sm font-medium text-zinc-800">
                               {r.seminar_name}
                             </p>
                             <div className="flex flex-wrap items-center gap-2">
@@ -689,7 +758,7 @@ export function AdminRecruitmentTermsView({
                                   })
                                 }
                                 placeholder="人数"
-                                className="w-24 rounded-lg border border-black/[.08] bg-background px-3 py-1.5 text-sm dark:border-white/[.145]"
+                                className="w-24 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                               />
                               {GRADE_OPTIONS.map((grade) => (
                                 <label
@@ -702,30 +771,31 @@ export function AdminRecruitmentTermsView({
                                     onChange={() =>
                                       toggleTargetGrade(r.seminar_id, grade)
                                     }
+                                    className="h-4 w-4 accent-[#add8e6]"
                                   />
                                   {grade}
                                 </label>
                               ))}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleSaveRecruitment(r.seminar_id)
-                                }
-                                disabled={savingSeminarId === r.seminar_id}
-                                className="rounded-full border border-black/[.08] px-3 py-1.5 text-xs font-medium hover:bg-black/[.04] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[.145] dark:hover:bg-white/[.08]"
-                              >
-                                {savingSeminarId === r.seminar_id
-                                  ? "保存中..."
-                                  : "保存する"}
-                              </button>
                             </div>
                           </div>
                         );
                       })
                     )}
-                    <p className="text-xs text-foreground/40">
+                    <p className="text-xs text-zinc-400">
                       対象学年をすべて外すと、そのゼミは募集していない扱いになります。
                     </p>
+                    {!isLoadingRecruitments && recruitments.length > 0 && (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={handleSaveAllRecruitments}
+                          disabled={isSavingRecruitments}
+                          className="rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
+                        >
+                          {isSavingRecruitments ? "保存中..." : "保存する"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </section>

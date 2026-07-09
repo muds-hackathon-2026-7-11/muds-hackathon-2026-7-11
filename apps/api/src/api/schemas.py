@@ -93,6 +93,7 @@ class SeminarMaterialOut(BaseModel):
 class SeminarMemberOut(BaseModel):
     id: uuid.UUID
     name: str
+    grade: str | None
     research_title: str | None
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
@@ -130,13 +131,33 @@ class SeminarStatsOut(BaseModel):
     ratio: float | None
     # 現在の所属ゼミ生数（継続者）。
     continuing_count: int
+    # 継続希望人数: 現在の所属ゼミ生のうち、今回の募集ラウンドで
+    # 同じゼミを第1志望に選んだ人数。
+    continuing_first_choice_count: int
     # 対象学年(#99)。未設定(募集ラウンドの設定行が無い)ならnull。
     target_grades: list[str] | None
+    # アイコン表示用(#139)。ゼミ自体の写真。
+    photo_url: str | None
+    # アイコン表示用(#139)。担当教員が1人だけの場合に限りその教員の写真を
+    # 使う(複数教員のゼミは特定の1人を代表にできないためnull)。
+    teacher_photo_url: str | None
 
 
 class QuestionCreate(BaseModel):
     seminar_id: uuid.UUID
     slack_user_id: str
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class QuestionCreateWeb(BaseModel):
+    """Web(FAQ画面)からの質問投稿(#141)。
+
+    Slack Bot経由のQuestionCreateとは別経路。投稿者はslack_user_idではなく
+    Web認証済みユーザーで特定する。投稿時のSlack通知はQuestionCreateと同じ
+    notify_answer_candidatesを使う(#143)。
+    """
+
+    seminar_id: uuid.UUID
     content: str = Field(min_length=1, max_length=2000)
 
 
@@ -159,6 +180,12 @@ class AnswerOut(BaseModel):
 
 class QuestionWithAnswersOut(QuestionOut):
     answers: list[AnswerOut]
+
+
+class AnswerCreate(BaseModel):
+    question_id: uuid.UUID
+    slack_user_id: str
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class ApplicationChoiceIn(BaseModel):
@@ -249,6 +276,8 @@ class ApplicantOut(BaseModel):
     grade: str | None
     priority: int
     reason: str
+    research_title: str | None
+    research_theme: str | None
     past_seminars: list[PastSeminarOut]
 
 
@@ -269,6 +298,14 @@ class TeacherRecruitmentOut(BaseModel):
     seminar_name: str
     capacity: int | None
     target_grades: list[str] | None
+
+
+class TeacherSeminarUpdate(BaseModel):
+    """教員が自分の担当ゼミの紹介内容を編集する(#149)。名称変更・削除・担当の
+    付け外しはadmin専用のまま(AdminSeminarUpdateとは別スキーマ)。"""
+
+    description: str | None = None
+    photo_url: str | None = None
 
 
 # --- マッチ度診断 (#59) ---
@@ -362,10 +399,21 @@ class AdminTeacherCreate(BaseModel):
 
 class AdminTeacherUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    email: str | None = Field(default=None, min_length=3, max_length=255)
     research_title: str | None = None
     research_theme: str | None = None
     photo_url: str | None = None
     is_active: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
 
 
 class AdminTeacherOut(BaseModel):
@@ -377,6 +425,45 @@ class AdminTeacherOut(BaseModel):
     research_title: str | None
     research_theme: str | None
     photo_url: str | None
+    is_active: bool
+
+
+# --- 管理者管理(#134) ---
+# 管理者は教員とは完全に独立したユーザー(role=admin)として扱う。
+# 新規作成はせず、既にusers(学生・教員)に登録済みのメールアドレスから
+# 既存ユーザーを探してroleをadminに変更する形で追加する。
+
+
+class AdminUserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("有効なメールアドレスを入力してください。")
+        return normalized
+
+
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    is_active: bool
+
+
+class AdminUserLookupOut(BaseModel):
+    """管理者追加前に、メールアドレスから既存ユーザーの名前を確認するための表示用。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    email: str
+    role: UserRole
     is_active: bool
 
 
