@@ -50,15 +50,22 @@ export default async function AdminRecruitmentTermsPage() {
   ]);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4">
-      <Link
-        href="/admin"
-        className="self-start text-sm underline hover:opacity-70"
-      >
-        ← 管理者メニューに戻る
-      </Link>
-      <h1 className="text-xl font-semibold">募集ラウンド管理</h1>
-      <AdminRecruitmentTermsView initialTerms={terms} allSeminars={seminars} />
+    <main className="page-canvas relative flex flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 sm:p-6">
+        <Link
+          href="/admin"
+          className="self-start text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+        >
+          ← 管理者メニューに戻る
+        </Link>
+        <h1 className="text-xl font-semibold text-zinc-900">
+          募集ラウンド管理
+        </h1>
+        <AdminRecruitmentTermsView
+          initialTerms={terms}
+          allSeminars={seminars}
+        />
+      </div>
     </main>
   );
 }
