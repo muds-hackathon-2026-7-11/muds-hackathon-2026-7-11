@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from api.consult_client import ConsultClient, ConsultTurn, get_consult_client
 from api.db import get_db
-from api.models import ChatLog, Seminar, User
+from api.models import Seminar, User
 from api.schemas import ConsultIn, ConsultOut, ConsultRecommendation
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,8 @@ async def consult(
 ) -> ConsultOut:
     """学生の自由文相談に対し、ゼミ情報から適したゼミを理由付きで推薦する。
 
-    やりとりは chat_logs に追記して残す(継続会話・振り返り用)。
+    会話内容はサーバーに保存しない(プライバシー配慮)。継続会話はクライアントが
+    送る history で成立するため、サーバー側の保存は不要。
     """
     context = await _seminars_context(db)
     if not context:
@@ -60,16 +61,6 @@ async def consult(
         # OpenAI失敗(quota/timeout/不正JSON等)でもエンドポイントは落とさない。
         logger.exception("consult LLM call failed")
         return ConsultOut(reply=_ERROR_REPLY, recommendations=[])
-
-    db.add(
-        ChatLog(
-            user_id=user.id,
-            message=payload.message,
-            response=result.reply,
-            recommendations=result.recommendations,
-        )
-    )
-    await db.flush()
 
     return ConsultOut(
         reply=result.reply,
