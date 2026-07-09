@@ -169,11 +169,11 @@ def _applicants_csv_response(
     for seminar in data:
         for applicant in seminar.applicants:
             # past_seminarsはacademic_year降順のため、先頭が前回(直近)の所属。
-            last_seminar = applicant.past_seminars[0] if applicant.past_seminars else None
+            last_seminar = (
+                applicant.past_seminars[0] if applicant.past_seminars else None
+            )
             last_seminar_label = (
-                f"{last_seminar.seminar_name}({last_seminar.academic_year})"
-                if last_seminar is not None
-                else ""
+                last_seminar.seminar_name if last_seminar is not None else ""
             )
             writer.writerow(
                 [
