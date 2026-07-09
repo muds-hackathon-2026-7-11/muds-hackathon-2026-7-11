@@ -641,4 +641,135 @@ describe("ApplicationForm", () => {
       secondSelectOptions.map((option) => (option as HTMLOptionElement).value),
     ).not.toContain("sem-1");
   });
+
+  // --- マッチ度診断(#119) ---
+
+  function draftWithChoice(
+    seminarId: string,
+    reason: string,
+  ): ApplicationFormData {
+    return emptyDraft({
+      choices: [
+        {
+          seminar_id: seminarId,
+          priority: 1,
+          reason,
+          match_score: null,
+          match_feedback: null,
+        },
+      ],
+    });
+  }
+
+  const SAMPLE_MATCH = {
+    results: [
+      {
+        seminar_id: "sem-1",
+        seminar_name: "福原ゼミ",
+        selected_score: 88,
+        rubric: { field: 92, method: 85, interest: 90, style: 80 },
+        summary: "研究分野・興味が高く一致。",
+        recommendations: [
+          { seminar_id: "sem-9", seminar_name: "清木・林ゼミ", score: 82 },
+        ],
+      },
+    ],
+    message: null,
+  };
+
+  function mockReasonMatches(resp: unknown) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/seminars/reason-matches")) {
+        return new Response(JSON.stringify(resp), { status: 200 });
+      }
+      // 自動保存(PUT /applications/me)などのフォールバック。
+      return new Response(JSON.stringify(emptyDraft()), { status: 200 });
+    });
+  }
+
+  it("shows the diagnosis (selected % + recommendations) under the reason", async () => {
+    const user = userEvent.setup();
+    mockReasonMatches(SAMPLE_MATCH);
+    render(
+      <ApplicationForm
+        seminars={seminars}
+        initialApplication={draftWithChoice("sem-1", "機械学習をやりたい")}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "マッチ度診断（まとめて）" }),
+    );
+
+    expect(await screen.findByText("マッチ度（福原ゼミ）")).toBeInTheDocument();
+    expect(screen.getByText("研究分野・興味が高く一致。")).toBeInTheDocument();
+    expect(screen.getByText("清木・林ゼミ")).toBeInTheDocument();
+  });
+
+  it("posts the chosen seminar_id and reason to /seminars/reason-matches", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockReasonMatches(SAMPLE_MATCH);
+    render(
+      <ApplicationForm
+        seminars={seminars}
+        initialApplication={draftWithChoice("sem-1", "機械学習をやりたい")}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "マッチ度診断（まとめて）" }),
+    );
+    await screen.findByText("マッチ度（福原ゼミ）");
+
+    const call = fetchSpy.mock.calls.find((c) =>
+      String(c[0]).includes("/seminars/reason-matches"),
+    );
+    expect(call).toBeDefined();
+    const body = JSON.parse((call?.[1] as RequestInit).body as string);
+    expect(body.choices).toEqual([
+      { seminar_id: "sem-1", reason: "機械学習をやりたい" },
+    ]);
+  });
+
+  it("shows the returned message when there are no results", async () => {
+    const user = userEvent.setup();
+    mockReasonMatches({
+      results: [],
+      message: "評価できるゼミ情報がありません。",
+    });
+    render(
+      <ApplicationForm
+        seminars={seminars}
+        initialApplication={draftWithChoice("sem-1", "理由")}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "マッチ度診断（まとめて）" }),
+    );
+
+    expect(
+      await screen.findByText("評価できるゼミ情報がありません。"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the diagnosis again after the reason is edited", async () => {
+    const user = userEvent.setup();
+    mockReasonMatches(SAMPLE_MATCH);
+    render(
+      <ApplicationForm
+        seminars={seminars}
+        initialApplication={draftWithChoice("sem-1", "機械学習をやりたい")}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "マッチ度診断（まとめて）" }),
+    );
+    await screen.findByText("マッチ度（福原ゼミ）");
+
+    await user.type(screen.getByDisplayValue("機械学習をやりたい"), "追記");
+
+    expect(screen.queryByText("マッチ度（福原ゼミ）")).not.toBeInTheDocument();
+  });
 });
