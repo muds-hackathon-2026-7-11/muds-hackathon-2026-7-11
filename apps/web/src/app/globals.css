@@ -38,3 +38,16 @@ body {
 .page-canvas {
   background: var(--color-mist);
 }
+
+/* recharts(応募状況グラフ等)をクリックすると、内部のsvgがフォーカスされ
+   ブラウザ標準の青い枠線が出てしまう。マウス操作時は消し、キーボード
+   操作(Tab移動)時のフォーカスリングだけ残す(:focus-visible)。 */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--color-sky);
+  outline-offset: 2px;
+}

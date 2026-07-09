@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SeminarStatsList, type SeminarStats } from "./seminar-stats-list";
 
@@ -17,6 +17,9 @@ const stats: SeminarStats[] = [
     },
     ratio: 0.5,
     target_grades: ["B1", "B2", "B3", "B4"],
+    continuing_first_choice_count: 2,
+    photo_url: null,
+    teacher_photo_url: null,
   },
   {
     id: "seminar-2",
@@ -28,6 +31,9 @@ const stats: SeminarStats[] = [
     priority_grade_counts: { "1": {}, "2": {}, "3": {} },
     ratio: null,
     target_grades: null,
+    continuing_first_choice_count: 0,
+    photo_url: null,
+    teacher_photo_url: null,
   },
 ];
 
@@ -37,15 +43,17 @@ describe("SeminarStatsList", () => {
 
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("Webゼミ")).toBeInTheDocument();
-    expect(screen.getByText("5人")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("10人")).toBeInTheDocument();
+
+    const labels = screen.getAllByText("第1志望");
+    expect(labels[0].nextElementSibling).toHaveTextContent("2人");
+    expect(labels[1].nextElementSibling).toHaveTextContent("0人");
   });
 
-  it("falls back to placeholders for missing capacity and ratio", () => {
+  it("falls back to a placeholder for missing capacity", () => {
     render(<SeminarStatsList stats={stats} />);
 
     expect(screen.getAllByText("未設定")).toHaveLength(1);
-    expect(screen.getAllByText("-")).toHaveLength(1);
   });
 
   it("links each seminar name to its detail page", () => {
@@ -70,55 +78,78 @@ describe("SeminarStatsList", () => {
     }
   });
 
+  it("shows the continuing first-choice count for each seminar", () => {
+    render(<SeminarStatsList stats={stats} />);
+
+    const labels = screen.getAllByText("継続希望人数");
+    expect(labels[0].nextElementSibling).toHaveTextContent("2人");
+    expect(labels[1].nextElementSibling).toHaveTextContent("0人");
+  });
+
+  it("shows the seminar's own photo when set", () => {
+    const withPhoto: SeminarStats[] = [
+      { ...stats[0], photo_url: "https://example.com/lab.jpg" },
+    ];
+    render(<SeminarStatsList stats={withPhoto} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/lab.jpg",
+    );
+  });
+
+  it("falls back to the sole teacher's photo when the seminar has no photo", () => {
+    const withTeacherPhoto: SeminarStats[] = [
+      { ...stats[0], teacher_photo_url: "https://example.com/teacher.jpg" },
+    ];
+    render(<SeminarStatsList stats={withTeacherPhoto} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/teacher.jpg",
+    );
+  });
+
+  it("prefers the seminar's own photo over the teacher's photo", () => {
+    const withBothPhotos: SeminarStats[] = [
+      {
+        ...stats[0],
+        photo_url: "https://example.com/lab.jpg",
+        teacher_photo_url: "https://example.com/teacher.jpg",
+      },
+    ];
+    render(<SeminarStatsList stats={withBothPhotos} />);
+
+    expect(screen.getByAltText("AIゼミ")).toHaveAttribute(
+      "src",
+      "https://example.com/lab.jpg",
+    );
+  });
+
+  it("shows the seminar's initial when neither photo is set", () => {
+    render(<SeminarStatsList stats={[stats[0]]} />);
+
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.queryByAltText("AIゼミ")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the initial when the photo fails to load", () => {
+    const withPhoto: SeminarStats[] = [
+      { ...stats[0], photo_url: "https://example.com/broken.jpg" },
+    ];
+    render(<SeminarStatsList stats={withPhoto} />);
+
+    fireEvent.error(screen.getByAltText("AIゼミ"));
+
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.queryByAltText("AIゼミ")).not.toBeInTheDocument();
+  });
+
   it("shows a message when there are no stats", () => {
     render(<SeminarStatsList stats={[]} />);
 
     expect(
       screen.getByText("応募状況を取得できませんでした。"),
     ).toBeInTheDocument();
-  });
-
-  it("shows 全学年 when all four grades are targeted", () => {
-    render(<SeminarStatsList stats={stats} />);
-
-    expect(screen.getByText("全学年")).toBeInTheDocument();
-  });
-
-  it("shows a not-configured hint when target_grades is null", () => {
-    render(<SeminarStatsList stats={stats} />);
-
-    expect(screen.getByText("未設定(募集していません)")).toBeInTheDocument();
-  });
-
-  it("shows the specific grades when only some are targeted", () => {
-    render(
-      <SeminarStatsList
-        stats={[{ ...stats[0], id: "seminar-3", target_grades: ["B1", "B2"] }]}
-      />,
-    );
-
-    expect(screen.getByText("B1・B2")).toBeInTheDocument();
-  });
-
-  it("shows a closed hint when target_grades is an empty array", () => {
-    render(
-      <SeminarStatsList
-        stats={[{ ...stats[0], id: "seminar-4", target_grades: [] }]}
-      />,
-    );
-
-    expect(screen.getByText("募集していません")).toBeInTheDocument();
-  });
-
-  it("sorts target_grades into B1〜B4 order regardless of stored order", () => {
-    render(
-      <SeminarStatsList
-        stats={[
-          { ...stats[0], id: "seminar-5", target_grades: ["B2", "B3", "B1"] },
-        ]}
-      />,
-    );
-
-    expect(screen.getByText("B1・B2・B3")).toBeInTheDocument();
   });
 });

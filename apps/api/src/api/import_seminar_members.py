@@ -46,25 +46,35 @@ async def _find_seminar(session: AsyncSession, *, name: str) -> Seminar | None:
 async def _upsert_membership(
     session: AsyncSession, *, seminar: Seminar, student: User, term: RecruitmentTerm
 ) -> str:
-    """学生の当該年度の所属を作成/訂正する。"created"/"updated"/"unchanged" を返す。"""
+    """学生の当該年度の所属を作成/訂正する。"created"/"updated"/"unchanged" を返す。
+
+    同一学生・同一年度に所属行が複数残っている場合(過去の重複データ等)は、
+    scalar_one_or_none()がMultipleResultsFoundで落ちてバッチ全体が失敗する
+    のを避けるため、それらを削除してCSVの内容で1件に統一する。
+    """
     result = await session.execute(
         select(SeminarMember).where(
             SeminarMember.student_id == student.id,
             SeminarMember.term_id == term.id,
         )
     )
-    existing = result.scalar_one_or_none()
+    existing_rows = list(result.scalars().all())
 
-    if existing is None:
+    if not existing_rows:
         session.add(
             SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
         )
         return "created"
 
-    if existing.seminar_id == seminar.id:
+    if len(existing_rows) == 1 and existing_rows[0].seminar_id == seminar.id:
         return "unchanged"
 
-    existing.seminar_id = seminar.id
+    for row in existing_rows:
+        await session.delete(row)
+    await session.flush()
+    session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
     return "updated"
 
 

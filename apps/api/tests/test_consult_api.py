@@ -90,9 +90,17 @@ async def test_consult_passes_message_history_and_context(
 
 
 async def test_consult_without_seminars_returns_guidance(
-    client, db_session, fake_consult_client
+    client, db_session, fake_consult_client, monkeypatch
 ) -> None:
-    user = await _make_student(db_session)  # ゼミを作らない
+    # 実DBは共有のシードデータで常にゼミが存在するため、「ゼミが1件も
+    # 無い」状態はDBの実データでは再現できない。_seminars_contextを
+    # 差し替えて、空文脈の分岐を決定的に検証する。
+    async def _empty_context(db) -> str:
+        return ""
+
+    monkeypatch.setattr("api.routers.consult._seminars_context", _empty_context)
+
+    user = await _make_student(db_session)
     _authenticate_as(user)
 
     resp = await client.post("/consult", json={"message": "相談です"})

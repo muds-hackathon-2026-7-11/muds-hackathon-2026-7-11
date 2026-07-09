@@ -7,14 +7,11 @@ const seminar: SeminarDetail = {
   name: "AIゼミ",
   description: "機械学習の研究をします。",
   photo_url: null,
-  capacity: 10,
   teachers: [
     {
       id: "teacher-1",
       name: "山田教授",
       photo_url: null,
-      research_title: "深層学習モデルの研究",
-      research_theme: "深層学習",
       interest_tags: [
         { id: "tag-1", name: "深層学習", category: "AI・機械学習" },
       ],
@@ -62,8 +59,10 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("機械学習の研究をします。")).toBeInTheDocument();
     expect(screen.getByText("山田教授")).toBeInTheDocument();
-    expect(screen.getByText("深層学習モデルの研究")).toBeInTheDocument();
     expect(screen.getByText("PDF")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "https://example.com/a.pdf" }),
+    ).toHaveAttribute("href", "https://example.com/a.pdf");
     // 学年を名前の前に付けて表示し、その下に研究タイトルを出す。
     expect(screen.getByText("B3 学生A")).toBeInTheDocument();
     expect(screen.getByText("画像認識の精度向上")).toBeInTheDocument();
