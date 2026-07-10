@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import csv
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlalchemy import select
@@ -158,52 +159,87 @@ async def _deactivate_missing_users(
     return deactivated
 
 
+@dataclass
+class SkippedRow:
+    row: int
+    email: str
+    reason: str
+
+
+@dataclass
+class ImportSummary:
+    created: int = 0
+    updated: int = 0
+    deactivated: int = 0
+    skipped: list[SkippedRow] = field(default_factory=list)
+
+
+async def import_rows(
+    session: AsyncSession, rows: list[dict[str, str]]
+) -> ImportSummary:
+    """パース済みのCSV行を受け取り、ユーザーの作成/更新と、CSVに存在しなく
+    なった学生の非アクティブ化を行う(#163)。CLIスクリプト・管理者画面の
+    アップロードAPI両方から呼べるよう、ここではsession.flushのみ行い、
+    commitは呼び出し側の責務とする。
+    """
+    summary = ImportSummary()
+    active_emails: set[str] = set()
+
+    for row_number, row in enumerate(rows, start=1):
+        # Google OAuthのemail claimは小文字で返るため、大文字小文字の違いで
+        # 同一人物が別ユーザーとして再作成されないよう小文字に正規化する。
+        email = row["email"].strip().lower()
+
+        if _is_deactivated_in_slack(row):
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number, email=email, reason="Slackから退出済み(Deactivated)"
+                )
+            )
+            continue
+
+        profile = parse_fullname(row["fullname"], email)
+        if profile is None:
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number,
+                    email=email,
+                    reason=f"氏名欄をパースできません: {row['fullname']!r}",
+                )
+            )
+            continue
+
+        active_emails.add(email)
+        _, was_created = await _get_or_create_user(
+            session,
+            email=email,
+            slack_user_id=row["userid"].strip() or None,
+            profile=profile,
+        )
+        if was_created:
+            summary.created += 1
+        else:
+            summary.updated += 1
+
+    summary.deactivated = await _deactivate_missing_users(
+        session, active_emails=active_emails
+    )
+    return summary
+
+
 async def import_csv(path: Path) -> None:
     with path.open(newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
     async with async_session() as session:
-        created = 0
-        updated = 0
-        skipped = 0
-        active_emails: set[str] = set()
-
-        for row in rows:
-            # Google OAuthのemail claimは小文字で返るため、大文字小文字の違いで
-            # 同一人物が別ユーザーとして再作成されないよう小文字に正規化する。
-            email = row["email"].strip().lower()
-
-            if _is_deactivated_in_slack(row):
-                skipped += 1
-                print(f"skip(Deactivated): {email}")
-                continue
-
-            profile = parse_fullname(row["fullname"], email)
-            if profile is None:
-                skipped += 1
-                print(f"skip(fullnameをパースできません): {email} {row['fullname']!r}")
-                continue
-
-            active_emails.add(email)
-            _, was_created = await _get_or_create_user(
-                session,
-                email=email,
-                slack_user_id=row["userid"].strip() or None,
-                profile=profile,
-            )
-            if was_created:
-                created += 1
-            else:
-                updated += 1
-
-        deactivated = await _deactivate_missing_users(
-            session, active_emails=active_emails
-        )
+        summary = await import_rows(session, rows)
         await session.commit()
 
+    for skipped in summary.skipped:
+        print(f"skip: {skipped.email} ({skipped.reason})")
     print(
-        f"users: +{created} created, {updated} updated, {skipped} skipped, "
-        f"{deactivated} deactivated"
+        f"users: +{summary.created} created, {summary.updated} updated, "
+        f"{len(summary.skipped)} skipped, {summary.deactivated} deactivated"
     )
 
 

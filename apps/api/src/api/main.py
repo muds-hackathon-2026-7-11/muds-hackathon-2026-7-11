@@ -18,6 +18,7 @@ from api.routers import (
     seminars,
     teacher,
     users,
+    users_import,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ app.include_router(recruitment.router)
 app.include_router(teacher.router)
 app.include_router(admin.router)
 app.include_router(assignments.router)
+app.include_router(users_import.router)
 app.include_router(research_tags.router)
 app.include_router(consult.router)
 
