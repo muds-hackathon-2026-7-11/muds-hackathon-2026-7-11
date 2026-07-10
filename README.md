@@ -25,7 +25,7 @@ flowchart LR
     API -->|マッチ度診断の埋め込み生成| ST
     API -->|締切リマインダー・提出通知等| SLACK
     BOT <-->|Socket Mode| SLACK
-    BOT -->|質問投稿・回答等(内部API)| API
+    BOT -->|質問投稿・回答等を内部API経由で反映| API
     BACKUP -->|daily dump| DB
 ```
 
