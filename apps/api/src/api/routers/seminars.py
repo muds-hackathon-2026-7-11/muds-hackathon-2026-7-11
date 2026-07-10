@@ -121,15 +121,15 @@ async def list_seminars(
 
     学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
     ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
-    そもそも選べないようにするため #103)。教員・admin等、学生以外には
-    絞り込みをかけない。
+    そもそも選べないようにするため #103)。role=adminであっても実際には
+    在学中の学生であるユーザーがいるため、applications.pyの各エンドポイント
+    と同じ方針でstudentに加えてadminも絞り込みの対象にする(教員は対象外)。
     """
+    is_student_like = user.role in (UserRole.student, UserRole.admin)
     return await _list_seminars_for_grade(
         db,
-        student_grade=normalize_grade(user.grade)
-        if user.role == UserRole.student
-        else None,
-        apply_grade_filter=user.role == UserRole.student,
+        student_grade=normalize_grade(user.grade) if is_student_like else None,
+        apply_grade_filter=is_student_like,
     )
 
 
