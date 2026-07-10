@@ -517,6 +517,23 @@ class AssignmentImportResult(BaseModel):
     errors: list[AssignmentImportError]
 
 
+# --- 学生・教員名簿CSVインポート (#163) ---
+
+
+class UserImportSkip(BaseModel):
+    # CSVの行番号(ヘッダを除いた1始まり)・メールアドレス・スキップ理由。
+    row: int
+    email: str
+    reason: str
+
+
+class UserImportResult(BaseModel):
+    created: int  # 新規に作成したユーザー数
+    updated: int  # 既存ユーザーで更新した数(学年変更等)
+    deactivated: int  # CSVに存在しなくなり非アクティブ化した学生数
+    skipped: list[UserImportSkip]
+
+
 # --- AIゼミ相談アシスタント (requirements §2 / chat_logs) ---
 
 
