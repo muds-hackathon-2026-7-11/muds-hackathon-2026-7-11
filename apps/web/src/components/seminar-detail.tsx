@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { isSafeHttpUrl } from "@/lib/safe-url";
 
 type ResearchTag = {
   id: string;
@@ -236,14 +237,20 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 <span className="shrink-0 text-xs text-zinc-400">
                   {MATERIAL_TYPE_LABEL[material.type]}
                 </span>
-                <a
-                  href={material.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 truncate text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
-                >
-                  {material.url}
-                </a>
+                {isSafeHttpUrl(material.url) ? (
+                  <a
+                    href={material.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 truncate text-sm text-zinc-900 underline decoration-[#add8e6] underline-offset-2 hover:opacity-70"
+                  >
+                    {material.url}
+                  </a>
+                ) : (
+                  <span className="min-w-0 truncate text-sm text-zinc-400">
+                    {material.url}(無効なURL)
+                  </span>
+                )}
               </li>
             ))}
           </ul>

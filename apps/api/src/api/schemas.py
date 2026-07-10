@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -401,6 +402,17 @@ class AdminSeminarTeacherOut(BaseModel):
 class SeminarMaterialCreate(BaseModel):
     url: str = Field(min_length=1)
     type: MaterialType
+
+    @field_validator("url")
+    @classmethod
+    def _require_http_scheme(cls, value: str) -> str:
+        # javascript: 等のスキームだと、フロント側でこのURLをそのまま
+        # <a href> に使った際にクリックで実行されてしまう(#172)。
+        # 資料リンクはhttp(s)のみを許可する。
+        scheme = urlsplit(value).scheme.lower()
+        if scheme not in ("http", "https"):
+            raise ValueError("資料URLはhttp(s)から始まるURLを入力してください。")
+        return value
 
 
 class AdminSeminarOut(BaseModel):

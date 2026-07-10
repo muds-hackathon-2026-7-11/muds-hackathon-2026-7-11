@@ -513,6 +513,24 @@ async def test_create_own_seminar_material(client, db_session) -> None:
     assert result.scalar_one().url == "https://example.com/slide.pdf"
 
 
+async def test_create_own_seminar_material_rejects_non_http_scheme(
+    client, db_session
+) -> None:
+    # javascript: 等はそのままリンクにするとクリックで実行されてしまうため
+    # 拒否する(#172)。
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{seminar.id}/materials",
+        json={"url": "javascript:alert(1)", "type": "pdf"},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_create_material_forbidden_for_other_teachers_seminar(
     client, db_session
 ) -> None:

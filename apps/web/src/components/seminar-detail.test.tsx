@@ -69,6 +69,21 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("B4 学生B")).toBeInTheDocument();
   });
 
+  it("does not render an unsafe material URL as a clickable link", () => {
+    const withUnsafeMaterial: SeminarDetail = {
+      ...seminar,
+      materials: [
+        { id: "material-2", url: "javascript:alert(1)", type: "pdf" },
+      ],
+    };
+    render(<SeminarDetailView seminar={withUnsafeMaterial} />);
+
+    expect(
+      screen.queryByRole("link", { name: /javascript:/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/javascript:alert\(1\)/)).toBeInTheDocument();
+  });
+
   it("falls back to a placeholder when a member's research title is unset", () => {
     render(<SeminarDetailView seminar={seminar} />);
 

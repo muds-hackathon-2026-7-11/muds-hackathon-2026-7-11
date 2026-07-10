@@ -223,6 +223,22 @@ async def test_create_seminar_material(client, db_session) -> None:
     assert created is not None and created.seminar_id == seminar.id
 
 
+async def test_create_seminar_material_rejects_non_http_scheme(
+    client, db_session
+) -> None:
+    # javascript: 等はそのままリンクにするとクリックで実行されてしまうため
+    # 拒否する(#172)。
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+
+    resp = await client.post(
+        f"/admin/seminars/{seminar.id}/materials",
+        json={"url": "javascript:alert(1)", "type": "slide"},
+    )
+
+    assert resp.status_code == 422
+
+
 async def test_create_material_unknown_seminar_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     resp = await client.post(
