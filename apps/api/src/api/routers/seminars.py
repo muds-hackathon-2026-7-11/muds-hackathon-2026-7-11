@@ -319,7 +319,9 @@ async def seminar_stats(
 
 @router.get("/{seminar_id}", response_model=SeminarDetailOut)
 async def get_seminar(
-    seminar_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    seminar_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> SeminarDetailOut:
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
