@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { isSafeHttpUrl } from "@/lib/safe-url";
 
 export type AdminTeacherOption = {
   id: string;
@@ -579,14 +580,20 @@ export function AdminSeminarsView({
                           <span className="shrink-0 text-xs text-zinc-600">
                             {MATERIAL_TYPE_LABEL[material.type]}
                           </span>
-                          <a
-                            href={material.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="truncate underline hover:opacity-70"
-                          >
-                            {material.url}
-                          </a>
+                          {isSafeHttpUrl(material.url) ? (
+                            <a
+                              href={material.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate underline hover:opacity-70"
+                            >
+                              {material.url}
+                            </a>
+                          ) : (
+                            <span className="truncate text-zinc-400">
+                              {material.url}(無効なURL)
+                            </span>
+                          )}
                           <button
                             type="button"
                             onClick={() =>
