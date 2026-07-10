@@ -77,7 +77,9 @@ export function summarizeTargetGrades(
   if (!allSame) {
     return "ゼミにより異なる";
   }
-  return serialized[0] === "" ? "対象学年なし" : serialized[0].split(",").join(", ");
+  return serialized[0] === ""
+    ? "対象学年なし"
+    : serialized[0].split(",").join(", ");
 }
 
 // バックエンドのget_current_term(status=open かつ starts_at<=今日<=ends_at)
@@ -311,7 +313,9 @@ export function AdminRecruitmentTermsView({
               : newBulkTargetGrades.join(", ");
           setTerms((prev) =>
             prev.map((t) =>
-              t.id === created.id ? { ...t, target_grades_summary: summary } : t,
+              t.id === created.id
+                ? { ...t, target_grades_summary: summary }
+                : t,
             ),
           );
         } catch {

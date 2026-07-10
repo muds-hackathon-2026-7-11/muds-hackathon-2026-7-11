@@ -343,9 +343,7 @@ describe("AdminRecruitmentTermsView", () => {
       );
     });
     // ラウンドのカード側の要約テキストにも、保存した対象学年が反映される。
-    expect(
-      await screen.findByText("対象学年: B2, B3, B4"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("対象学年: B2, B3, B4")).toBeInTheDocument();
   });
 
   it("asks for confirmation before saving with no grades selected", async () => {
@@ -418,9 +416,7 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     await screen.findByText("2028年度");
-    expect(
-      await screen.findByText("対象学年: B1, B2, B3"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("対象学年: B1, B2, B3")).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledTimes(3); // POST term + PUT x2 seminars
     });
