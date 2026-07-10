@@ -23,11 +23,14 @@ router = APIRouter(
 
 
 @router.post("/import", response_model=UserImportResult)
-async def import_users(
+async def upload_users_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ) -> UserImportResult:
-    """Slackメンバー一覧CSVをアップロードし、学生・教員データを更新する。
+    """Slackメンバー一覧CSVをアップロードし、学生データを更新する。
+
+    教員は対象外(管理者画面の「教員・管理者管理」から個別に追加・編集する
+    運用のため、api.import_users.import_rowsが取り込み時にスキップする)。
 
     CSV列: username, email, status, billing-active, has-2fa, has-sso,
     userid, fullname, displayname, expiration-timestamp
