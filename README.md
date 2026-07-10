@@ -79,7 +79,6 @@ make format     # web(Biome) + api・slack-bot(ruff format)
 make migrate    # devのDBにAlembicマイグレーションを適用
 make migration m="message"  # 新しいAlembicマイグレーションを生成
 make ensure-recruitment-term year=2026  # dev/デモ用に対象年度の募集期間を1件作成(べき等)
-make link-slack-user id=U0XXXXXXX  # 自分のSlackユーザーIDをテスト用ユーザーに紐付け(Slack連携の動作確認用)
 make db-shell   # devのDBにpsqlで接続
 make ps         # docker compose ps でコンテナ状態を確認
 make logs       # 全サービスのログをfollow(SVC=<service>で個別指定も可)

@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data link-slack-user backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -76,9 +76,6 @@ import-seminar-knowledge: ## load seminar summary docs into seminars.knowledge (
 	cd apps/api && uv run python -m api.import_seminar_knowledge "../../$(or $(dir),docs/seminars/knowledge)"
 
 import-data: import-seminars import-users import-seminar-members ## run import-seminars, import-users, then import-seminar-members with default CSV paths
-
-link-slack-user: ## link your Slack user id to a test account (usage: make link-slack-user id=U0XXXX)
-	cd apps/api && uv run python -m api.link_slack_user $(id)
 
 backup: ## take an on-demand DB backup into ./backups (pg_dump, custom format)
 	mkdir -p backups
