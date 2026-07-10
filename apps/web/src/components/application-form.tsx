@@ -529,18 +529,20 @@ export function ApplicationForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        {submittedAt && (
-          <p className="text-sm text-zinc-500">
-            提出日時: {formatDateTime(submittedAt)}
-          </p>
-        )}
-        {!isEditable && (
-          <p className="text-sm text-red-600">
-            ※ 現在は募集期間外です。内容の変更・提出はできません。
-          </p>
-        )}
-      </div>
+      {(submittedAt || !isEditable) && (
+        <div className="flex flex-col gap-1">
+          {submittedAt && (
+            <p className="text-sm text-zinc-500">
+              提出日時: {formatDateTime(submittedAt)}
+            </p>
+          )}
+          {!isEditable && (
+            <p className="text-sm text-red-600">
+              ※ 現在は募集期間外です。内容の変更・提出はできません。
+            </p>
+          )}
+        </div>
+      )}
 
       {errorMessage && (
         <p className="rounded-2xl border-2 border-red-300 bg-white p-4 text-sm text-red-600 shadow-sm">
