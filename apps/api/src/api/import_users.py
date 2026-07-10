@@ -1,4 +1,4 @@
-"""Slackワークスペースメンバー一覧CSVから学生・教員データをDBへ投入するスクリプト。
+"""Slackワークスペースメンバー一覧CSVから学生データをDBへ投入するスクリプト。
 
 使い方: uv run python -m api.import_users <CSVファイルパス>
 
@@ -7,11 +7,12 @@ username, email, status, billing-active, has-2fa, has-sso, userid,
 fullname, displayname, expiration-timestamp
 
 fullname は `[学年] 氏名 / Romanized Name` 形式(例: `[B1] 山田 太郎 / Taro Yamada`)。
-角括弧の中身が「教員」ならrole=teacher、既知の学年パターン(B1-4, MIDS/B1-4,
-M1/M2/D1等、guestサフィックス可)ならrole=studentにする。それ以外(卒業生の
-「卒」、他学科、提携企業ゲスト、重複アカウント等)はデータサイエンス学科の
-現役学生・教員ではないため無視する(全学ワークスペースのエクスポートには
-これらが大量に混在するため)。
+既知の学年パターン(B1-4, MIDS/B1-4, M1/M2/D1等、guestサフィックス可)なら
+role=studentとして取り込む。角括弧の中身が「教員」の行はスキップする(#163。
+教員は管理者画面の「教員・管理者管理」から個別に追加・編集する運用のため)。
+それ以外(卒業生の「卒」、他学科、提携企業ゲスト、重複アカウント等)は
+データサイエンス学科の現役学生ではないため無視する(全学ワークスペースの
+エクスポートにはこれらが大量に混在するため)。
 
 ログイン前にemailキーでレコードを用意しておけば、実際にGoogleログインした際
 api.auth._provision_user のemail一致ロジックで自動的にgoogle_idが後付けされる。
@@ -210,6 +211,18 @@ async def import_rows(
                     row=row_number,
                     email=email,
                     reason=f"氏名欄をパースできません: {row['fullname']!r}",
+                )
+            )
+            continue
+
+        if profile.role == UserRole.teacher:
+            # 教員は管理者画面の「教員・管理者管理」から個別に追加・編集する
+            # 運用のため、CSVでは学生のみを対象にする(#163)。
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number,
+                    email=email,
+                    reason="教員はCSVでは取り込みません(管理者画面から追加してください)",
                 )
             )
             continue

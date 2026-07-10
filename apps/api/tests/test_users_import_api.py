@@ -125,6 +125,25 @@ async def test_import_reports_skipped_rows(client, db_session) -> None:
     assert "パース" in reasons_by_email[unparseable_email]
 
 
+async def test_import_skips_teacher_rows(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    teacher_email = f"{_unique('teacher-test')}@example.com"
+
+    resp = await _post(
+        client,
+        _csv([_csv_row(email=teacher_email, fullname="[教員] 客員 教授 / Kyakuin")]),
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["created"] == 0
+    assert len(body["skipped"]) == 1
+    assert body["skipped"][0]["email"] == teacher_email
+
+    result = await db_session.execute(select(User).where(User.email == teacher_email))
+    assert result.scalar_one_or_none() is None
+
+
 async def test_import_deactivates_students_missing_from_csv(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     graduate_email = f"{_unique('s0000010-test')}@stu.musashino-u.ac.jp"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 
@@ -106,17 +107,22 @@ export function AdminUsersImportView() {
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
-        <h2 className="font-semibold text-zinc-800">
-          学生・教員名簿CSVアップロード
-        </h2>
+        <h2 className="font-semibold text-zinc-800">学生名簿CSVアップロード</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Slack管理画面からエクスポートした、ワークスペースメンバー一覧CSVを
           そのままアップロードしてください(列: username, email, status,
           billing-active, has-2fa, has-sso, userid, fullname, displayname,
           expiration-timestamp。<code>make import-users</code>
-          と同じ形式です)。学年更新・新入生の追加を行い、CSVに存在しなく
-          なった学生(卒業・退学)は非アクティブ化されます。教員は
-          非アクティブ化の対象外です。
+          と同じ形式です)。学生の学年更新・新入生の追加を行い、CSVに存在
+          しなくなった学生(卒業・退学)は非アクティブ化されます。教員は
+          対象外です(
+          <Link
+            href="/admin/teachers"
+            className="underline underline-offset-2 hover:opacity-70"
+          >
+            教員・管理者管理
+          </Link>
+          から追加・編集してください)。
         </p>
 
         <div className="mt-3 flex flex-col gap-3">

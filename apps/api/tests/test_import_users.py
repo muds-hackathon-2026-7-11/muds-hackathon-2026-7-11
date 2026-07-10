@@ -263,6 +263,27 @@ async def test_import_rows_records_skip_reasons(db_session) -> None:
 
 
 @pytest.mark.asyncio
+async def test_import_rows_skips_teacher_rows(db_session) -> None:
+    # 教員は管理者画面の「教員・管理者管理」から追加する運用のため、
+    # CSVでは取り込まない(#163)。
+    email = "teacher-test@example.com"
+    rows = [
+        _row(email=email, fullname="[教員] 客員 教授 / Kyakuin Kyoju"),
+    ]
+
+    summary = await import_rows(db_session, rows)
+
+    assert summary.created == 0
+    assert summary.updated == 0
+    assert len(summary.skipped) == 1
+    assert summary.skipped[0].email == email
+    assert "教員" in summary.skipped[0].reason
+
+    result = await db_session.execute(select(User).where(User.email == email))
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
 async def test_import_rows_deactivates_students_missing_from_csv(db_session) -> None:
     profile = parse_fullname(
         "[B4] 卒業予定 花子 / Hanako Sotsugyoyotei",
