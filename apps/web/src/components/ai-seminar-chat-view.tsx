@@ -131,21 +131,9 @@ export function AiSeminarChatView() {
 
   return (
     <section className="flex h-[75vh] flex-col rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold text-zinc-800">AIゼミ相談</p>
-        <button
-          type="button"
-          onClick={handleReset}
-          disabled={isSending || messages.length === 0}
-          className="rounded-full px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900 disabled:opacity-40 disabled:hover:bg-transparent"
-        >
-          会話をリセット
-        </button>
-      </div>
-
       <div
         aria-live="polite"
-        className="mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"
       >
         <ChatBubble speaker="assistant" content={GREETING} />
         {messages.map((message) => (
@@ -188,7 +176,7 @@ export function AiSeminarChatView() {
           type="button"
           onClick={() => void handleSend()}
           disabled={!canSend}
-          className="shrink-0 rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 transition-colors hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
         >
           送信
         </button>
@@ -199,9 +187,19 @@ export function AiSeminarChatView() {
           {input.length}/{MESSAGE_MAX_LENGTH}
         </span>
       </div>
-      <p className="text-[11px] text-zinc-400">
-        ※ 会話内容は保存されません。ページを更新・移動すると消えます。
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-zinc-400">
+          ※ 会話内容は保存されません。ページを更新・移動すると消えます。
+        </p>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={isSending || messages.length === 0}
+          className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900 disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          会話をリセット
+        </button>
+      </div>
     </section>
   );
 }
