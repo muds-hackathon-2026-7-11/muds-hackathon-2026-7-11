@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 from slack_bolt import App
@@ -9,6 +10,13 @@ from slack_sdk.errors import SlackApiError
 from slack_bot.api_client import fetch_seminars, submit_answer, submit_question
 
 logger = logging.getLogger(__name__)
+
+# Boltはlistener_executor未指定だとThreadPoolExecutor(max_workers=5)を使う。
+# 各リスナーはack()自体もこのプールで実行されるため、5件同時に処理中だと
+# 6件目以降がSlackの3秒ack期限(trigger_id)に間に合わずボタンが無反応に
+# 見えてしまう(#173)。授業の一斉告知後など複数人が同時に操作しうるため、
+# 余裕を持たせる。
+_LISTENER_MAX_WORKERS = 32
 
 
 def _home_view() -> dict:
@@ -340,6 +348,7 @@ def create_app(token_verification_enabled: bool = True) -> App:
     app = App(
         token=os.environ["SLACK_BOT_TOKEN"],
         token_verification_enabled=token_verification_enabled,
+        listener_executor=ThreadPoolExecutor(max_workers=_LISTENER_MAX_WORKERS),
     )
 
     app.event("app_home_opened")(_handle_home_opened)
