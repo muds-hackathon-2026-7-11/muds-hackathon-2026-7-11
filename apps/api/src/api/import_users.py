@@ -104,7 +104,12 @@ async def _get_or_create_user(
     user = result.scalar_one_or_none()
     if user is not None:
         user.name = profile.name
-        user.role = profile.role
+        # adminは運営がAdmin管理画面から個別に付与する権限で、Slack
+        # エクスポートの学年ブラケットには表れない。ここで上書きすると
+        # CSV再取り込みのたびにadminがstudent/teacherへ戻ってしまうため、
+        # 既にadminのユーザーはroleを変更しない。
+        if user.role != UserRole.admin:
+            user.role = profile.role
         user.grade = profile.grade
         user.student_id = profile.student_id
         user.slack_user_id = slack_user_id

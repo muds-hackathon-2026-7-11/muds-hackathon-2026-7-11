@@ -147,6 +147,39 @@ async def test_get_or_create_user_creates_then_updates(db_session) -> None:
     assert len(result.scalars().all()) == 1
 
 
+@pytest.mark.asyncio
+async def test_get_or_create_user_preserves_admin_role_on_update(db_session) -> None:
+    # adminは運営が個別に付与する権限で、Slackエクスポートの学年ブラケットは
+    # student/teacherしか表現できない。CSV再取り込みで既存adminの権限を
+    # 勝手に落としてはいけない(実際に発生した事故)。
+    admin = User(
+        google_id="google-admin-test",
+        email="s0000009-test@stu.musashino-u.ac.jp",
+        name="運営 admin太郎",
+        role=UserRole.admin,
+        grade="B3",
+    )
+    db_session.add(admin)
+    await db_session.flush()
+
+    profile = parse_fullname(
+        "[B4] 運営 admin太郎 / Admin Taro", "s0000009-test@stu.musashino-u.ac.jp"
+    )
+    assert profile is not None
+
+    updated, created = await _get_or_create_user(
+        db_session,
+        email="s0000009-test@stu.musashino-u.ac.jp",
+        slack_user_id="U0000009TEST",
+        profile=profile,
+    )
+
+    assert created is False
+    assert updated.role == UserRole.admin
+    # role以外(進級等)は通常通り反映される。
+    assert updated.grade == "B4"
+
+
 def _row(
     *, email: str, fullname: str, status: str = "Member", userid: str | None = None
 ) -> dict[str, str]:
