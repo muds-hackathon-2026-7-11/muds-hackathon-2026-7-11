@@ -341,7 +341,10 @@ async def get_seminar(
     teachers_result = await db.execute(
         select(User)
         .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
-        .where(SeminarTeacher.seminar_id == seminar_id)
+        .where(
+            SeminarTeacher.seminar_id == seminar_id,
+            User.is_active.is_(True),
+        )
         .order_by(User.name)
     )
     teacher_users = list(teachers_result.scalars().all())
@@ -377,6 +380,7 @@ async def get_seminar(
             .where(
                 SeminarMember.seminar_id == seminar_id,
                 RecruitmentTerm.academic_year == academic_year,
+                User.is_active.is_(True),
             )
             # 学年順(B1→B4)に並べ、同学年内は名前順。gradeは"B1".."B4"の
             # 文字列なので昇順で学年の昇順になる。gradeがNULLの学生は末尾。
