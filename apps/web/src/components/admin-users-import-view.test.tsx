@@ -78,7 +78,12 @@ describe("AdminUsersImportView", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
-        JSON.stringify({ created: 2, updated: 1, deactivated: 0, skipped: [] }),
+        JSON.stringify({
+          created: 2,
+          updated: 1,
+          deactivated: 0,
+          skipped: [],
+        }),
         { status: 200 },
       ),
     );
