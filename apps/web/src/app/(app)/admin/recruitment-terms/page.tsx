@@ -2,11 +2,38 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import {
   AdminRecruitmentTermsView,
+  summarizeTargetGrades,
   type AdminRecruitmentTerm,
   type AdminSeminarOption,
+  type AdminSeminarRecruitment,
 } from "@/components/admin-recruitment-terms-view";
 import { serverApiFetch } from "@/lib/api-server";
 import type { Session } from "next-auth";
+
+type RecruitmentTermApiResponse = Omit<
+  AdminRecruitmentTerm,
+  "target_grades_summary"
+>;
+
+async function getTargetGradesSummary(
+  session: Session | null,
+  termId: string,
+): Promise<string> {
+  try {
+    const res = await serverApiFetch(
+      `/admin/recruitment-terms/${termId}/seminars`,
+      session,
+      { cache: "no-store" },
+    );
+    if (!res.ok) {
+      return "取得できませんでした";
+    }
+    const recruitments = (await res.json()) as AdminSeminarRecruitment[];
+    return summarizeTargetGrades(recruitments);
+  } catch {
+    return "取得できませんでした";
+  }
+}
 
 async function getTerms(
   session: Session | null,
@@ -18,7 +45,15 @@ async function getTerms(
     if (!res.ok) {
       return [];
     }
-    return (await res.json()) as AdminRecruitmentTerm[];
+    const terms = (await res.json()) as RecruitmentTermApiResponse[];
+    // ラウンド一覧のカードに、ゼミ別設定を横断した対象学年の要約を
+    // 直接表示する(「ゼミ別設定」を開かなくても確認できるように)。
+    return Promise.all(
+      terms.map(async (term) => ({
+        ...term,
+        target_grades_summary: await getTargetGradesSummary(session, term.id),
+      })),
+    );
   } catch {
     return [];
   }

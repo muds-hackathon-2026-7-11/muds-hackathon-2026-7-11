@@ -12,6 +12,12 @@ export type AdminRecruitmentTerm = {
   starts_at: string;
   ends_at: string;
   status: "preparing" | "open" | "closed";
+  // ゼミ別設定を横断した対象学年の要約(#99)。対象学年はゼミごとの設定
+  // (SeminarRecruitment)なので、募集ラウンド自体には値を持たない。
+  // ラウンド作成直後に一括適用した値を、編集不要な確認用テキストとして
+  // ラウンドのカード上に直接出す(「ゼミ別設定」を開かなくても確認できる
+  // ように)。
+  target_grades_summary: string;
 };
 
 export type AdminSeminarRecruitment = {
@@ -51,6 +57,28 @@ const STATUS_OPTIONS: {
   { value: "open", label: STATUS_LABEL.open },
   { value: "closed", label: STATUS_LABEL.closed },
 ];
+
+// ゼミ別の対象学年を横断して、ラウンド単位の要約テキストにする。
+// 全ゼミで同じ設定なら学年をそのまま表示し、ゼミごとに違えば「ゼミにより
+// 異なる」とだけ表示する(個別の内訳は「ゼミ別設定」で確認する)。
+export function summarizeTargetGrades(
+  recruitments: AdminSeminarRecruitment[],
+): string {
+  const gradeSets = recruitments
+    .map((r) => r.target_grades)
+    .filter((g): g is string[] => g !== null);
+  if (gradeSets.length === 0) {
+    return "未設定";
+  }
+  const canonicalize = (grades: string[]) =>
+    GRADE_OPTIONS.filter((g) => grades.includes(g)).join(",");
+  const serialized = gradeSets.map(canonicalize);
+  const allSame = serialized.every((s) => s === serialized[0]);
+  if (!allSame) {
+    return "ゼミにより異なる";
+  }
+  return serialized[0] === "" ? "対象学年なし" : serialized[0].split(",").join(", ");
+}
 
 // バックエンドのget_current_term(status=open かつ starts_at<=今日<=ends_at)
 // と同じ条件。status=openのまま終了日を過ぎているだけの募集ラウンドは、
@@ -259,7 +287,13 @@ export function AdminRecruitmentTermsView({
         setErrorMessage(await extractErrorDetail(res));
         return;
       }
-      const created = (await res.json()) as AdminRecruitmentTerm;
+      const created: AdminRecruitmentTerm = {
+        ...((await res.json()) as Omit<
+          AdminRecruitmentTerm,
+          "target_grades_summary"
+        >),
+        target_grades_summary: "未設定",
+      };
       setTerms((prev) =>
         [...prev, created].sort((a, b) => {
           if (a.academic_year !== b.academic_year) {
@@ -271,6 +305,15 @@ export function AdminRecruitmentTermsView({
       if (allSeminars.length > 0) {
         try {
           await applyBulkTargetGrades(created.id, newBulkTargetGrades);
+          const summary =
+            newBulkTargetGrades.length === 0
+              ? "対象学年なし"
+              : newBulkTargetGrades.join(", ");
+          setTerms((prev) =>
+            prev.map((t) =>
+              t.id === created.id ? { ...t, target_grades_summary: summary } : t,
+            ),
+          );
         } catch {
           setErrorMessage(
             "募集ラウンドは作成しましたが、対象学年の一括設定に失敗しました。「ゼミ別設定」から個別に確認してください。",
@@ -322,8 +365,13 @@ export function AdminRecruitmentTermsView({
         setErrorMessage(await extractErrorDetail(res));
         return;
       }
-      const updated = (await res.json()) as AdminRecruitmentTerm;
-      setTerms((prev) => prev.map((t) => (t.id === termId ? updated : t)));
+      const updated = (await res.json()) as Omit<
+        AdminRecruitmentTerm,
+        "target_grades_summary"
+      >;
+      setTerms((prev) =>
+        prev.map((t) => (t.id === termId ? { ...t, ...updated } : t)),
+      );
       setEditingId(null);
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
@@ -480,9 +528,20 @@ export function AdminRecruitmentTermsView({
         const updatedById = new Map(
           succeeded.map((r) => [r.seminarId, r.updated]),
         );
-        setRecruitments((prev) =>
-          prev.map((r) => updatedById.get(r.seminar_id) ?? r),
+        const mergedRecruitments = recruitments.map(
+          (r) => updatedById.get(r.seminar_id) ?? r,
         );
+        setRecruitments(mergedRecruitments);
+        if (selectedTermId) {
+          const summary = summarizeTargetGrades(mergedRecruitments);
+          setTerms((prev) =>
+            prev.map((t) =>
+              t.id === selectedTermId
+                ? { ...t, target_grades_summary: summary }
+                : t,
+            ),
+          );
+        }
         setRecruitmentInputs((prev) => {
           const next = { ...prev };
           for (const { seminarId, updated } of succeeded) {
@@ -706,6 +765,9 @@ export function AdminRecruitmentTermsView({
                       </p>
                       <p className="mt-1 text-sm text-zinc-600">
                         {formatPeriod(term.starts_at, term.ends_at)}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        対象学年: {term.target_grades_summary}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">

@@ -16,6 +16,7 @@ from api.models import (
     RecruitmentTerm,
     RecruitmentTermStatus,
     SeminarMember,
+    SeminarRecruitment,
     SeminarTeacher,
     User,
 )
@@ -64,6 +65,27 @@ def normalize_grade(raw: str | None) -> str | None:
         if raw.endswith(grade):
             return grade
     return None
+
+
+async def term_targets_grade(
+    db: AsyncSession, *, term_id: uuid.UUID, student_grade: str | None
+) -> bool:
+    """指定の募集期間に、この学年を対象とするゼミが1件でもあるか判定する(#99)。
+
+    どのゼミの対象学年にも入っていない学生は、この募集ラウンドの対象外として
+    扱う(マイページで「未提出」ではなく「準備中」を表示し、志望提出自体も
+    できないようにする側で使う)。
+    """
+    if student_grade is None:
+        return False
+    result = await db.execute(
+        select(SeminarRecruitment.target_grades).where(
+            SeminarRecruitment.term_id == term_id
+        )
+    )
+    return any(
+        student_grade in target_grades for target_grades in result.scalars().all()
+    )
 
 
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
