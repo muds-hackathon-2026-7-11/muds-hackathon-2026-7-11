@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from api import auth
 from api.models import (
     MaterialType,
     RecruitmentTerm,
@@ -21,6 +22,15 @@ pytestmark = pytest.mark.asyncio
 
 def _unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+def _auth_headers(email: str) -> dict[str, str]:
+    return {"X-Dev-User-Email": email, "X-Dev-User-Role": "student"}
+
+
+@pytest.fixture(autouse=True)
+def _enable_dev_auth(monkeypatch):
+    monkeypatch.setattr(auth.settings, "auth_dev_mode", True)
 
 
 async def _make_seminar(db_session) -> Seminar:
@@ -105,7 +115,9 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
     )
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(current_student.email)
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -151,7 +163,9 @@ async def test_get_seminar_detail_excludes_inactive_teachers_and_members(
     )
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(active_student.email)
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -163,19 +177,37 @@ async def test_get_seminar_detail_excludes_inactive_teachers_and_members(
     assert inactive_student.name not in member_names
 
 
-async def test_get_seminar_detail_unknown_id_returns_404(client) -> None:
-    resp = await client.get(f"/seminars/{uuid.uuid4()}")
+async def test_get_seminar_detail_unknown_id_returns_404(client, db_session) -> None:
+    user = await _make_user(db_session, UserRole.student)
+    resp = await client.get(
+        f"/seminars/{uuid.uuid4()}", headers=_auth_headers(user.email)
+    )
 
     assert resp.status_code == 404
+
+
+async def test_get_seminar_detail_requires_auth(
+    client, db_session, monkeypatch
+) -> None:
+    seminar = await _make_seminar(db_session)
+    await db_session.flush()
+    monkeypatch.setattr(auth.settings, "auth_dev_mode", False)
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 401
 
 
 async def test_get_seminar_detail_without_recruitment_data_returns_empty_lists(
     client, db_session
 ) -> None:
     seminar = await _make_seminar(db_session)
+    user = await _make_user(db_session, UserRole.student)
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(user.email)
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -209,7 +241,9 @@ async def test_get_seminar_detail_shows_current_members_without_an_active_term(
     )
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(student.email)
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -241,7 +275,9 @@ async def test_get_seminar_detail_ignores_a_newer_preparing_term_for_current_mem
     db_session.add(next_term)
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(student.email)
+    )
 
     assert resp.status_code == 200
     assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
@@ -270,7 +306,9 @@ async def test_get_seminar_detail_ignores_a_term_opened_before_it_starts(
     db_session.add(next_term)
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(student.email)
+    )
 
     assert resp.status_code == 200
     assert {m["name"] for m in resp.json()["current_members"]} == {student.name}
@@ -296,9 +334,12 @@ async def test_get_seminar_detail_ignores_open_term_outside_its_date_range(
     db_session.add(
         SeminarRecruitment(term_id=future_term.id, seminar_id=seminar.id, capacity=10)
     )
+    user = await _make_user(db_session, UserRole.student)
     await db_session.flush()
 
-    resp = await client.get(f"/seminars/{seminar.id}")
+    resp = await client.get(
+        f"/seminars/{seminar.id}", headers=_auth_headers(user.email)
+    )
 
     assert resp.status_code == 200
     body = resp.json()

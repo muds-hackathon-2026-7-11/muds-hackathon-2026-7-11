@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import require_role
+from api.auth import require_internal_secret, require_role
 from api.db import get_db
 from api.models import Answer, Question, Seminar, User, UserRole
 from api.schemas import (
@@ -21,12 +21,24 @@ from api.slack_client import SlackClient, get_slack_client
 router = APIRouter(prefix="/questions", tags=["questions"])
 
 
-@router.post("", response_model=QuestionOut, status_code=201)
+@router.post(
+    "",
+    response_model=QuestionOut,
+    status_code=201,
+    dependencies=[Depends(require_internal_secret)],
+)
 async def create_question(
     payload: QuestionCreate,
     db: AsyncSession = Depends(get_db),
     slack_client: SlackClient = Depends(get_slack_client),
 ) -> Question:
+    """Slack Botから質問を投稿する(#33)。
+
+    slack_user_id自体は秘密情報ではなくSlack上で誰でも見えるため、
+    require_internal_secretで「Slack Bot経由の呼び出しであること」を
+    別途保証する(#170。Web版はcreate_question_webを使い、こちらは
+    使わない)。
+    """
     result = await db.execute(
         select(User).where(User.slack_user_id == payload.slack_user_id)
     )

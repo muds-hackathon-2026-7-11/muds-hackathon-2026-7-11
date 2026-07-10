@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
+from api import auth
 from api.models import (
     AnswerRequest,
     RecruitmentTerm,
@@ -17,6 +18,13 @@ from api.models import (
 from api.slack_client import SentDM
 
 pytestmark = pytest.mark.asyncio
+
+_SECRET = "test-internal-secret"
+
+
+@pytest.fixture(autouse=True)
+def _set_internal_secret(monkeypatch):
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
 
 
 def _unique(prefix: str) -> str:
@@ -71,6 +79,7 @@ async def _post_question(client, *, seminar_id, slack_user_id: str, content: str
             "slack_user_id": slack_user_id,
             "content": content,
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
 
