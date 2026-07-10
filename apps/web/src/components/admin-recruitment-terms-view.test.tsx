@@ -28,6 +28,7 @@ function makeTerm(
     starts_at: "2026-07-07",
     ends_at: "2027-04-03",
     status: "open",
+    target_grades_summary: "未設定",
     ...overrides,
   };
 }
@@ -100,6 +101,13 @@ describe("AdminRecruitmentTermsView", () => {
 
     expect(screen.getByText("2027年度")).toBeInTheDocument();
     expect(screen.getByText("募集中")).toBeInTheDocument();
+  });
+
+  it("shows the target-grades summary directly on the term card", () => {
+    const term = makeTerm({ target_grades_summary: "B3, B4" });
+    renderView({ terms: [term] });
+
+    expect(screen.getByText("対象学年: B3, B4")).toBeInTheDocument();
   });
 
   it("shows 終了 when status is open but the end date has passed", () => {
@@ -334,6 +342,8 @@ describe("AdminRecruitmentTermsView", () => {
         }),
       );
     });
+    // ラウンドのカード側の要約テキストにも、保存した対象学年が反映される。
+    expect(await screen.findByText("対象学年: B2, B3, B4")).toBeInTheDocument();
   });
 
   it("asks for confirmation before saving with no grades selected", async () => {
@@ -406,6 +416,7 @@ describe("AdminRecruitmentTermsView", () => {
     await user.click(screen.getByRole("button", { name: "作成する" }));
 
     await screen.findByText("2028年度");
+    expect(await screen.findByText("対象学年: B1, B2, B3")).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledTimes(3); // POST term + PUT x2 seminars
     });

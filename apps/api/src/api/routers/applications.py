@@ -34,7 +34,7 @@ from api.schemas import (
     ApplicationFormOut,
     ApplicationUpsertIn,
 )
-from api.services import get_current_term, normalize_grade
+from api.services import get_current_term, normalize_grade, term_targets_grade
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -160,21 +160,40 @@ async def _require_current_term(db: AsyncSession) -> RecruitmentTerm:
     return term
 
 
+async def _require_targeted_term(
+    db: AsyncSession, *, student_grade: str | None
+) -> RecruitmentTerm:
+    """今回の募集ラウンドが開いており、かつ自分の学年を対象とするゼミが
+    1件以上あることを要求する(#99)。対象外の学年は編集・提出できない。
+    """
+    term = await _require_current_term(db)
+    if not await term_targets_grade(db, term_id=term.id, student_grade=student_grade):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="現在の募集ラウンドはあなたの学年を対象としていません。",
+        )
+    return term
+
+
 @router.get("/me", response_model=ApplicationFormOut)
 async def get_my_application(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
     term = await get_current_term(db)
-    if term is not None:
+    is_targeted = term is not None and await term_targets_grade(
+        db, term_id=term.id, student_grade=normalize_grade(user.grade)
+    )
+    if term is not None and is_targeted:
         form = await _get_form(db, term_id=term.id, student_id=user.id)
         if form is None:
             return _empty_form_out(is_editable=True)
         choices = await _get_choices(db, form_id=form.id)
         return _form_out(form, choices, is_editable=True)
 
-    # 提出期間外: 編集はできないが、直近の提出内容は閲覧できるようにする
-    # (次の募集期間が始まれば、そちらの新しい下書きに切り替わる)。
+    # 提出期間外、または自分の学年を対象とするゼミが無い(#99): 編集はできないが、
+    # 直近の提出内容は閲覧できるようにする(次の募集期間が始まれば、そちらの
+    # 新しい下書きに切り替わる)。
     latest_form = await _get_latest_form(db, student_id=user.id)
     if latest_form is None:
         return _empty_form_out(is_editable=False)
@@ -188,13 +207,14 @@ async def upsert_my_application(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
-    term = await _require_current_term(db)
+    student_grade = normalize_grade(user.grade)
+    term = await _require_targeted_term(db, student_grade=student_grade)
     _validate_choice_shape(payload.choices)
     await _validate_recruiting(
         db,
         term_id=term.id,
         seminar_ids=[c.seminar_id for c in payload.choices],
-        student_grade=normalize_grade(user.grade),
+        student_grade=student_grade,
     )
 
     form = await _get_form(db, term_id=term.id, student_id=user.id)
@@ -245,7 +265,7 @@ async def submit_my_application(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(UserRole.student, UserRole.admin)),
 ) -> ApplicationFormOut:
-    term = await _require_current_term(db)
+    term = await _require_targeted_term(db, student_grade=normalize_grade(user.grade))
 
     form = await _get_form(db, term_id=term.id, student_id=user.id)
     if form is None:

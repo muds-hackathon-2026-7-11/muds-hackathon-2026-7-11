@@ -56,7 +56,8 @@ async function getMyApplication(
 }
 
 // #137: マイページの「Application Status」カードの文言・ボタンを、
-// 実際の志望提出状況(募集期間外/未提出/下書き/提出済み)に応じて出し分ける。
+// 今回の募集期間の提出状況(準備中/未提出/提出済み)だけに応じて出し分ける。
+// 過去の募集期間の提出状況は今回とは無関係なので表示しない。
 function applicationStatusView(application: MyApplication | null): {
   label: string;
   buttonLabel: string | null;
@@ -65,23 +66,13 @@ function applicationStatusView(application: MyApplication | null): {
     return { label: "取得できませんでした", buttonLabel: null };
   }
   if (!application.is_editable) {
-    if (application.id === null) {
-      // 現在募集中の期間が無く、過去の提出も無い(preparing/closed/未設定)。
-      return { label: "準備中", buttonLabel: null };
-    }
-    return {
-      label:
-        application.status === "submitted" ? "提出済み(前回)" : "下書き(前回)",
-      buttonLabel: "内容を確認",
-    };
+    // 今回募集中の期間が無い(準備中/締切後)。過去の提出有無は問わない。
+    return { label: "準備中", buttonLabel: null };
   }
-  if (application.id === null) {
-    return { label: "未提出", buttonLabel: "志望を提出" };
+  if (application.status === "submitted") {
+    return { label: "提出済み", buttonLabel: "内容を編集" };
   }
-  return {
-    label: application.status === "submitted" ? "提出済み" : "下書き保存中",
-    buttonLabel: "内容を編集",
-  };
+  return { label: "未提出", buttonLabel: "志望を提出" };
 }
 
 async function getResearchTags(
