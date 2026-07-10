@@ -188,7 +188,7 @@ export function AiSeminarChatView() {
           type="button"
           onClick={() => void handleSend()}
           disabled={!canSend}
-          className="shrink-0 rounded-full bg-[#add8e6] px-4 py-2 text-sm font-semibold text-sky-950 transition-colors hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] hover:shadow active:translate-y-px disabled:cursor-not-allowed focus:outline-none focus-visible:ring-4 focus-visible:ring-[#add8e6]/50"
         >
           送信
         </button>
