@@ -171,6 +171,7 @@ async def find_answer_candidates(
             RecruitmentTerm.academic_year == academic_year,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
+            User.is_active.is_(True),
         )
     )
     teachers_result = await db.execute(
@@ -180,6 +181,7 @@ async def find_answer_candidates(
             SeminarTeacher.seminar_id == seminar_id,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
+            User.is_active.is_(True),
         )
     )
 

@@ -418,6 +418,27 @@ async def test_list_own_seminars_includes_materials_and_excludes_others(
     assert [m["url"] for m in body[0]["materials"]] == ["https://example.com/slide.pdf"]
 
 
+async def test_list_own_seminars_excludes_inactive_co_teachers(
+    client, db_session
+) -> None:
+    # 退職教員(is_active=false)は担当付け外し自体は残る運用のため、
+    # 共同担当の一覧に「現役」として表示され続けないようにする(#171)。
+    teacher = await _make_user(db_session, UserRole.teacher)
+    retired_teacher = await _make_user(db_session, UserRole.teacher, is_active=False)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+    await _link_teacher(db_session, seminar, retired_teacher)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/seminars")
+
+    assert resp.status_code == 200
+    teacher_ids = {t["id"] for t in resp.json()[0]["teachers"]}
+    assert str(teacher.id) in teacher_ids
+    assert str(retired_teacher.id) not in teacher_ids
+
+
 async def test_update_own_seminar(client, db_session) -> None:
     teacher = await _make_user(db_session, UserRole.teacher)
     seminar = await _make_seminar(db_session)

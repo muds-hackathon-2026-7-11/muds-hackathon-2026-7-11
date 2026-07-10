@@ -44,7 +44,11 @@ async def _make_open_term(db_session, academic_year: int) -> RecruitmentTerm:
 
 
 async def _make_user(
-    db_session, role: UserRole, research_theme: str | None = None
+    db_session,
+    role: UserRole,
+    research_theme: str | None = None,
+    *,
+    is_active: bool = True,
 ) -> User:
     user = User(
         google_id=_unique("google"),
@@ -52,6 +56,7 @@ async def _make_user(
         name=_unique("name"),
         role=role,
         research_theme=research_theme,
+        is_active=is_active,
     )
     db_session.add(user)
     await db_session.flush()
@@ -113,6 +118,49 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
     member_names = {m["name"] for m in body["current_members"]}
     assert member_names == {current_student.name}
     assert past_student.name not in member_names
+
+
+async def test_get_seminar_detail_excludes_inactive_teachers_and_members(
+    client, db_session
+) -> None:
+    # 退職教員・卒業生(is_active=false)は、担当付け外し自体は残る運用
+    # (admin.pyのDELETE /admin/teachers/{id}参照)なので、「現役」として
+    # 表示され続けないようにここで除外する(#171)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+    seminar = await _make_seminar(db_session)
+
+    active_teacher = await _make_user(db_session, UserRole.teacher)
+    inactive_teacher = await _make_user(db_session, UserRole.teacher, is_active=False)
+    db_session.add(SeminarTeacher(seminar_id=seminar.id, teacher_id=active_teacher.id))
+    db_session.add(
+        SeminarTeacher(seminar_id=seminar.id, teacher_id=inactive_teacher.id)
+    )
+
+    active_student = await _make_user(db_session, UserRole.student)
+    inactive_student = await _make_user(db_session, UserRole.student, is_active=False)
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id, student_id=active_student.id, term_id=term.id
+        )
+    )
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id, student_id=inactive_student.id, term_id=term.id
+        )
+    )
+    await db_session.flush()
+
+    resp = await client.get(f"/seminars/{seminar.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    teacher_names = {t["name"] for t in body["teachers"]}
+    assert active_teacher.name in teacher_names
+    assert inactive_teacher.name not in teacher_names
+    member_names = {m["name"] for m in body["current_members"]}
+    assert active_student.name in member_names
+    assert inactive_student.name not in member_names
 
 
 async def test_get_seminar_detail_unknown_id_returns_404(client) -> None:

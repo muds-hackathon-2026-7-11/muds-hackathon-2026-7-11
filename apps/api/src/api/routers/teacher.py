@@ -83,7 +83,10 @@ async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> AdminSeminarOut
     teachers_result = await db.execute(
         select(User)
         .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
-        .where(SeminarTeacher.seminar_id == seminar.id)
+        .where(
+            SeminarTeacher.seminar_id == seminar.id,
+            User.is_active.is_(True),
+        )
         .order_by(User.name)
     )
     teachers = [
