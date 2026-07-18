@@ -10,9 +10,13 @@ async function getUnsubmittedApplicants(
   session: Session | null,
 ): Promise<UnsubmittedApplicant[] | null> {
   try {
-    const res = await serverApiFetch("/teacher/unsubmitted-applicants", session, {
-      cache: "no-store",
-    });
+    const res = await serverApiFetch(
+      "/teacher/unsubmitted-applicants",
+      session,
+      {
+        cache: "no-store",
+      },
+    );
     if (!res.ok) {
       return null;
     }

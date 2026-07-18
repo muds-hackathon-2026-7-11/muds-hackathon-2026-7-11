@@ -78,9 +78,9 @@ export function TeacherUnsubmittedView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((applicant, index) => (
+              {filtered.map((applicant) => (
                 <tr
-                  key={`${applicant.student_id ?? applicant.name}-${index}`}
+                  key={applicant.student_id ?? applicant.name}
                   className="border-b border-[#add8e6]/20 last:border-0"
                 >
                   <td className="px-4 py-2 font-medium text-zinc-800">

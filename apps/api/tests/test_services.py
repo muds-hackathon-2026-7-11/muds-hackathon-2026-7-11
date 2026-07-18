@@ -104,4 +104,5 @@ async def test_get_current_term_is_deterministic_even_when_fully_tied(
     second_call = await get_current_term(db_session)
 
     assert first_call is not None
+    assert second_call is not None
     assert first_call.id == second_call.id

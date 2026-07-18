@@ -8,7 +8,12 @@ import {
 
 function makeApplicants(): UnsubmittedApplicant[] {
   return [
-    { student_id: "s2322087", name: "橘 由翔", grade: "B4", normalized_grade: "B4" },
+    {
+      student_id: "s2322087",
+      name: "橘 由翔",
+      grade: "B4",
+      normalized_grade: "B4",
+    },
     {
       student_id: "s2422108",
       name: "阪田 琴美",
