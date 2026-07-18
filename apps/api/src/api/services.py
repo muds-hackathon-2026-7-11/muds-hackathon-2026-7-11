@@ -101,6 +101,11 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
 
     todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
     だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
+
+    academic_yearが同じopen期間が複数該当する場合(本来運営側で避けるべき
+    データだが、実際に発生した)、starts_atが最も遅いもの(=最も新しく
+    設定された募集ラウンド)を優先する。ここが不定だと、呼び出し側
+    (未提出者一覧など)が同じリクエストのたびに違う結果を返しかねない。
     """
     today = datetime.now(JST).date()
     result = await db.execute(
@@ -110,7 +115,9 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
             RecruitmentTerm.starts_at <= today,
             RecruitmentTerm.ends_at >= today,
         )
-        .order_by(RecruitmentTerm.academic_year.desc())
+        .order_by(
+            RecruitmentTerm.academic_year.desc(), RecruitmentTerm.starts_at.desc()
+        )
         .limit(1)
     )
     return result.scalar_one_or_none()

@@ -22,8 +22,8 @@ async function getUnsubmittedApplicants(
   }
 }
 
-export default async function TeacherUnsubmittedPage() {
-  // /teacher配下は apps/web/src/app/(app)/teacher/layout.tsx で
+export default async function UnsubmittedPage() {
+  // apps/web/src/app/(app)/unsubmitted/layout.tsx で
   // 認証・teacher/admin権限を既にチェック済み。
   const session = await auth();
   const applicants = await getUnsubmittedApplicants(session);

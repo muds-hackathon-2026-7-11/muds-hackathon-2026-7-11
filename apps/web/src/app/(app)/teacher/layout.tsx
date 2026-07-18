@@ -12,10 +12,7 @@ export default async function TeacherLayout({
     redirect("/login");
   }
   const role = await getSessionRole();
-  // 未提出者一覧(/teacher/unsubmitted, #182)はadminからも見られるようにしているため、
-  // teacher配下全体をadminにも開放する。他ページはバックエンド側がteacher限定のままなので
-  // adminが叩くと403になるだけで実害はない。
-  if (role !== "teacher" && role !== "admin") {
+  if (role !== "teacher") {
     redirect("/");
   }
 

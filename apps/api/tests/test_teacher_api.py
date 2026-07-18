@@ -453,6 +453,25 @@ async def test_unsubmitted_applicants_lists_targeted_students_without_submission
     assert inactive.name not in names
 
 
+async def test_unsubmitted_applicants_returns_empty_when_term_has_no_recruitments(
+    client, db_session
+) -> None:
+    # 募集ラウンドはopenでも、対象ゼミ(SeminarRecruitment)が1件も無ければ
+    # 対象学年が定義できない。実DBで同じacademic_yearのopenラウンドが複数
+    # 存在し、そのうち定員設定が空のものをget_current_termが拾ってしまう
+    # ケースを想定した回帰テスト(#182)。「全学生が未提出」ではなく空配列を
+    # 返すべき。
+    await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _make_user(db_session, UserRole.student, grade="B1")
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 async def test_unsubmitted_applicants_allows_admin(client, db_session) -> None:
     term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)

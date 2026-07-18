@@ -10,6 +10,17 @@ export type UnsubmittedApplicant = {
 
 const GRADE_FILTERS = ["すべて", "B1", "B2", "B3", "B4"] as const;
 
+// バックエンド(api.services.normalize_grade)と同じ正規化ルール。
+// 実データのgradeは表記が統一されておらず(例: "MIDS/B3")、末尾一致で
+// 判定する。ここがAPI側と食い違うと、表示上は対象学年なのにフィルタボタンを
+// 押すと消える、という不整合が起きる。
+function normalizeGrade(raw: string | null): string | null {
+  if (raw === null) {
+    return null;
+  }
+  return GRADE_FILTERS.find((grade) => grade !== "すべて" && raw.endsWith(grade)) ?? null;
+}
+
 type TeacherUnsubmittedViewProps = {
   applicants: UnsubmittedApplicant[];
 };
@@ -24,7 +35,9 @@ export function TeacherUnsubmittedView({
     () =>
       gradeFilter === "すべて"
         ? applicants
-        : applicants.filter((applicant) => applicant.grade === gradeFilter),
+        : applicants.filter(
+            (applicant) => normalizeGrade(applicant.grade) === gradeFilter,
+          ),
     [applicants, gradeFilter],
   );
 
@@ -60,9 +73,15 @@ export function TeacherUnsubmittedView({
           <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="border-b border-[#add8e6]/40 text-left text-xs font-semibold text-zinc-500">
-                <th className="px-4 py-2">氏名</th>
-                <th className="px-4 py-2">学年</th>
-                <th className="px-4 py-2">学籍番号</th>
+                <th scope="col" className="px-4 py-2">
+                  氏名
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  学年
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  学籍番号
+                </th>
               </tr>
             </thead>
             <tbody>
