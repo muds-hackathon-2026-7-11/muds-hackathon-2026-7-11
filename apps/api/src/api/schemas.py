@@ -292,6 +292,10 @@ class UnsubmittedApplicantOut(BaseModel):
     student_id: str | None
     name: str
     grade: str | None
+    # 表示用の生のgradeとは別に、学年フィルタ用のB1〜B4正規化済み値を返す。
+    # normalize_gradeの正規化ルールをフロントで再実装すると二重管理になり
+    # 食い違う(#182)ため、判定はAPI側の1箇所に寄せる。
+    normalized_grade: str | None
 
 
 class TeacherRecruitmentUpdate(BaseModel):

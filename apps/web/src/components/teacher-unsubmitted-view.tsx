@@ -6,20 +6,13 @@ export type UnsubmittedApplicant = {
   student_id: string | null;
   name: string;
   grade: string | null;
+  // 表示は生のgrade(例: "MIDS/B3")、フィルタ判定はAPI側で
+  // normalize_gradeを通した"B1"〜"B4"を使う。正規化ルールをここで
+  // 再実装すると二重管理になり食い違うため(#182)、判定はAPIの値をそのまま使う。
+  normalized_grade: string | null;
 };
 
 const GRADE_FILTERS = ["すべて", "B1", "B2", "B3", "B4"] as const;
-
-// バックエンド(api.services.normalize_grade)と同じ正規化ルール。
-// 実データのgradeは表記が統一されておらず(例: "MIDS/B3")、末尾一致で
-// 判定する。ここがAPI側と食い違うと、表示上は対象学年なのにフィルタボタンを
-// 押すと消える、という不整合が起きる。
-function normalizeGrade(raw: string | null): string | null {
-  if (raw === null) {
-    return null;
-  }
-  return GRADE_FILTERS.find((grade) => grade !== "すべて" && raw.endsWith(grade)) ?? null;
-}
 
 type TeacherUnsubmittedViewProps = {
   applicants: UnsubmittedApplicant[];
@@ -36,7 +29,7 @@ export function TeacherUnsubmittedView({
       gradeFilter === "すべて"
         ? applicants
         : applicants.filter(
-            (applicant) => normalizeGrade(applicant.grade) === gradeFilter,
+            (applicant) => applicant.normalized_grade === gradeFilter,
           ),
     [applicants, gradeFilter],
   );

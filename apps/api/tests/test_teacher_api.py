@@ -418,7 +418,8 @@ async def test_unsubmitted_applicants_lists_targeted_students_without_submission
     teacher = await _make_user(db_session, UserRole.teacher)
     await _link_teacher(db_session, seminar, teacher)
 
-    not_submitted = await _make_user(db_session, UserRole.student, grade="B3")
+    # 表記揺れ(#99)のある学生も、末尾一致でB3の対象として拾えるかを確認する。
+    not_submitted = await _make_user(db_session, UserRole.student, grade="MIDS/B3")
     submitted = await _make_user(db_session, UserRole.student, grade="B3")
     draft_only = await _make_user(db_session, UserRole.student, grade="B4")
     out_of_target_grade = await _make_user(db_session, UserRole.student, grade="B1")
@@ -445,12 +446,17 @@ async def test_unsubmitted_applicants_lists_targeted_students_without_submission
     resp = await client.get("/teacher/unsubmitted-applicants")
 
     assert resp.status_code == 200
-    names = [a["name"] for a in resp.json()]
+    body = resp.json()
+    names = [a["name"] for a in body]
     assert not_submitted.name in names
     assert draft_only.name in names
     assert submitted.name not in names
     assert out_of_target_grade.name not in names
     assert inactive.name not in names
+
+    not_submitted_entry = next(a for a in body if a["name"] == not_submitted.name)
+    assert not_submitted_entry["grade"] == "MIDS/B3"
+    assert not_submitted_entry["normalized_grade"] == "B3"
 
 
 async def test_unsubmitted_applicants_returns_empty_when_term_has_no_recruitments(

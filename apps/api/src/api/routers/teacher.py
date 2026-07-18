@@ -322,7 +322,10 @@ async def _unsubmitted_applicants(db: AsyncSession) -> list[UnsubmittedApplicant
 
     return [
         UnsubmittedApplicantOut(
-            student_id=student.student_id, name=student.name, grade=student.grade
+            student_id=student.student_id,
+            name=student.name,
+            grade=student.grade,
+            normalized_grade=normalize_grade(student.grade),
         )
         for student in unsubmitted
     ]
