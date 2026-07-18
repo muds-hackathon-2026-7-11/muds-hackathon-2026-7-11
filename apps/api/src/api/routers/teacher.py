@@ -259,14 +259,13 @@ def _applicants_csv_response(
     )
 
 
-def _grade_sort_key(student: User) -> tuple[int, str]:
-    normalized = normalize_grade(student.grade)
+def _grade_sort_key(normalized_grade: str | None, name: str) -> tuple[int, str]:
     order = (
-        GRADE_OPTIONS.index(normalized)
-        if normalized in GRADE_OPTIONS
+        GRADE_OPTIONS.index(normalized_grade)
+        if normalized_grade in GRADE_OPTIONS
         else len(GRADE_OPTIONS)
     )
-    return (order, student.name)
+    return (order, name)
 
 
 async def _unsubmitted_applicants(db: AsyncSession) -> list[UnsubmittedApplicantOut]:
@@ -313,21 +312,21 @@ async def _unsubmitted_applicants(db: AsyncSession) -> list[UnsubmittedApplicant
     ).scalars()
 
     unsubmitted = [
-        student
+        (student, normalized_grade)
         for student in students
         if student.id not in submitted_student_ids
-        and normalize_grade(student.grade) in target_grades
+        and (normalized_grade := normalize_grade(student.grade)) in target_grades
     ]
-    unsubmitted.sort(key=_grade_sort_key)
+    unsubmitted.sort(key=lambda pair: _grade_sort_key(pair[1], pair[0].name))
 
     return [
         UnsubmittedApplicantOut(
             student_id=student.student_id,
             name=student.name,
             grade=student.grade,
-            normalized_grade=normalize_grade(student.grade),
+            normalized_grade=normalized_grade,
         )
-        for student in unsubmitted
+        for student, normalized_grade in unsubmitted
     ]
 
 
