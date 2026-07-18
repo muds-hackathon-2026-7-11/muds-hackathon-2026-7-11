@@ -288,6 +288,12 @@ class SeminarApplicantsOut(BaseModel):
     applicants: list[ApplicantOut]
 
 
+class UnsubmittedApplicantOut(BaseModel):
+    student_id: str | None
+    name: str
+    grade: str | None
+
+
 class TeacherRecruitmentUpdate(BaseModel):
     capacity: int = Field(ge=0)
     # Noneなら据え置き(現状の対象学年を変更しない)。

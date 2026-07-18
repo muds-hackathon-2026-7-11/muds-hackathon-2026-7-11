@@ -386,6 +386,99 @@ async def test_all_applicants_csv_requires_teacher_role(client, db_session) -> N
     assert resp.status_code == 403
 
 
+# --- 未提出者一覧 (#182) ---
+
+
+async def _make_recruitment(
+    db_session,
+    *,
+    term: RecruitmentTerm,
+    seminar: Seminar,
+    target_grades: list[str],
+) -> SeminarRecruitment:
+    recruitment = SeminarRecruitment(
+        term_id=term.id,
+        seminar_id=seminar.id,
+        capacity=10,
+        target_grades=target_grades,
+    )
+    db_session.add(recruitment)
+    await db_session.flush()
+    return recruitment
+
+
+async def test_unsubmitted_applicants_lists_targeted_students_without_submission(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B3", "B4"]
+    )
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _link_teacher(db_session, seminar, teacher)
+
+    not_submitted = await _make_user(db_session, UserRole.student, grade="B3")
+    submitted = await _make_user(db_session, UserRole.student, grade="B3")
+    draft_only = await _make_user(db_session, UserRole.student, grade="B4")
+    out_of_target_grade = await _make_user(db_session, UserRole.student, grade="B1")
+    inactive = await _make_user(
+        db_session, UserRole.student, grade="B3", is_active=False
+    )
+
+    await _apply(
+        db_session,
+        term=term,
+        student=submitted,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1, "志望します")],
+    )
+    await _apply(
+        db_session,
+        term=term,
+        student=draft_only,
+        status=ApplicationStatus.draft,
+        choices=[(seminar, 1, "下書き")],
+    )
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    names = [a["name"] for a in resp.json()]
+    assert not_submitted.name in names
+    assert draft_only.name in names
+    assert submitted.name not in names
+    assert out_of_target_grade.name not in names
+    assert inactive.name not in names
+
+
+async def test_unsubmitted_applicants_allows_admin(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+    admin = await _make_user(db_session, UserRole.admin)
+    student = await _make_user(db_session, UserRole.student, grade="B1")
+
+    _authenticate_as(admin)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    # 実DB(共有の開発用DB)には他のB1学生も存在しうるため、対象学生が
+    # 含まれていることだけを確認する(完全一致は実データに左右され壊れやすい)。
+    assert student.name in [a["name"] for a in resp.json()]
+
+
+async def test_unsubmitted_applicants_requires_teacher_or_admin_role(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.student))
+    resp = await client.get("/teacher/unsubmitted-applicants")
+    assert resp.status_code == 403
+
+
 # --- 自ゼミの紹介内容編集 ---
 
 
