@@ -426,6 +426,21 @@ class AdminSeminarOut(BaseModel):
     materials: list[SeminarMaterialOut]
 
 
+class TeacherSeminarOut(BaseModel):
+    """教員向けの自ゼミ情報(#149/#184)。AdminSeminarOutと似ているが、
+    現ラウンドの定員(capacity)を持つ点が異なる(ゼミの恒常的なプロフィール
+    ではなく、募集ラウンドごとの設定なため)。現ラウンドが無い、または
+    まだ定員未設定ならNone。"""
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    photo_url: str | None
+    teachers: list[AdminSeminarTeacherOut]
+    materials: list[SeminarMaterialOut]
+    capacity: int | None
+
+
 class AdminTeacherCreate(BaseModel):
     # 教員ユーザーを1名追加する(作成はここ、一括はCSV #40)。
     name: str = Field(min_length=1, max_length=200)

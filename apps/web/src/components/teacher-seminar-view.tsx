@@ -17,6 +17,9 @@ export type TeacherSeminar = {
   description: string | null;
   photo_url: string | null;
   materials: TeacherSeminarMaterial[];
+  // 現在の募集ラウンドの定員(#184)。ラウンドが無い、またはまだ設定して
+  // いなければnull。
+  capacity: number | null;
 };
 
 const MATERIAL_TYPE_LABEL: Record<TeacherSeminarMaterial["type"], string> = {
@@ -60,6 +63,11 @@ export function TeacherSeminarView({
   const [deletingMaterialKey, setDeletingMaterialKey] = useState<string | null>(
     null,
   );
+
+  const [capacityInputs, setCapacityInputs] = useState<Record<string, string>>(
+    {},
+  );
+  const [savingCapacityId, setSavingCapacityId] = useState<string | null>(null);
 
   function startEdit(seminar: TeacherSeminar): void {
     setEditingId(seminar.id);
@@ -173,6 +181,47 @@ export function TeacherSeminarView({
     }
   }
 
+  async function handleSaveCapacity(seminarId: string): Promise<void> {
+    const raw = capacityInputs[seminarId] ?? "";
+    const capacity = Number(raw);
+    setErrorMessage(null);
+    if (raw.trim() === "" || !Number.isInteger(capacity) || capacity < 0) {
+      setErrorMessage("定員は0以上の整数で入力してください。");
+      return;
+    }
+    setSavingCapacityId(seminarId);
+    try {
+      const res = await apiFetch(
+        `/teacher/seminars/${seminarId}/recruitment`,
+        session,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ capacity }),
+        },
+      );
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      const updated = (await res.json()) as { capacity: number | null };
+      setSeminars((prev) =>
+        prev.map((s) =>
+          s.id === seminarId ? { ...s, capacity: updated.capacity } : s,
+        ),
+      );
+      setCapacityInputs((prev) => {
+        const next = { ...prev };
+        delete next[seminarId];
+        return next;
+      });
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setSavingCapacityId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {errorMessage && (
@@ -256,6 +305,43 @@ export function TeacherSeminarView({
                   </button>
                 </div>
               )}
+
+              <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
+                <p className="text-sm font-semibold text-zinc-700">
+                  定員(今回の募集ラウンド)
+                </p>
+                {seminar.capacity === null && (
+                  <p className="mt-1 text-sm text-zinc-500">
+                    未設定です。募集期間外の場合は変更できません。
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={capacityInputs[seminar.id] ?? seminar.capacity ?? ""}
+                    onChange={(e) =>
+                      setCapacityInputs((prev) => ({
+                        ...prev,
+                        [seminar.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="人数"
+                    className="w-28 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveCapacity(seminar.id)}
+                    disabled={savingCapacityId === seminar.id}
+                    className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingCapacityId === seminar.id
+                      ? "保存中..."
+                      : "定員を保存する"}
+                  </button>
+                </div>
+              </div>
 
               <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
                 <p className="text-sm font-semibold text-zinc-700">紹介資料</p>
