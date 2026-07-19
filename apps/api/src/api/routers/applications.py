@@ -34,7 +34,12 @@ from api.schemas import (
     ApplicationFormOut,
     ApplicationUpsertIn,
 )
-from api.services import get_current_term, normalize_grade, term_targets_grade
+from api.services import (
+    get_current_term,
+    normalize_grade,
+    student_has_current_seminar,
+    term_targets_grade,
+)
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -279,6 +284,16 @@ async def submit_my_application(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="志望が1件も登録されていません。",
+        )
+    # ゼミ所属中の学生は、教員が応募者一覧で参考にする研究概要が空のまま
+    # 提出できないようにする(#188)。配属前(ゼミ未所属)の学生はまだ書ける
+    # 研究概要が無いのが普通なので対象外。
+    if not (user.research_theme or "").strip() and await student_has_current_seminar(
+        db, student_id=user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="研究概要が未入力です。マイページから入力してから提出してください。",
         )
     # 下書き保存後に募集状況が変わっている可能性があるため、提出時にも
     # 募集中のゼミのみであることを再検証する。
