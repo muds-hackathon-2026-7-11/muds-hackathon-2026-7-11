@@ -20,6 +20,7 @@ from api.models import (
     RecruitmentTermStatus,
     Seminar,
     SeminarMember,
+    SeminarRecruitment,
     SeminarTeacher,
     User,
     UserRole,
@@ -475,7 +476,23 @@ async def find_students_without_submission(
     status=draftのまま(下書き止まり)を含む。role=adminであっても実際には
     在学中の学生であるユーザーがいるため、applications.pyの各エンドポイント
     と同じくstudentに加えてadminも対象にする(role=teacherは対象外)。
+
+    対象学年(target_grades)にも絞る(#153)。募集ラウンドが対象としていない
+    学年の学生はそもそも志望を提出できない(マイページで「準備中」表示)ため、
+    ここで絞らないと「提出できないのに催促される」リマインダーが届いてしまう。
     """
+    target_grades: set[str] = set()
+    for grades in (
+        await db.execute(
+            select(SeminarRecruitment.target_grades).where(
+                SeminarRecruitment.term_id == term_id
+            )
+        )
+    ).scalars():
+        target_grades.update(grades)
+    if not target_grades:
+        return []
+
     submitted_result = await db.execute(
         select(ApplicationForm.student_id).where(
             ApplicationForm.term_id == term_id,
@@ -495,6 +512,7 @@ async def find_students_without_submission(
         student
         for student in students_result.scalars().all()
         if student.id not in submitted_student_ids
+        and normalize_grade(student.grade) in target_grades
     ]
 
 
