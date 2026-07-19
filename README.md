@@ -118,6 +118,8 @@ gunzip -c backups/daily/seminar_platform-YYYYMMDD.sql.gz | \
 
 `make backup`で取得した手動バックアップ(pg_dumpのcustom形式)は、`make restore file=...`でリストアできる。既存のスキーマが残っている状態でも`--clean --if-exists`により安全に上書きされる(小さなデータ巻き戻し向け)。一方、自動バックアップ(gzip SQL形式)は**空のDBへのフルリストア**を想定した形式で、既存スキーマが残っている状態にそのまま流し込むとエラーになる点に注意。
 
+> ローカルの開発DBを大学サーバーへ初回デプロイする(別ホストへ移行する)手順は [docs/deployment.md](docs/deployment.md) を参照。
+
 ## リポジトリ構成
 
 ```
