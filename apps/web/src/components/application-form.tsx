@@ -61,6 +61,16 @@ function clearLocalDraft(): void {
   }
 }
 
+// エラー表示は画面上部、提出・戻るボタンは一番下にあるため、それらのボタンを
+// 押した結果のエラーがボタン付近からは見えない。ユーザーが明示的に押した
+// 操作の結果としてエラーが出た時だけ呼ぶこと(自動保存の失敗はユーザー操作の
+// 直後ではなく、下の方で入力中に静かに走るため、ここで呼ぶと入力中の画面を
+// 強制的にスクロールさせてしまう。自動保存の失敗は既存のautosaveState
+// インジケータで十分)。
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 async function extractErrorDetail(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: string };
@@ -180,14 +190,6 @@ export function ApplicationForm({
   const [isReverting, setIsReverting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
-  // エラー表示は画面上部にあるが、提出ボタンは一番下にあるため、提出時の
-  // エラー(研究概要未入力等)がボタン付近からは見えない。エラーが出たら
-  // 上部までスクロールして必ず目に入るようにする。
-  useEffect(() => {
-    if (errorMessage) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [errorMessage]);
   // 提出済みの内容を誤って書き換えないよう、まず読み取り専用で表示し、
   // 「編集する」を押すまで入力できないようにする。募集期間外の場合は
   // 編集する自体を出さない(読み取り専用のまま)。
@@ -433,11 +435,13 @@ export function ApplicationForm({
 
     if (buildPayloadChoices().length === 0) {
       setErrorMessage("志望を1件以上入力してください。");
+      scrollToTop();
       return;
     }
     const missing = missingReasonLabels();
     if (missing.length > 0) {
       setErrorMessage(`${missing.join("・")}の志望理由が未入力です。`);
+      scrollToTop();
       return;
     }
 
@@ -445,6 +449,7 @@ export function ApplicationForm({
     try {
       const saved = await persistChoices(slots);
       if (!saved) {
+        scrollToTop();
         return;
       }
       // ここでPUTが成功した時点でサーバー側は編集後の内容になっている。
@@ -457,6 +462,7 @@ export function ApplicationForm({
       });
       if (!res.ok) {
         setErrorMessage(await extractErrorDetail(res));
+        scrollToTop();
         return;
       }
       const data = (await res.json()) as ApplicationFormData;
@@ -468,6 +474,7 @@ export function ApplicationForm({
       serverDirtySinceEdit.current = false;
     } catch {
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+      scrollToTop();
     } finally {
       setIsSubmitting(false);
     }
@@ -522,6 +529,7 @@ export function ApplicationForm({
     try {
       const ok = await persistChoices(snapshotSlots);
       if (!ok) {
+        scrollToTop();
         return;
       }
       resyncLocalDraft(snapshotSlots);

@@ -285,6 +285,16 @@ async def submit_my_application(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="志望が1件も登録されていません。",
         )
+    # 下書き保存後に募集状況が変わっている可能性があるため、提出時にも
+    # 募集中のゼミのみであることを再検証する。研究概要チェックより先に行い、
+    # 両方に該当する場合はより解決を急ぐべき募集状況の変化を優先して伝える
+    # (研究概要を埋めても解決しないエラーを先に見せない)。
+    await _validate_recruiting(
+        db,
+        term_id=term.id,
+        seminar_ids=[c.seminar_id for c in choices],
+        student_grade=normalize_grade(user.grade),
+    )
     # ゼミ所属中の学生は、教員が応募者一覧で参考にする研究概要が空のまま
     # 提出できないようにする(#188)。配属前(ゼミ未所属)の学生はまだ書ける
     # 研究概要が無いのが普通なので対象外。
@@ -295,14 +305,6 @@ async def submit_my_application(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="研究概要が未入力です。マイページから入力してから提出してください。",
         )
-    # 下書き保存後に募集状況が変わっている可能性があるため、提出時にも
-    # 募集中のゼミのみであることを再検証する。
-    await _validate_recruiting(
-        db,
-        term_id=term.id,
-        seminar_ids=[c.seminar_id for c in choices],
-        student_grade=normalize_grade(user.grade),
-    )
 
     form.status = ApplicationStatus.submitted
     form.submitted_at = datetime.now(timezone.utc)
