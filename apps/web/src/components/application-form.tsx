@@ -180,6 +180,14 @@ export function ApplicationForm({
   const [isReverting, setIsReverting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  // エラー表示は画面上部にあるが、提出ボタンは一番下にあるため、提出時の
+  // エラー(研究概要未入力等)がボタン付近からは見えない。エラーが出たら
+  // 上部までスクロールして必ず目に入るようにする。
+  useEffect(() => {
+    if (errorMessage) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [errorMessage]);
   // 提出済みの内容を誤って書き換えないよう、まず読み取り専用で表示し、
   // 「編集する」を押すまで入力できないようにする。募集期間外の場合は
   // 編集する自体を出さない(読み取り専用のまま)。
