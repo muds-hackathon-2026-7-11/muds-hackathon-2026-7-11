@@ -557,6 +557,32 @@ async def test_list_own_seminars_excludes_inactive_co_teachers(
     assert str(retired_teacher.id) not in teacher_ids
 
 
+async def test_list_own_seminars_reflects_current_round_capacity(
+    client, db_session
+) -> None:
+    # 定員(#184)は募集ラウンドごとのSeminarRecruitmentに紐づくため、
+    # まだ設定していなければnull、PATCH .../recruitmentで設定した後は
+    # その値がGET /teacher/seminarsにも反映されることを確認する。
+    await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    before = await client.get("/teacher/seminars")
+    assert before.status_code == 200
+    assert before.json()[0]["capacity"] is None
+
+    patch_resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}/recruitment",
+        json={"capacity": 15},
+    )
+    assert patch_resp.status_code == 200
+
+    after = await client.get("/teacher/seminars")
+    assert after.json()[0]["capacity"] == 15
+
+
 async def test_update_own_seminar(client, db_session) -> None:
     teacher = await _make_user(db_session, UserRole.teacher)
     seminar = await _make_seminar(db_session)

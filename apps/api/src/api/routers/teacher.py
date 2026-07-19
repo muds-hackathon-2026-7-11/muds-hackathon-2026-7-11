@@ -22,7 +22,6 @@ from api.models import (
     UserRole,
 )
 from api.schemas import (
-    AdminSeminarOut,
     AdminSeminarTeacherOut,
     ApplicantOut,
     PastSeminarOut,
@@ -31,6 +30,7 @@ from api.schemas import (
     SeminarMaterialOut,
     TeacherRecruitmentOut,
     TeacherRecruitmentUpdate,
+    TeacherSeminarOut,
     TeacherSeminarUpdate,
     UnsubmittedApplicantOut,
 )
@@ -82,7 +82,12 @@ async def _require_own_seminar(
     return seminar
 
 
-async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> AdminSeminarOut:
+async def _to_seminar_out(
+    db: AsyncSession, seminar: Seminar, *, term: RecruitmentTerm | None
+) -> TeacherSeminarOut:
+    """termはget_current_term()の結果を呼び出し元から渡す。list_own_seminarsは
+    担当ゼミ全件に対してこの関数を呼ぶため、ここで毎回問い合わせると
+    ゼミ数だけ同じクエリを繰り返すことになる(#184)。"""
     teachers_result = await db.execute(
         select(User)
         .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
@@ -103,13 +108,25 @@ async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> AdminSeminarOut
         SeminarMaterialOut.model_validate(m) for m in materials_result.scalars()
     ]
 
-    return AdminSeminarOut(
+    # 定員(#184)は現ラウンドが無ければNone、あってもまだ設定していなければNone。
+    capacity = None
+    if term is not None:
+        recruitment_result = await db.execute(
+            select(SeminarRecruitment.capacity).where(
+                SeminarRecruitment.term_id == term.id,
+                SeminarRecruitment.seminar_id == seminar.id,
+            )
+        )
+        capacity = recruitment_result.scalar_one_or_none()
+
+    return TeacherSeminarOut(
         id=seminar.id,
         name=seminar.name,
         description=seminar.description,
         photo_url=seminar.photo_url,
         teachers=teachers,
         materials=materials,
+        capacity=capacity,
     )
 
 
@@ -423,28 +440,30 @@ async def set_own_seminar_recruitment(
 # ゼミ名の変更・削除、担当教員の付け外しはadmin専用のまま。
 
 
-@router.get("/seminars", response_model=list[AdminSeminarOut])
+@router.get("/seminars", response_model=list[TeacherSeminarOut])
 async def list_own_seminars(
     teacher: User = Depends(require_teacher), db: AsyncSession = Depends(get_db)
-) -> list[AdminSeminarOut]:
-    """自分の担当ゼミを、編集フォームの初期値用に詳細(紹介文・資料)込みで返す。"""
+) -> list[TeacherSeminarOut]:
+    """自分の担当ゼミを、編集フォームの初期値用に詳細(紹介文・資料・定員)込みで返す。"""
     seminars = await _teacher_seminars(db, teacher)
-    return [await _to_seminar_out(db, s) for s in seminars]
+    term = await get_current_term(db)
+    return [await _to_seminar_out(db, s, term=term) for s in seminars]
 
 
-@router.patch("/seminars/{seminar_id}", response_model=AdminSeminarOut)
+@router.patch("/seminars/{seminar_id}", response_model=TeacherSeminarOut)
 async def update_own_seminar(
     seminar_id: uuid.UUID,
     payload: TeacherSeminarUpdate,
     teacher: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
-) -> AdminSeminarOut:
+) -> TeacherSeminarOut:
     """自分の担当ゼミの紹介文・写真を編集する。"""
     seminar = await _require_own_seminar(db, seminar_id=seminar_id, teacher=teacher)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(seminar, field, value)
     await db.flush()
-    return await _to_seminar_out(db, seminar)
+    term = await get_current_term(db)
+    return await _to_seminar_out(db, seminar, term=term)
 
 
 @router.post(
