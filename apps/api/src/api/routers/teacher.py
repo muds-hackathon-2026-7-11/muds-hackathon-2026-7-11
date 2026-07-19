@@ -79,7 +79,12 @@ async def _require_own_seminar(
     return seminar
 
 
-async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> TeacherSeminarOut:
+async def _to_seminar_out(
+    db: AsyncSession, seminar: Seminar, *, term: RecruitmentTerm | None
+) -> TeacherSeminarOut:
+    """termはget_current_term()の結果を呼び出し元から渡す。list_own_seminarsは
+    担当ゼミ全件に対してこの関数を呼ぶため、ここで毎回問い合わせると
+    ゼミ数だけ同じクエリを繰り返すことになる(#184)。"""
     teachers_result = await db.execute(
         select(User)
         .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
@@ -102,7 +107,6 @@ async def _to_seminar_out(db: AsyncSession, seminar: Seminar) -> TeacherSeminarO
 
     # 定員(#184)は現ラウンドが無ければNone、あってもまだ設定していなければNone。
     capacity = None
-    term = await get_current_term(db)
     if term is not None:
         recruitment_result = await db.execute(
             select(SeminarRecruitment.capacity).where(
@@ -360,7 +364,8 @@ async def list_own_seminars(
 ) -> list[TeacherSeminarOut]:
     """自分の担当ゼミを、編集フォームの初期値用に詳細(紹介文・資料・定員)込みで返す。"""
     seminars = await _teacher_seminars(db, teacher)
-    return [await _to_seminar_out(db, s) for s in seminars]
+    term = await get_current_term(db)
+    return [await _to_seminar_out(db, s, term=term) for s in seminars]
 
 
 @router.patch("/seminars/{seminar_id}", response_model=TeacherSeminarOut)
@@ -375,7 +380,8 @@ async def update_own_seminar(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(seminar, field, value)
     await db.flush()
-    return await _to_seminar_out(db, seminar)
+    term = await get_current_term(db)
+    return await _to_seminar_out(db, seminar, term=term)
 
 
 @router.post(

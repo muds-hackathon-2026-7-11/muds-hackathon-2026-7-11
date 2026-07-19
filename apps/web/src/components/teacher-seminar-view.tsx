@@ -68,6 +68,12 @@ export function TeacherSeminarView({
     {},
   );
   const [savingCapacityId, setSavingCapacityId] = useState<string | null>(null);
+  // 定員保存のエラーは共有のerrorMessageとは別に持つ。同じカード上で
+  // 紹介文編集と定員編集を独立に行き来できるため、共有stateだと片方の
+  // 成功が他方の直前のエラー表示を消してしまう(#184)。
+  const [capacityErrors, setCapacityErrors] = useState<Record<string, string>>(
+    {},
+  );
 
   function startEdit(seminar: TeacherSeminar): void {
     setEditingId(seminar.id);
@@ -181,12 +187,24 @@ export function TeacherSeminarView({
     }
   }
 
+  function setCapacityError(seminarId: string, message: string | null): void {
+    setCapacityErrors((prev) => {
+      const next = { ...prev };
+      if (message === null) {
+        delete next[seminarId];
+      } else {
+        next[seminarId] = message;
+      }
+      return next;
+    });
+  }
+
   async function handleSaveCapacity(seminarId: string): Promise<void> {
     const raw = capacityInputs[seminarId] ?? "";
     const capacity = Number(raw);
-    setErrorMessage(null);
+    setCapacityError(seminarId, null);
     if (raw.trim() === "" || !Number.isInteger(capacity) || capacity < 0) {
-      setErrorMessage("定員は0以上の整数で入力してください。");
+      setCapacityError(seminarId, "定員は0以上の整数で入力してください。");
       return;
     }
     setSavingCapacityId(seminarId);
@@ -201,7 +219,7 @@ export function TeacherSeminarView({
         },
       );
       if (!res.ok) {
-        setErrorMessage(await extractErrorDetail(res));
+        setCapacityError(seminarId, await extractErrorDetail(res));
         return;
       }
       const updated = (await res.json()) as { capacity: number | null };
@@ -216,7 +234,10 @@ export function TeacherSeminarView({
         return next;
       });
     } catch {
-      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+      setCapacityError(
+        seminarId,
+        "通信に失敗しました。時間をおいて再度お試しください。",
+      );
     } finally {
       setSavingCapacityId(null);
     }
@@ -341,6 +362,11 @@ export function TeacherSeminarView({
                       : "定員を保存する"}
                   </button>
                 </div>
+                {capacityErrors[seminar.id] && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {capacityErrors[seminar.id]}
+                  </p>
+                )}
               </div>
 
               <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
