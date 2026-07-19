@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ProfileCard, type ResearchTag } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
+import { getSessionRole } from "@/lib/session-role";
 import type { Session } from "next-auth";
 
 type CurrentSeminar = {
@@ -95,6 +96,15 @@ export default async function Home() {
   const session = await auth();
   if (!session) {
     redirect("/login");
+  }
+  // マイページは学生向け(プロフィール・所属ゼミ・志望提出状況)の内容しか無く、
+  // /applications/me もteacherには403を返す。ログイン直後は常にここへ
+  // 着地する(login-button.tsxのsignIn()にcallbackUrl指定が無いため)が、
+  // teacherのナビ(menu-bar.tsxのteacherNavItems)には「マイページ」自体が
+  // 無く二度と辿り着けないので、教員だけログイン直後に自分のホームへ流す。
+  const role = await getSessionRole();
+  if (role === "teacher") {
+    redirect("/assignment");
   }
   const [me, researchTags, myApplication] = await Promise.all([
     getMe(session),

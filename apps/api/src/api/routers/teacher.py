@@ -32,13 +32,16 @@ from api.schemas import (
     TeacherRecruitmentOut,
     TeacherRecruitmentUpdate,
     TeacherSeminarUpdate,
+    UnsubmittedApplicantOut,
 )
-from api.services import GRADE_OPTIONS, get_current_term
+from api.services import GRADE_OPTIONS, get_current_term, normalize_grade
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
 # require_role(teacher) は依存として使うと認証済みの teacher(User) を返す。
 require_teacher = require_role(UserRole.teacher)
+# 未提出者一覧(#182)は担当ゼミに関係なく全学生分を見せるため、教員・管理者どちらもOK。
+require_teacher_or_admin = require_role(UserRole.teacher, UserRole.admin)
 
 
 async def _teacher_seminars(db: AsyncSession, teacher: User) -> list[Seminar]:
@@ -256,6 +259,77 @@ def _applicants_csv_response(
     )
 
 
+def _grade_sort_key(normalized_grade: str | None, name: str) -> tuple[int, str]:
+    order = (
+        GRADE_OPTIONS.index(normalized_grade)
+        if normalized_grade in GRADE_OPTIONS
+        else len(GRADE_OPTIONS)
+    )
+    return (order, name)
+
+
+async def _unsubmitted_applicants(db: AsyncSession) -> list[UnsubmittedApplicantOut]:
+    """今回の募集ラウンドの対象学年なのに、まだ志望理由を提出していない学生の一覧(#182)。
+
+    未提出者はどのゼミにも紐付かない(ApplicationChoiceが無い)ため、担当ゼミ単位では
+    絞り込めない。教員・管理者は全員が同じ全学生分の一覧を見る想定(/teacher/applicants/
+    all.csv が既に教員に全ゼミ横断のCSVを出している前例に合わせる)。
+    """
+    term = await get_current_term(db)
+    if term is None:
+        return []
+
+    target_grades: set[str] = set()
+    for grades in (
+        await db.execute(
+            select(SeminarRecruitment.target_grades).where(
+                SeminarRecruitment.term_id == term.id
+            )
+        )
+    ).scalars():
+        target_grades.update(grades)
+    if not target_grades:
+        return []
+
+    submitted_student_ids = set(
+        (
+            await db.execute(
+                select(ApplicationForm.student_id).where(
+                    ApplicationForm.term_id == term.id,
+                    ApplicationForm.status == ApplicationStatus.submitted,
+                )
+            )
+        ).scalars()
+    )
+
+    students = (
+        await db.execute(
+            select(User).where(
+                User.role == UserRole.student,
+                User.is_active.is_(True),
+            )
+        )
+    ).scalars()
+
+    unsubmitted = [
+        (student, normalized_grade)
+        for student in students
+        if student.id not in submitted_student_ids
+        and (normalized_grade := normalize_grade(student.grade)) in target_grades
+    ]
+    unsubmitted.sort(key=lambda pair: _grade_sort_key(pair[1], pair[0].name))
+
+    return [
+        UnsubmittedApplicantOut(
+            student_id=student.student_id,
+            name=student.name,
+            grade=student.grade,
+            normalized_grade=normalized_grade,
+        )
+        for student, normalized_grade in unsubmitted
+    ]
+
+
 @router.get("/applicants", response_model=list[SeminarApplicantsOut])
 async def list_applicants(
     teacher: User = Depends(require_teacher), db: AsyncSession = Depends(get_db)
@@ -283,6 +357,14 @@ async def download_all_applicants_csv(
     seminars = await _all_seminars(db)
     data = await _gather_applicants_for_seminars(db, seminars)
     return _applicants_csv_response(data, filename="applicants_all.csv")
+
+
+@router.get("/unsubmitted-applicants", response_model=list[UnsubmittedApplicantOut])
+async def list_unsubmitted_applicants(
+    _user: User = Depends(require_teacher_or_admin), db: AsyncSession = Depends(get_db)
+) -> list[UnsubmittedApplicantOut]:
+    """今回の募集ラウンドで志望理由をまだ提出していない学生の一覧(#182)。"""
+    return await _unsubmitted_applicants(db)
 
 
 @router.patch(

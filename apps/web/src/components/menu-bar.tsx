@@ -15,6 +15,7 @@ const baseNavItems = [
 
 const teacherNavItems = [
   { label: "応募者一覧", href: "/teacher/applicants" },
+  { label: "未提出者一覧", href: "/unsubmitted" },
   { label: "ゼミ設定", href: "/teacher/seminar" },
 ] as const;
 

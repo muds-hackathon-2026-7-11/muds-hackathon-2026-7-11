@@ -101,6 +101,15 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
 
     todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
     だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
+
+    academic_yearが同じopen期間が複数該当する場合(本来運営側で避けるべき
+    データだが、実際に発生した)、created_atが最も新しいもの(=最後に
+    設定された募集ラウンド)を優先する。starts_atはdate型(日単位)かつ
+    運営が手入力する業務上の日付にすぎず、同日開始の複数ラウンドを
+    区別できないため使わない。created_atも同一トランザクション内でINSERT
+    されると同値になりうる(PostgresのNOW()はトランザクション開始時刻)ため、
+    最後にidで機械的なタイブレークを行う(業務的な意味は無いが、最低限
+    「同じリクエストのたびに違う結果を返す」ことだけは無くす)。
     """
     today = datetime.now(JST).date()
     result = await db.execute(
@@ -110,7 +119,11 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
             RecruitmentTerm.starts_at <= today,
             RecruitmentTerm.ends_at >= today,
         )
-        .order_by(RecruitmentTerm.academic_year.desc())
+        .order_by(
+            RecruitmentTerm.academic_year.desc(),
+            RecruitmentTerm.created_at.desc(),
+            RecruitmentTerm.id.desc(),
+        )
         .limit(1)
     )
     return result.scalar_one_or_none()
