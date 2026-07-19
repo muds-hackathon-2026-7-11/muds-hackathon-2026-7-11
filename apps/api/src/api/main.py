@@ -62,24 +62,35 @@ async def _run_deadline_reminders() -> None:
 
 
 scheduler = AsyncIOScheduler(timezone=JST)
-scheduler.add_job(
-    _run_deadline_reminders,
-    CronTrigger(hour=12, minute=0, timezone=JST),
-    id="deadline_reminders",
-)
+if settings.enable_deadline_reminder_scheduler:
+    scheduler.add_job(
+        _run_deadline_reminders,
+        CronTrigger(hour=12, minute=0, timezone=JST),
+        id="deadline_reminders",
+    )
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    scheduler.start()
-    job = scheduler.get_job("deadline_reminders")
-    logger.info(
-        "締切リマインダーの次回実行予定: %s", job.next_run_time if job else None
-    )
+    if settings.enable_deadline_reminder_scheduler:
+        scheduler.start()
+        job = scheduler.get_job("deadline_reminders")
+        logger.info(
+            "締切リマインダーの次回実行予定: %s", job.next_run_time if job else None
+        )
+    else:
+        # apiコンテナは常時稼働しており、DBに締切が近い募集ラウンドがあると
+        # 本物のSlack DMが飛んでしまう。ローカル/CIでは既定でスケジューラ自体を
+        # 起動しない(ENABLE_DEADLINE_REMINDER_SCHEDULER=trueで明示的にopt-in)。
+        logger.info(
+            "ENABLE_DEADLINE_REMINDER_SCHEDULER is OFF: 締切リマインダーの"
+            "スケジューラは起動しません(ローカル/CI既定)。"
+        )
     try:
         yield
     finally:
-        scheduler.shutdown(wait=False)
+        if settings.enable_deadline_reminder_scheduler:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(lifespan=lifespan)
