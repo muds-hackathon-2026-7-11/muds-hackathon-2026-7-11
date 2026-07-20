@@ -162,6 +162,31 @@ async def current_academic_year(db: AsyncSession) -> int | None:
     return result.scalar_one_or_none()
 
 
+async def student_has_current_seminar(
+    db: AsyncSession, *, student_id: uuid.UUID
+) -> bool:
+    """現在の年度に所属しているゼミが1件でもあるか(#188)。
+
+    routers/me.pyの_get_current_seminarと同じ「現在年度のSeminarMemberが
+    あるか」の判定だが、こちらは表示用にSeminarの中身までは要らないので
+    存在チェックだけの軽量版にしている。
+    """
+    academic_year = await current_academic_year(db)
+    if academic_year is None:
+        return False
+
+    result = await db.execute(
+        select(SeminarMember.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
+        .where(
+            SeminarMember.student_id == student_id,
+            RecruitmentTerm.academic_year == academic_year,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def find_answer_candidates(
     db: AsyncSession, *, seminar_id: uuid.UUID, exclude_user_id: uuid.UUID
 ) -> list[User]:
