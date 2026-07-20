@@ -16,9 +16,9 @@ from api.models import (
 )
 from api.services import (
     find_students_without_submission,
+    get_current_term,
     normalize_grade,
     send_deadline_reminders,
-    get_current_term,
 )
 
 
@@ -371,6 +371,7 @@ async def test_send_deadline_reminders_continues_after_individual_failure(
     sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
     assert failing_student.slack_user_id not in sent_ids
     assert other_student.slack_user_id in sent_ids
+
 
 @pytest.mark.asyncio
 async def test_get_current_term_prefers_latest_created_at_when_academic_year_ties(

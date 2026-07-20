@@ -34,15 +34,14 @@ from api.schemas import (
     ApplicationFormOut,
     ApplicationUpsertIn,
 )
-
-from api.slack_client import SlackClient, get_slack_client
 from api.services import (
     get_current_term,
     normalize_grade,
+    notify_submission,
     student_has_current_seminar,
     term_targets_grade,
-    notify_submission,
 )
+from api.slack_client import SlackClient, get_slack_client
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
