@@ -2,9 +2,24 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from sqlalchemy import update
 
-from api.models import RecruitmentTerm, RecruitmentTermStatus
-from api.services import get_current_term, normalize_grade
+from api.models import (
+    ApplicationForm,
+    ApplicationStatus,
+    RecruitmentTerm,
+    RecruitmentTermStatus,
+    Seminar,
+    SeminarRecruitment,
+    User,
+    UserRole,
+)
+from api.services import (
+    find_students_without_submission,
+    get_current_term,
+    normalize_grade,
+    send_deadline_reminders,
+)
 
 
 @pytest.mark.parametrize(
@@ -30,6 +45,332 @@ from api.services import get_current_term, normalize_grade
 )
 def test_normalize_grade(raw: str | None, expected: str | None) -> None:
     assert normalize_grade(raw) == expected
+
+
+def _unique(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+async def _make_term(
+    db_session,
+    *,
+    ends_at: date,
+    status: RecruitmentTermStatus = RecruitmentTermStatus.open,
+) -> RecruitmentTerm:
+    term = RecruitmentTerm(
+        academic_year=3000 + int(uuid.uuid4().int % 1000),
+        starts_at=ends_at - timedelta(days=30),
+        ends_at=ends_at,
+        status=status,
+    )
+    db_session.add(term)
+    await db_session.flush()
+    return term
+
+
+_UNSET = object()
+
+
+async def _make_student(
+    db_session,
+    *,
+    slack_user_id: str | None | object = _UNSET,
+    is_active: bool = True,
+    role: UserRole = UserRole.student,
+    grade: str | None = "B3",
+) -> User:
+    resolved_slack_user_id = _unique("U") if slack_user_id is _UNSET else slack_user_id
+    user = User(
+        google_id=_unique("google"),
+        email=f"{_unique('student')}@example.com",
+        name=_unique("student"),
+        role=role,
+        slack_user_id=resolved_slack_user_id,
+        is_active=is_active,
+        grade=grade,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+async def _make_recruitment(
+    db_session, *, term: RecruitmentTerm, target_grades: list[str]
+) -> SeminarRecruitment:
+    """termに対して対象学年付きの募集ゼミを1件作る。
+
+    find_students_without_submissionは対象学年(target_grades)で絞るため
+    (#153)、これが無い(=SeminarRecruitmentが1件も無い)termだと常に
+    空リストを返す。
+    """
+    seminar = Seminar(name=_unique("seminar"))
+    db_session.add(seminar)
+    await db_session.flush()
+    recruitment = SeminarRecruitment(
+        term_id=term.id,
+        seminar_id=seminar.id,
+        capacity=10,
+        target_grades=target_grades,
+    )
+    db_session.add(recruitment)
+    await db_session.flush()
+    return recruitment
+
+
+async def _submit(db_session, *, term: RecruitmentTerm, student: User) -> None:
+    db_session.add(
+        ApplicationForm(
+            term_id=term.id, student_id=student.id, status=ApplicationStatus.submitted
+        )
+    )
+    await db_session.flush()
+
+
+async def _close_all_open_terms(db_session) -> None:
+    """send_deadline_remindersは全てのopen募集期間を走査するため、共有DB上の
+    実データの募集期間が「今日」「明日」を締切日とたまたま一致すると、その
+    期間の実学生にまで通知対象が及んでしまう。db_sessionはテスト終了時に
+    rollbackされるため、一時的にclosedへ変更しても安全
+    (test_applications_api.pyの同名ヘルパーと同じパターン)。
+    """
+    await db_session.execute(
+        update(RecruitmentTerm)
+        .where(RecruitmentTerm.status == RecruitmentTermStatus.open)
+        .values(status=RecruitmentTermStatus.closed)
+    )
+    await db_session.flush()
+
+
+# --- find_students_without_submission ---
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_excludes_submitted(
+    db_session,
+) -> None:
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    not_submitted = await _make_student(db_session)
+    submitted = await _make_student(db_session)
+    await _submit(db_session, term=term, student=submitted)
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    result_ids = {u.id for u in result}
+    assert not_submitted.id in result_ids
+    assert submitted.id not in result_ids
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_excludes_unlinked_and_inactive(
+    db_session,
+) -> None:
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    unlinked = await _make_student(db_session, slack_user_id=None)
+    inactive = await _make_student(db_session, is_active=False)
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    result_ids = {u.id for u in result}
+    assert unlinked.id not in result_ids
+    assert inactive.id not in result_ids
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_includes_admin_role(
+    db_session,
+) -> None:
+    # role=adminであっても実際には在学中の学生であるユーザーがいるため、
+    # applications.pyの各エンドポイントと同様に対象に含める。
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    admin_student = await _make_student(db_session, role=UserRole.admin)
+    teacher = await _make_student(db_session, role=UserRole.teacher)
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    result_ids = {u.id for u in result}
+    assert admin_student.id in result_ids
+    assert teacher.id not in result_ids
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_excludes_grade_not_targeted(
+    db_session,
+) -> None:
+    # このラウンドがB3のみ対象の場合、B4の学生はそもそも志望を提出できない
+    # (マイページで「準備中」表示)。提出できない学生にリマインダーで
+    # 「まだの場合はご提出ください」と催促するのはおかしいため、対象外の
+    # 学年は除外する。
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    targeted = await _make_student(db_session, grade="B3")
+    not_targeted = await _make_student(db_session, grade="B4")
+    no_grade = await _make_student(db_session, grade=None)
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    result_ids = {u.id for u in result}
+    assert targeted.id in result_ids
+    assert not_targeted.id not in result_ids
+    assert no_grade.id not in result_ids
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_matches_mids_style_grade(
+    db_session,
+) -> None:
+    # 表記揺れ(#99)。"MIDS/B3"のような学生もnormalize_grade経由でB3として
+    # 対象学年判定される。
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    mids_student = await _make_student(db_session, grade="MIDS/B3")
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    assert mids_student.id in {u.id for u in result}
+
+
+@pytest.mark.asyncio
+async def test_find_students_without_submission_empty_when_term_has_no_recruitments(
+    db_session,
+) -> None:
+    # SeminarRecruitmentが1件も無い(=対象学年が定義できない)募集ラウンドでは、
+    # 「全学生が対象」にフォールバックしてはいけない。
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_student(db_session, grade="B3")
+
+    result = await find_students_without_submission(db_session, term_id=term.id)
+
+    assert result == []
+
+
+# --- send_deadline_reminders ---
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_sends_on_deadline_day(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    assert student.slack_user_id in sent_by_id
+    assert "本日" in sent_by_id[student.slack_user_id].text
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_sends_the_day_before_deadline(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today() + timedelta(days=1))
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    assert student.slack_user_id in sent_by_id
+    assert "締切まで1日です" in sent_by_id[student.slack_user_id].text
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_ignores_terms_two_days_out(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today() + timedelta(days=2))
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
+    assert student.slack_user_id not in sent_ids
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_ignores_closed_terms(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(
+        db_session, ends_at=date.today(), status=RecruitmentTermStatus.closed
+    )
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
+    assert student.slack_user_id not in sent_ids
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_skips_students_who_submitted(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    submitted = await _make_student(db_session)
+    await _submit(db_session, term=term, student=submitted)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
+    assert submitted.slack_user_id not in sent_ids
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_skips_students_whose_grade_is_not_targeted(
+    db_session, fake_slack_client
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    not_targeted = await _make_student(db_session, grade="B4")
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
+    assert not_targeted.slack_user_id not in sent_ids
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_continues_after_individual_failure(
+    db_session, fake_slack_client, monkeypatch
+) -> None:
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=date.today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    failing_student = await _make_student(db_session)
+    other_student = await _make_student(db_session)
+
+    original_send_dm = fake_slack_client.send_dm
+
+    async def _flaky_send_dm(*, slack_user_id: str, text: str, blocks=None):
+        if slack_user_id == failing_student.slack_user_id:
+            raise RuntimeError("Slack API is down")
+        return await original_send_dm(
+            slack_user_id=slack_user_id, text=text, blocks=blocks
+        )
+
+    monkeypatch.setattr(fake_slack_client, "send_dm", _flaky_send_dm)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    # failing_studentへの送信失敗が、other_studentへの送信を止めない。
+    sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
+    assert failing_student.slack_user_id not in sent_ids
+    assert other_student.slack_user_id in sent_ids
 
 
 @pytest.mark.asyncio

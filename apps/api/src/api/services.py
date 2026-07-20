@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -11,14 +11,19 @@ from api.models import (
     AnswerRequest,
     AnswerRequestStatus,
     AnswerSource,
+    ApplicationChoice,
+    ApplicationForm,
+    ApplicationStatus,
     Question,
     QuestionStatus,
     RecruitmentTerm,
     RecruitmentTermStatus,
+    Seminar,
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
     User,
+    UserRole,
 )
 from api.slack_client import SlackClient
 
@@ -463,3 +468,162 @@ async def record_answer_and_notify(
 
     await db.flush()
     return answer
+
+
+def _submission_confirmation_blocks(
+    choices: list[ApplicationChoice], seminar_names: dict[uuid.UUID, str]
+) -> list[dict]:
+    lines = "\n".join(
+        f"第{c.priority}志望: {seminar_names.get(c.seminar_id, '不明')}"
+        for c in sorted(choices, key=lambda c: c.priority)
+    )
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": ":white_check_mark: *志望を提出しました*",
+            },
+        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": lines}},
+    ]
+
+
+async def notify_submission(
+    db: AsyncSession,
+    slack_client: SlackClient,
+    *,
+    user: User,
+    choices: list[ApplicationChoice],
+) -> None:
+    """志望提出時に、提出した本人へSlackで確認通知を送る(#153)。
+
+    Slack API呼び出しの失敗は他の通知系と同じく個別に握りつぶし、
+    提出処理自体を失敗させない。締切前の上書き(再提出)でも都度送ってよい。
+    """
+    if user.slack_user_id is None or not choices:
+        return
+
+    seminar_ids = [c.seminar_id for c in choices]
+    result = await db.execute(
+        select(Seminar.id, Seminar.name).where(Seminar.id.in_(seminar_ids))
+    )
+    seminar_names: dict[uuid.UUID, str] = {row.id: row.name for row in result.all()}
+
+    text = "志望を提出しました: " + ", ".join(
+        f"第{c.priority}志望 {seminar_names.get(c.seminar_id, '不明')}"
+        for c in sorted(choices, key=lambda c: c.priority)
+    )
+    try:
+        await slack_client.send_dm(
+            slack_user_id=user.slack_user_id,
+            text=text,
+            blocks=_submission_confirmation_blocks(choices, seminar_names),
+        )
+    except Exception:
+        logger.warning(
+            "提出確認通知の送信に失敗しました: user_id=%s",
+            user.id,
+            exc_info=True,
+        )
+
+
+async def find_students_without_submission(
+    db: AsyncSession, *, term_id: uuid.UUID
+) -> list[User]:
+    """指定の募集期間で、まだ志望を提出していない学生(Slack連携済み)を返す。
+
+    「提出していない」は、その期間のApplication自体が無い、または
+    status=draftのまま(下書き止まり)を含む。role=adminであっても実際には
+    在学中の学生であるユーザーがいるため、applications.pyの各エンドポイント
+    と同じくstudentに加えてadminも対象にする(role=teacherは対象外)。
+
+    対象学年(target_grades)にも絞る(#153)。募集ラウンドが対象としていない
+    学年の学生はそもそも志望を提出できない(マイページで「準備中」表示)ため、
+    ここで絞らないと「提出できないのに催促される」リマインダーが届いてしまう。
+    """
+    target_grades: set[str] = set()
+    for grades in (
+        await db.execute(
+            select(SeminarRecruitment.target_grades).where(
+                SeminarRecruitment.term_id == term_id
+            )
+        )
+    ).scalars():
+        target_grades.update(grades)
+    if not target_grades:
+        return []
+
+    submitted_result = await db.execute(
+        select(ApplicationForm.student_id).where(
+            ApplicationForm.term_id == term_id,
+            ApplicationForm.status == ApplicationStatus.submitted,
+        )
+    )
+    submitted_student_ids = {row[0] for row in submitted_result.all()}
+
+    students_result = await db.execute(
+        select(User).where(
+            User.role.in_([UserRole.student, UserRole.admin]),
+            User.is_active.is_(True),
+            User.slack_user_id.is_not(None),
+        )
+    )
+    return [
+        student
+        for student in students_result.scalars().all()
+        if student.id not in submitted_student_ids
+        and normalize_grade(student.grade) in target_grades
+    ]
+
+
+def _deadline_reminder_text(*, is_deadline_day: bool, ends_at_label: str) -> str:
+    suffix = "まだ提出していない場合はお早めにご提出ください。"
+    if is_deadline_day:
+        return f":alarm_clock: 本日{ends_at_label}が志望提出の締切です。{suffix}"
+    return (
+        f":alarm_clock: 締切まで1日です。志望提出の締切は{ends_at_label}です。{suffix}"
+    )
+
+
+async def send_deadline_reminders(db: AsyncSession, slack_client: SlackClient) -> None:
+    """締切前日・当日の昼12時に、まだ志望を提出していない学生へリマインダーDMを送る(#153)。
+
+    1日1回、締切の前日と当日それぞれの日付にだけ一致する募集期間を対象に
+    するため、この関数自体は1日1回の定期実行(main.pyのスケジューラ)を
+    前提とする(同じ学生・期間に何度も送らないための重複排除テーブルは
+    持たない)。
+    """
+    today = datetime.now(JST).date()
+    result = await db.execute(
+        select(RecruitmentTerm).where(
+            RecruitmentTerm.status == RecruitmentTermStatus.open
+        )
+    )
+    terms = list(result.scalars().all())
+
+    for term in terms:
+        is_deadline_day = term.ends_at == today
+        is_day_before = term.ends_at - timedelta(days=1) == today
+        if not is_deadline_day and not is_day_before:
+            continue
+
+        students = await find_students_without_submission(db, term_id=term.id)
+        ends_at_label = term.ends_at.strftime("%Y年%m月%d日")
+        text = _deadline_reminder_text(
+            is_deadline_day=is_deadline_day, ends_at_label=ends_at_label
+        )
+        for student in students:
+            if student.slack_user_id is None:
+                continue
+            try:
+                await slack_client.send_dm(
+                    slack_user_id=student.slack_user_id, text=text
+                )
+            except Exception:
+                logger.warning(
+                    "締切リマインダーの送信に失敗しました: term_id=%s, user_id=%s",
+                    term.id,
+                    student.id,
+                    exc_info=True,
+                )

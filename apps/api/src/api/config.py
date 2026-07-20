@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     # Vision対応が必須(gpt-4o-mini はVision対応)。
     doc_summary_model: str = "gpt-4o-mini"
 
+    # --- 締切リマインダー(#153) ---
+    # 本番でのみ true にする。apiコンテナは常時稼働しており、SLACK_BOT_TOKEN が
+    # 実際の値だとDBの募集ラウンドの日付次第で本物のSlack DMが飛ぶため、
+    # ローカル/CIでは既定でスケジューラ自体を起動しない(明示的なopt-in)。
+    enable_deadline_reminder_scheduler: bool = False
     # --- マッチ度診断のルーブリック重み(#118) ---
     # 観点別スコア(0-100)を総合スコアへ合成する重み。使用時に合計で正規化する
     # ため、合計が1でなくてもよい。

@@ -11,6 +11,8 @@ dependencies = [
     "aiohttp>=3.13.0",
     "alembic>=1.18.5",
     "anthropic>=0.115.0",
+    # 締切リマインダー通知(#153)の定期実行に使う。
+    "apscheduler>=3.10.4",
     "asyncpg>=0.31.0",
     "fastapi>=0.138.2",
     "httpx>=0.28.1",
@@ -69,10 +71,10 @@ quote-style = "double"
 warn_return_any = true
 check_untyped_defs = true
 
-# python-jose は型スタブ(py.typed)を同梱していないため、mypyのuntyped-import
-# エラーを避けるべく個別に無視する。
+# python-jose・apschedulerは型スタブ(py.typed)を同梱していないため、mypyの
+# untyped-importエラーを避けるべく個別に無視する。
 [[tool.mypy.overrides]]
-module = ["jose.*"]
+module = ["jose.*", "apscheduler.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
