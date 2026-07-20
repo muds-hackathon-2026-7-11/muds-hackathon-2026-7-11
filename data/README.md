@@ -11,7 +11,7 @@
 ```sh
 make migrate       # テーブル作成
 # data/seminar_teacher.csv と data/slack_member.csv をこのディレクトリに置く(下記参照)
-make import-data   # ゼミ・教員・学生データをまとめて投入
+make import-data   # ゼミ・教員・学生＋ゼミ知識をまとめて投入
 ```
 
 募集期間(recruitment_terms)・ゼミごとの定員(seminar_recruitments)は運営向けAPI/UI
@@ -79,10 +79,17 @@ make import-data   # ゼミ・教員・学生データをまとめて投入
 
 ## まとめて投入
 
-デフォルトのファイル名(`seminar_teacher.csv`, `slack_member.csv`)で両方揃っていれば、
+デフォルトのファイル名(`seminar_teacher.csv`, `slack_member.csv`, `users_seminar.csv`)が
+揃っていれば、
 
 ```sh
 make import-data
 ```
 
-で`import-seminars`→`import-users`の順にまとめて実行できる。
+で`import-seminars`→`import-users`→`import-seminar-members`→`import-seminar-knowledge`
+の順にまとめて実行できる。
+
+- `import-seminar-knowledge`はリポジトリ管理下の`docs/seminars/knowledge/`を読むため、
+  `data/`への追加配置は不要。
+- OpenAIを使うPDF要約(`make import-seminar-docs`)は`import-data`に**含まれない**ため、
+  必要な場合のみ個別に実行する。
