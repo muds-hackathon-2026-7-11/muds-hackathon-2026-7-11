@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from api import auth
 from api.auth import get_current_user
 from api.main import app
 from api.models import (
@@ -18,6 +19,8 @@ from api.models import (
 from api.services import record_answer
 
 pytestmark = pytest.mark.asyncio
+
+_SECRET = "test-internal-secret"
 
 
 def _unique(prefix: str) -> str:
@@ -78,7 +81,8 @@ async def test_list_seminars(client, db_session) -> None:
     assert seminar.name in names
 
 
-async def test_create_question_success(client, db_session) -> None:
+async def test_create_question_success(client, db_session, monkeypatch) -> None:
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
     slack_user_id = _unique("U")
     user = User(
         google_id=_unique("google"),
@@ -98,6 +102,7 @@ async def test_create_question_success(client, db_session) -> None:
             "slack_user_id": slack_user_id,
             "content": "プログラミング未経験でも大丈夫ですか？",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 201
@@ -107,9 +112,26 @@ async def test_create_question_success(client, db_session) -> None:
     assert "user_id" not in body  # 匿名化: APIレスポンスにuser_idを含めない
 
 
+async def test_create_question_rejects_missing_secret(client, db_session) -> None:
+    seminar = await _make_seminar(db_session)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/questions",
+        json={
+            "seminar_id": str(seminar.id),
+            "slack_user_id": _unique("U"),
+            "content": "質問です",
+        },
+    )
+
+    assert resp.status_code == 403
+
+
 async def test_create_question_unknown_slack_user_returns_404(
-    client, db_session
+    client, db_session, monkeypatch
 ) -> None:
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
     seminar = await _make_seminar(db_session)
     await db_session.flush()
 
@@ -120,12 +142,16 @@ async def test_create_question_unknown_slack_user_returns_404(
             "slack_user_id": _unique("U-unknown"),
             "content": "質問です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 404
 
 
-async def test_create_question_unknown_seminar_returns_404(client, db_session) -> None:
+async def test_create_question_unknown_seminar_returns_404(
+    client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
     slack_user_id = _unique("U")
     user = User(
         google_id=_unique("google"),
@@ -144,12 +170,16 @@ async def test_create_question_unknown_seminar_returns_404(client, db_session) -
             "slack_user_id": slack_user_id,
             "content": "質問です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 404
 
 
-async def test_create_question_empty_content_is_rejected(client, db_session) -> None:
+async def test_create_question_empty_content_is_rejected(
+    client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
     slack_user_id = _unique("U")
     user = User(
         google_id=_unique("google"),
@@ -169,6 +199,7 @@ async def test_create_question_empty_content_is_rejected(client, db_session) -> 
             "slack_user_id": slack_user_id,
             "content": "",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 422

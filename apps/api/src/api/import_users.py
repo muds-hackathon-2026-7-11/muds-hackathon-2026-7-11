@@ -1,4 +1,4 @@
-"""Slackワークスペースメンバー一覧CSVから学生・教員データをDBへ投入するスクリプト。
+"""Slackワークスペースメンバー一覧CSVから学生データをDBへ投入するスクリプト。
 
 使い方: uv run python -m api.import_users <CSVファイルパス>
 
@@ -7,11 +7,12 @@ username, email, status, billing-active, has-2fa, has-sso, userid,
 fullname, displayname, expiration-timestamp
 
 fullname は `[学年] 氏名 / Romanized Name` 形式(例: `[B1] 山田 太郎 / Taro Yamada`)。
-角括弧の中身が「教員」ならrole=teacher、既知の学年パターン(B1-4, MIDS/B1-4,
-M1/M2/D1等、guestサフィックス可)ならrole=studentにする。それ以外(卒業生の
-「卒」、他学科、提携企業ゲスト、重複アカウント等)はデータサイエンス学科の
-現役学生・教員ではないため無視する(全学ワークスペースのエクスポートには
-これらが大量に混在するため)。
+既知の学年パターン(B1-4, MIDS/B1-4, M1/M2/D1等、guestサフィックス可)なら
+role=studentとして取り込む。角括弧の中身が「教員」の行はスキップする(#163。
+教員は管理者画面の「教員・管理者管理」から個別に追加・編集する運用のため)。
+それ以外(卒業生の「卒」、他学科、提携企業ゲスト、重複アカウント等)は
+データサイエンス学科の現役学生ではないため無視する(全学ワークスペースの
+エクスポートにはこれらが大量に混在するため)。
 
 ログイン前にemailキーでレコードを用意しておけば、実際にGoogleログインした際
 api.auth._provision_user のemail一致ロジックで自動的にgoogle_idが後付けされる。
@@ -21,6 +22,7 @@ import argparse
 import asyncio
 import csv
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlalchemy import select
@@ -103,7 +105,12 @@ async def _get_or_create_user(
     user = result.scalar_one_or_none()
     if user is not None:
         user.name = profile.name
-        user.role = profile.role
+        # adminは運営がAdmin管理画面から個別に付与する権限で、Slack
+        # エクスポートの学年ブラケットには表れない。ここで上書きすると
+        # CSV再取り込みのたびにadminがstudent/teacherへ戻ってしまうため、
+        # 既にadminのユーザーはroleを変更しない。
+        if user.role != UserRole.admin:
+            user.role = profile.role
         user.grade = profile.grade
         user.student_id = profile.student_id
         user.slack_user_id = slack_user_id
@@ -158,52 +165,99 @@ async def _deactivate_missing_users(
     return deactivated
 
 
+@dataclass
+class SkippedRow:
+    row: int
+    email: str
+    reason: str
+
+
+@dataclass
+class ImportSummary:
+    created: int = 0
+    updated: int = 0
+    deactivated: int = 0
+    skipped: list[SkippedRow] = field(default_factory=list)
+
+
+async def import_rows(
+    session: AsyncSession, rows: list[dict[str, str]]
+) -> ImportSummary:
+    """パース済みのCSV行を受け取り、ユーザーの作成/更新と、CSVに存在しなく
+    なった学生の非アクティブ化を行う(#163)。CLIスクリプト・管理者画面の
+    アップロードAPI両方から呼べるよう、ここではsession.flushのみ行い、
+    commitは呼び出し側の責務とする。
+    """
+    summary = ImportSummary()
+    active_emails: set[str] = set()
+
+    for row_number, row in enumerate(rows, start=1):
+        # Google OAuthのemail claimは小文字で返るため、大文字小文字の違いで
+        # 同一人物が別ユーザーとして再作成されないよう小文字に正規化する。
+        email = row["email"].strip().lower()
+
+        if _is_deactivated_in_slack(row):
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number, email=email, reason="Slackから退出済み(Deactivated)"
+                )
+            )
+            continue
+
+        profile = parse_fullname(row["fullname"], email)
+        if profile is None:
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number,
+                    email=email,
+                    reason=f"氏名欄をパースできません: {row['fullname']!r}",
+                )
+            )
+            continue
+
+        if profile.role == UserRole.teacher:
+            # 教員は管理者画面の「教員・管理者管理」から個別に追加・編集する
+            # 運用のため、CSVでは学生のみを対象にする(#163)。
+            summary.skipped.append(
+                SkippedRow(
+                    row=row_number,
+                    email=email,
+                    reason="教員はCSVでは取り込みません(管理者画面から追加してください)",
+                )
+            )
+            continue
+
+        active_emails.add(email)
+        _, was_created = await _get_or_create_user(
+            session,
+            email=email,
+            slack_user_id=row["userid"].strip() or None,
+            profile=profile,
+        )
+        if was_created:
+            summary.created += 1
+        else:
+            summary.updated += 1
+
+    summary.deactivated = await _deactivate_missing_users(
+        session, active_emails=active_emails
+    )
+    return summary
+
+
 async def import_csv(path: Path) -> None:
     with path.open(newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
     async with async_session() as session:
-        created = 0
-        updated = 0
-        skipped = 0
-        active_emails: set[str] = set()
-
-        for row in rows:
-            # Google OAuthのemail claimは小文字で返るため、大文字小文字の違いで
-            # 同一人物が別ユーザーとして再作成されないよう小文字に正規化する。
-            email = row["email"].strip().lower()
-
-            if _is_deactivated_in_slack(row):
-                skipped += 1
-                print(f"skip(Deactivated): {email}")
-                continue
-
-            profile = parse_fullname(row["fullname"], email)
-            if profile is None:
-                skipped += 1
-                print(f"skip(fullnameをパースできません): {email} {row['fullname']!r}")
-                continue
-
-            active_emails.add(email)
-            _, was_created = await _get_or_create_user(
-                session,
-                email=email,
-                slack_user_id=row["userid"].strip() or None,
-                profile=profile,
-            )
-            if was_created:
-                created += 1
-            else:
-                updated += 1
-
-        deactivated = await _deactivate_missing_users(
-            session, active_emails=active_emails
-        )
+        summary = await import_rows(session, rows)
         await session.commit()
 
+    for skipped in summary.skipped:
+        print(f"skip: {skipped.email} ({skipped.reason})")
     print(
-        f"users: +{created} created, {updated} updated, {skipped} skipped, "
-        f"{deactivated} deactivated"
+        f"users: +{summary.created} created, {summary.updated} updated, "
+        f"{len(summary.skipped)} skipped, {summary.deactivated} deactivated"
     )
 
 

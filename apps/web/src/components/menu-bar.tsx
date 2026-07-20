@@ -1,9 +1,11 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import logo from "@/app/logo.png";
 
 const baseNavItems = [
   { label: "マイページ", href: "/" },
@@ -13,6 +15,7 @@ const baseNavItems = [
 
 const teacherNavItems = [
   { label: "応募者一覧", href: "/teacher/applicants" },
+  { label: "未提出者一覧", href: "/unsubmitted" },
   { label: "ゼミ設定", href: "/teacher/seminar" },
 ] as const;
 
@@ -51,12 +54,16 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
 
   return (
     <header className="relative z-40 border-b border-[#e6e6e6] bg-white">
-      <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-2 px-4 sm:px-6">
-        <Link
-          href="/"
-          className="text-lg font-semibold tracking-tight text-zinc-900"
-        >
-          Zemi-Match
+      <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6">
+        <Link href="/" className="flex items-center">
+          <Image
+            src={logo}
+            alt="ホーム"
+            width={882}
+            height={369}
+            priority
+            className="h-8 w-auto"
+          />
         </Link>
 
         <nav className="ml-auto hidden items-center gap-1 sm:flex">
@@ -79,7 +86,7 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
           href="/chat"
           aria-label="AIゼミ相談"
           title="AIゼミ相談"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 hover:bg-[#e6e6e6]/60 hover:text-zinc-900"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

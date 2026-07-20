@@ -23,6 +23,7 @@ from api.routers import (
     seminars,
     teacher,
     users,
+    users_import,
 )
 from api.services import JST, send_deadline_reminders
 from api.slack_client import get_slack_client
@@ -100,6 +101,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# match.router の GET /seminars/matches(静的パス)を、seminars.router の
+# GET /seminars/{seminar_id} に横取りされないよう、match を先に登録する(#118)。
+app.include_router(match.router)
 app.include_router(seminars.router)
 app.include_router(questions.router)
 app.include_router(answers.router)
@@ -108,9 +112,9 @@ app.include_router(users.router)
 app.include_router(applications.router)
 app.include_router(recruitment.router)
 app.include_router(teacher.router)
-app.include_router(match.router)
 app.include_router(admin.router)
 app.include_router(assignments.router)
+app.include_router(users_import.router)
 app.include_router(research_tags.router)
 app.include_router(consult.router)
 

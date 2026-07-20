@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { isSafeHttpUrl } from "@/lib/safe-url";
 
 export type TeacherSeminarMaterial = {
   id: string;
@@ -16,6 +17,9 @@ export type TeacherSeminar = {
   description: string | null;
   photo_url: string | null;
   materials: TeacherSeminarMaterial[];
+  // 現在の募集ラウンドの定員(#184)。ラウンドが無い、またはまだ設定して
+  // いなければnull。
+  capacity: number | null;
 };
 
 const MATERIAL_TYPE_LABEL: Record<TeacherSeminarMaterial["type"], string> = {
@@ -58,6 +62,17 @@ export function TeacherSeminarView({
   const [addingMaterialId, setAddingMaterialId] = useState<string | null>(null);
   const [deletingMaterialKey, setDeletingMaterialKey] = useState<string | null>(
     null,
+  );
+
+  const [capacityInputs, setCapacityInputs] = useState<Record<string, string>>(
+    {},
+  );
+  const [savingCapacityId, setSavingCapacityId] = useState<string | null>(null);
+  // 定員保存のエラーは共有のerrorMessageとは別に持つ。同じカード上で
+  // 紹介文編集と定員編集を独立に行き来できるため、共有stateだと片方の
+  // 成功が他方の直前のエラー表示を消してしまう(#184)。
+  const [capacityErrors, setCapacityErrors] = useState<Record<string, string>>(
+    {},
   );
 
   function startEdit(seminar: TeacherSeminar): void {
@@ -172,6 +187,62 @@ export function TeacherSeminarView({
     }
   }
 
+  function setCapacityError(seminarId: string, message: string | null): void {
+    setCapacityErrors((prev) => {
+      const next = { ...prev };
+      if (message === null) {
+        delete next[seminarId];
+      } else {
+        next[seminarId] = message;
+      }
+      return next;
+    });
+  }
+
+  async function handleSaveCapacity(seminarId: string): Promise<void> {
+    const raw = capacityInputs[seminarId] ?? "";
+    const capacity = Number(raw);
+    setCapacityError(seminarId, null);
+    if (raw.trim() === "" || !Number.isInteger(capacity) || capacity < 0) {
+      setCapacityError(seminarId, "定員は0以上の整数で入力してください。");
+      return;
+    }
+    setSavingCapacityId(seminarId);
+    try {
+      const res = await apiFetch(
+        `/teacher/seminars/${seminarId}/recruitment`,
+        session,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ capacity }),
+        },
+      );
+      if (!res.ok) {
+        setCapacityError(seminarId, await extractErrorDetail(res));
+        return;
+      }
+      const updated = (await res.json()) as { capacity: number | null };
+      setSeminars((prev) =>
+        prev.map((s) =>
+          s.id === seminarId ? { ...s, capacity: updated.capacity } : s,
+        ),
+      );
+      setCapacityInputs((prev) => {
+        const next = { ...prev };
+        delete next[seminarId];
+        return next;
+      });
+    } catch {
+      setCapacityError(
+        seminarId,
+        "通信に失敗しました。時間をおいて再度お試しください。",
+      );
+    } finally {
+      setSavingCapacityId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {errorMessage && (
@@ -257,6 +328,48 @@ export function TeacherSeminarView({
               )}
 
               <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
+                <p className="text-sm font-semibold text-zinc-700">
+                  定員(今回の募集ラウンド)
+                </p>
+                {seminar.capacity === null && (
+                  <p className="mt-1 text-sm text-zinc-500">
+                    未設定です。募集期間外の場合は変更できません。
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={capacityInputs[seminar.id] ?? seminar.capacity ?? ""}
+                    onChange={(e) =>
+                      setCapacityInputs((prev) => ({
+                        ...prev,
+                        [seminar.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="人数"
+                    className="w-28 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveCapacity(seminar.id)}
+                    disabled={savingCapacityId === seminar.id}
+                    className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingCapacityId === seminar.id
+                      ? "保存中..."
+                      : "定員を保存する"}
+                  </button>
+                </div>
+                {capacityErrors[seminar.id] && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {capacityErrors[seminar.id]}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
                 <p className="text-sm font-semibold text-zinc-700">紹介資料</p>
                 {seminar.materials.length === 0 ? (
                   <p className="mt-1 text-sm text-zinc-500">
@@ -274,14 +387,20 @@ export function TeacherSeminarView({
                           <span className="shrink-0 text-xs text-zinc-400">
                             {MATERIAL_TYPE_LABEL[material.type]}
                           </span>
-                          <a
-                            href={material.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="truncate underline hover:opacity-70"
-                          >
-                            {material.url}
-                          </a>
+                          {isSafeHttpUrl(material.url) ? (
+                            <a
+                              href={material.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate underline hover:opacity-70"
+                            >
+                              {material.url}
+                            </a>
+                          ) : (
+                            <span className="truncate text-zinc-400">
+                              {material.url}(無効なURL)
+                            </span>
+                          )}
                           <button
                             type="button"
                             onClick={() =>

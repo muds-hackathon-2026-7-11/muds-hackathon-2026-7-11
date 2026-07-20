@@ -72,6 +72,27 @@ def normalize_grade(raw: str | None) -> str | None:
     return None
 
 
+async def term_targets_grade(
+    db: AsyncSession, *, term_id: uuid.UUID, student_grade: str | None
+) -> bool:
+    """指定の募集期間に、この学年を対象とするゼミが1件でもあるか判定する(#99)。
+
+    どのゼミの対象学年にも入っていない学生は、この募集ラウンドの対象外として
+    扱う(マイページで「未提出」ではなく「準備中」を表示し、志望提出自体も
+    できないようにする側で使う)。
+    """
+    if student_grade is None:
+        return False
+    result = await db.execute(
+        select(SeminarRecruitment.target_grades).where(
+            SeminarRecruitment.term_id == term_id
+        )
+    )
+    return any(
+        student_grade in target_grades for target_grades in result.scalars().all()
+    )
+
+
 async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     """今アクティブな募集ラウンドを1件返す(なければNone)。
 
@@ -85,6 +106,15 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
 
     todayはJST基準で計算する(サーバーはUTCで動いているため、date.today()
     だと日付の境界(0時〜9時JST)で管理画面の表示や学生の提出可否とズレる)。
+
+    academic_yearが同じopen期間が複数該当する場合(本来運営側で避けるべき
+    データだが、実際に発生した)、created_atが最も新しいもの(=最後に
+    設定された募集ラウンド)を優先する。starts_atはdate型(日単位)かつ
+    運営が手入力する業務上の日付にすぎず、同日開始の複数ラウンドを
+    区別できないため使わない。created_atも同一トランザクション内でINSERT
+    されると同値になりうる(PostgresのNOW()はトランザクション開始時刻)ため、
+    最後にidで機械的なタイブレークを行う(業務的な意味は無いが、最低限
+    「同じリクエストのたびに違う結果を返す」ことだけは無くす)。
     """
     today = datetime.now(JST).date()
     result = await db.execute(
@@ -94,7 +124,11 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
             RecruitmentTerm.starts_at <= today,
             RecruitmentTerm.ends_at >= today,
         )
-        .order_by(RecruitmentTerm.academic_year.desc())
+        .order_by(
+            RecruitmentTerm.academic_year.desc(),
+            RecruitmentTerm.created_at.desc(),
+            RecruitmentTerm.id.desc(),
+        )
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -133,6 +167,31 @@ async def current_academic_year(db: AsyncSession) -> int | None:
     return result.scalar_one_or_none()
 
 
+async def student_has_current_seminar(
+    db: AsyncSession, *, student_id: uuid.UUID
+) -> bool:
+    """現在の年度に所属しているゼミが1件でもあるか(#188)。
+
+    routers/me.pyの_get_current_seminarと同じ「現在年度のSeminarMemberが
+    あるか」の判定だが、こちらは表示用にSeminarの中身までは要らないので
+    存在チェックだけの軽量版にしている。
+    """
+    academic_year = await current_academic_year(db)
+    if academic_year is None:
+        return False
+
+    result = await db.execute(
+        select(SeminarMember.id)
+        .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
+        .where(
+            SeminarMember.student_id == student_id,
+            RecruitmentTerm.academic_year == academic_year,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def find_answer_candidates(
     db: AsyncSession, *, seminar_id: uuid.UUID, exclude_user_id: uuid.UUID
 ) -> list[User]:
@@ -155,6 +214,7 @@ async def find_answer_candidates(
             RecruitmentTerm.academic_year == academic_year,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
+            User.is_active.is_(True),
         )
     )
     teachers_result = await db.execute(
@@ -164,6 +224,7 @@ async def find_answer_candidates(
             SeminarTeacher.seminar_id == seminar_id,
             User.slack_user_id.is_not(None),
             User.id != exclude_user_id,
+            User.is_active.is_(True),
         )
     )
 

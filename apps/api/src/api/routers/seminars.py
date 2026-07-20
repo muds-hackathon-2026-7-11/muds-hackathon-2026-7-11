@@ -121,15 +121,15 @@ async def list_seminars(
 
     学生には、現在の募集ラウンドで自分の学年が対象学年に含まれない
     ゼミ(#99の学年別募集)を一覧から除外する(志望提出フォームで
-    そもそも選べないようにするため #103)。教員・admin等、学生以外には
-    絞り込みをかけない。
+    そもそも選べないようにするため #103)。role=adminであっても実際には
+    在学中の学生であるユーザーがいるため、applications.pyの各エンドポイント
+    と同じ方針でstudentに加えてadminも絞り込みの対象にする(教員は対象外)。
     """
+    is_student_like = user.role in (UserRole.student, UserRole.admin)
     return await _list_seminars_for_grade(
         db,
-        student_grade=normalize_grade(user.grade)
-        if user.role == UserRole.student
-        else None,
-        apply_grade_filter=user.role == UserRole.student,
+        student_grade=normalize_grade(user.grade) if is_student_like else None,
+        apply_grade_filter=is_student_like,
     )
 
 
@@ -319,7 +319,9 @@ async def seminar_stats(
 
 @router.get("/{seminar_id}", response_model=SeminarDetailOut)
 async def get_seminar(
-    seminar_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    seminar_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> SeminarDetailOut:
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
@@ -339,7 +341,10 @@ async def get_seminar(
     teachers_result = await db.execute(
         select(User)
         .join(SeminarTeacher, SeminarTeacher.teacher_id == User.id)
-        .where(SeminarTeacher.seminar_id == seminar_id)
+        .where(
+            SeminarTeacher.seminar_id == seminar_id,
+            User.is_active.is_(True),
+        )
         .order_by(User.name)
     )
     teacher_users = list(teachers_result.scalars().all())
@@ -375,6 +380,7 @@ async def get_seminar(
             .where(
                 SeminarMember.seminar_id == seminar_id,
                 RecruitmentTerm.academic_year == academic_year,
+                User.is_active.is_(True),
             )
             # 学年順(B1→B4)に並べ、同学年内は名前順。gradeは"B1".."B4"の
             # 文字列なので昇順で学年の昇順になる。gradeがNULLの学生は末尾。

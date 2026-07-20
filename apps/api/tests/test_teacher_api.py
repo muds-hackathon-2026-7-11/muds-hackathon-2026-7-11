@@ -386,6 +386,124 @@ async def test_all_applicants_csv_requires_teacher_role(client, db_session) -> N
     assert resp.status_code == 403
 
 
+# --- 未提出者一覧 (#182) ---
+
+
+async def _make_recruitment(
+    db_session,
+    *,
+    term: RecruitmentTerm,
+    seminar: Seminar,
+    target_grades: list[str],
+) -> SeminarRecruitment:
+    recruitment = SeminarRecruitment(
+        term_id=term.id,
+        seminar_id=seminar.id,
+        capacity=10,
+        target_grades=target_grades,
+    )
+    db_session.add(recruitment)
+    await db_session.flush()
+    return recruitment
+
+
+async def test_unsubmitted_applicants_lists_targeted_students_without_submission(
+    client, db_session
+) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B3", "B4"]
+    )
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _link_teacher(db_session, seminar, teacher)
+
+    # 表記揺れ(#99)のある学生も、末尾一致でB3の対象として拾えるかを確認する。
+    not_submitted = await _make_user(db_session, UserRole.student, grade="MIDS/B3")
+    submitted = await _make_user(db_session, UserRole.student, grade="B3")
+    draft_only = await _make_user(db_session, UserRole.student, grade="B4")
+    out_of_target_grade = await _make_user(db_session, UserRole.student, grade="B1")
+    inactive = await _make_user(
+        db_session, UserRole.student, grade="B3", is_active=False
+    )
+
+    await _apply(
+        db_session,
+        term=term,
+        student=submitted,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1, "志望します")],
+    )
+    await _apply(
+        db_session,
+        term=term,
+        student=draft_only,
+        status=ApplicationStatus.draft,
+        choices=[(seminar, 1, "下書き")],
+    )
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    names = [a["name"] for a in body]
+    assert not_submitted.name in names
+    assert draft_only.name in names
+    assert submitted.name not in names
+    assert out_of_target_grade.name not in names
+    assert inactive.name not in names
+
+    not_submitted_entry = next(a for a in body if a["name"] == not_submitted.name)
+    assert not_submitted_entry["grade"] == "MIDS/B3"
+    assert not_submitted_entry["normalized_grade"] == "B3"
+
+
+async def test_unsubmitted_applicants_returns_empty_when_term_has_no_recruitments(
+    client, db_session
+) -> None:
+    # 募集ラウンドはopenでも、対象ゼミ(SeminarRecruitment)が1件も無ければ
+    # 対象学年が定義できない。実DBで同じacademic_yearのopenラウンドが複数
+    # 存在し、そのうち定員設定が空のものをget_current_termが拾ってしまう
+    # ケースを想定した回帰テスト(#182)。「全学生が未提出」ではなく空配列を
+    # 返すべき。
+    await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    await _make_user(db_session, UserRole.student, grade="B1")
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+async def test_unsubmitted_applicants_allows_admin(client, db_session) -> None:
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+    admin = await _make_user(db_session, UserRole.admin)
+    student = await _make_user(db_session, UserRole.student, grade="B1")
+
+    _authenticate_as(admin)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    # 実DB(共有の開発用DB)には他のB1学生も存在しうるため、対象学生が
+    # 含まれていることだけを確認する(完全一致は実データに左右され壊れやすい)。
+    assert student.name in [a["name"] for a in resp.json()]
+
+
+async def test_unsubmitted_applicants_requires_teacher_or_admin_role(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.student))
+    resp = await client.get("/teacher/unsubmitted-applicants")
+    assert resp.status_code == 403
+
+
 # --- 自ゼミの紹介内容編集 ---
 
 
@@ -416,6 +534,53 @@ async def test_list_own_seminars_includes_materials_and_excludes_others(
     assert [s["id"] for s in body] == [str(my_seminar.id)]
     assert body[0]["description"] == "紹介文"
     assert [m["url"] for m in body[0]["materials"]] == ["https://example.com/slide.pdf"]
+
+
+async def test_list_own_seminars_excludes_inactive_co_teachers(
+    client, db_session
+) -> None:
+    # 退職教員(is_active=false)は担当付け外し自体は残る運用のため、
+    # 共同担当の一覧に「現役」として表示され続けないようにする(#171)。
+    teacher = await _make_user(db_session, UserRole.teacher)
+    retired_teacher = await _make_user(db_session, UserRole.teacher, is_active=False)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+    await _link_teacher(db_session, seminar, retired_teacher)
+    await db_session.flush()
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/seminars")
+
+    assert resp.status_code == 200
+    teacher_ids = {t["id"] for t in resp.json()[0]["teachers"]}
+    assert str(teacher.id) in teacher_ids
+    assert str(retired_teacher.id) not in teacher_ids
+
+
+async def test_list_own_seminars_reflects_current_round_capacity(
+    client, db_session
+) -> None:
+    # 定員(#184)は募集ラウンドごとのSeminarRecruitmentに紐づくため、
+    # まだ設定していなければnull、PATCH .../recruitmentで設定した後は
+    # その値がGET /teacher/seminarsにも反映されることを確認する。
+    await _make_open_term(db_session)
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    before = await client.get("/teacher/seminars")
+    assert before.status_code == 200
+    assert before.json()[0]["capacity"] is None
+
+    patch_resp = await client.patch(
+        f"/teacher/seminars/{seminar.id}/recruitment",
+        json={"capacity": 15},
+    )
+    assert patch_resp.status_code == 200
+
+    after = await client.get("/teacher/seminars")
+    assert after.json()[0]["capacity"] == 15
 
 
 async def test_update_own_seminar(client, db_session) -> None:
@@ -490,6 +655,24 @@ async def test_create_own_seminar_material(client, db_session) -> None:
         select(SeminarMaterial).where(SeminarMaterial.seminar_id == seminar.id)
     )
     assert result.scalar_one().url == "https://example.com/slide.pdf"
+
+
+async def test_create_own_seminar_material_rejects_non_http_scheme(
+    client, db_session
+) -> None:
+    # javascript: 等はそのままリンクにするとクリックで実行されてしまうため
+    # 拒否する(#172)。
+    teacher = await _make_user(db_session, UserRole.teacher)
+    seminar = await _make_seminar(db_session)
+    await _link_teacher(db_session, seminar, teacher)
+
+    _authenticate_as(teacher)
+    resp = await client.post(
+        f"/teacher/seminars/{seminar.id}/materials",
+        json={"url": "javascript:alert(1)", "type": "pdf"},
+    )
+
+    assert resp.status_code == 422
 
 
 async def test_create_material_forbidden_for_other_teachers_seminar(

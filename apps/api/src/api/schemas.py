@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -287,6 +288,16 @@ class SeminarApplicantsOut(BaseModel):
     applicants: list[ApplicantOut]
 
 
+class UnsubmittedApplicantOut(BaseModel):
+    student_id: str | None
+    name: str
+    grade: str | None
+    # 表示用の生のgradeとは別に、学年フィルタ用のB1〜B4正規化済み値を返す。
+    # normalize_gradeの正規化ルールをフロントで再実装すると二重管理になり
+    # 食い違う(#182)ため、判定はAPI側の1箇所に寄せる。
+    normalized_grade: str | None
+
+
 class TeacherRecruitmentUpdate(BaseModel):
     capacity: int = Field(ge=0)
     # Noneなら据え置き(現状の対象学年を変更しない)。
@@ -319,6 +330,60 @@ class MatchOut(BaseModel):
     message: str | None = None
 
 
+# --- 一括マッチ度診断 (#118) ---
+
+
+class SeminarMatchOut(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    score: int  # ルーブリック観点の加重総合(0-100)
+    # 観点別スコア {"field","method","interest","style"}(各0-100)。
+    rubric: dict
+    summary: str
+    reasons: list[str]
+
+
+class SeminarMatchesOut(BaseModel):
+    # score 降順。算出不可の場合は空リスト + message。
+    results: list[SeminarMatchOut]
+    message: str | None = None
+
+
+# --- 志望理由ごとのマッチ度診断 (#119) ---
+
+
+class ReasonMatchIn(BaseModel):
+    seminar_id: uuid.UUID
+    reason: str = Field(max_length=400)
+
+
+class ReasonMatchesIn(BaseModel):
+    choices: list[ReasonMatchIn] = Field(max_length=3)
+
+
+class ReasonMatchRecommendation(BaseModel):
+    seminar_id: uuid.UUID
+    seminar_name: str
+    score: int  # 0-100
+
+
+class ReasonMatchResult(BaseModel):
+    seminar_id: uuid.UUID  # 志望に選んだゼミ
+    seminar_name: str
+    # 選んだゼミ自身のマッチ度(採点対象外=紹介文/資料が無い等ならnull)。
+    selected_score: int | None
+    rubric: dict
+    summary: str
+    # この志望理由に相性の良い他ゼミTop3(第1〜3志望のゼミは除外)。
+    recommendations: list[ReasonMatchRecommendation]
+
+
+class ReasonMatchesOut(BaseModel):
+    # choices と同じ並び。志望理由が空のスロットは含まない。
+    results: list[ReasonMatchResult]
+    message: str | None = None
+
+
 # --- 運営: 教員・ゼミ管理 (#62) ---
 # 新規の一括投入はCSV(#40/#45)が担うため、ここは個別の編集・担当の付け外しが中心。
 
@@ -348,6 +413,17 @@ class SeminarMaterialCreate(BaseModel):
     url: str = Field(min_length=1)
     type: MaterialType
 
+    @field_validator("url")
+    @classmethod
+    def _require_http_scheme(cls, value: str) -> str:
+        # javascript: 等のスキームだと、フロント側でこのURLをそのまま
+        # <a href> に使った際にクリックで実行されてしまう(#172)。
+        # 資料リンクはhttp(s)のみを許可する。
+        scheme = urlsplit(value).scheme.lower()
+        if scheme not in ("http", "https"):
+            raise ValueError("資料URLはhttp(s)から始まるURLを入力してください。")
+        return value
+
 
 class AdminSeminarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -358,6 +434,21 @@ class AdminSeminarOut(BaseModel):
     photo_url: str | None
     teachers: list[AdminSeminarTeacherOut]
     materials: list[SeminarMaterialOut]
+
+
+class TeacherSeminarOut(BaseModel):
+    """教員向けの自ゼミ情報(#149/#184)。AdminSeminarOutと似ているが、
+    現ラウンドの定員(capacity)を持つ点が異なる(ゼミの恒常的なプロフィール
+    ではなく、募集ラウンドごとの設定なため)。現ラウンドが無い、または
+    まだ定員未設定ならNone。"""
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    photo_url: str | None
+    teachers: list[AdminSeminarTeacherOut]
+    materials: list[SeminarMaterialOut]
+    capacity: int | None
 
 
 class AdminTeacherCreate(BaseModel):
@@ -461,6 +552,23 @@ class AssignmentImportResult(BaseModel):
     created: int  # 新規に作成した配属レコード数
     existing: int  # 既に存在していた(スキップした)数
     errors: list[AssignmentImportError]
+
+
+# --- 学生・教員名簿CSVインポート (#163) ---
+
+
+class UserImportSkip(BaseModel):
+    # CSVの行番号(ヘッダを除いた1始まり)・メールアドレス・スキップ理由。
+    row: int
+    email: str
+    reason: str
+
+
+class UserImportResult(BaseModel):
+    created: int  # 新規に作成したユーザー数
+    updated: int  # 既存ユーザーで更新した数(学年変更等)
+    deactivated: int  # CSVに存在しなくなり非アクティブ化した学生数
+    skipped: list[UserImportSkip]
 
 
 # --- AIゼミ相談アシスタント (requirements §2 / chat_logs) ---

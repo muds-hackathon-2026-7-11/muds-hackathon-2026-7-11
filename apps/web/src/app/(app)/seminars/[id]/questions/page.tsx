@@ -62,7 +62,9 @@ export default async function SeminarQuestionsPage({
           ← ゼミ詳細に戻る
         </Link>
 
-        <h1 className="text-2xl font-bold text-zinc-800">FAQ</h1>
+        <h1 className="border-l-4 border-[#add8e6] pl-3 text-2xl font-bold text-zinc-800">
+          FAQ
+        </h1>
 
         {result.status === "error" ? (
           <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">

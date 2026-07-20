@@ -205,19 +205,29 @@ async def test_teacher_sees_all_seminars_regardless_of_target_grades(
     assert seminar.name in _names(resp)
 
 
-async def test_admin_sees_all_seminars_regardless_of_target_grades(
+async def test_admin_who_is_a_student_is_filtered_like_a_student(
     client, db_session
 ) -> None:
+    # role=adminであっても実際には在学中の学生であるユーザーがいるため、
+    # studentと同じく学年別募集の対象外ゼミは一覧から除外する。
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar, target_grades=[])
-    admin = await _make_user(db_session, role=UserRole.admin)
+    targeted = await _make_seminar(db_session)
+    not_targeted = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=targeted, target_grades=["B3"]
+    )
+    await _make_recruitment(
+        db_session, term=term, seminar=not_targeted, target_grades=["B4"]
+    )
+    admin = await _make_user(db_session, role=UserRole.admin, grade="B3")
 
     _authenticate_as(admin)
     resp = await client.get("/seminars")
 
     assert resp.status_code == 200
-    assert seminar.name in _names(resp)
+    names = _names(resp)
+    assert targeted.name in names
+    assert not_targeted.name not in names
 
 
 async def test_no_filtering_when_there_is_no_active_term(client, db_session) -> None:

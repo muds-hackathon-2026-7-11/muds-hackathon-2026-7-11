@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ProfileCard, type ResearchTag } from "@/components/profile-card";
 import { serverApiFetch } from "@/lib/api-server";
+import { getSessionRole } from "@/lib/session-role";
 import type { Session } from "next-auth";
 
 type CurrentSeminar = {
@@ -56,7 +57,8 @@ async function getMyApplication(
 }
 
 // #137: マイページの「Application Status」カードの文言・ボタンを、
-// 実際の志望提出状況(募集期間外/未提出/下書き/提出済み)に応じて出し分ける。
+// 今回の募集期間の提出状況(準備中/未提出/提出済み)だけに応じて出し分ける。
+// 過去の募集期間の提出状況は今回とは無関係なので表示しない。
 function applicationStatusView(application: MyApplication | null): {
   label: string;
   buttonLabel: string | null;
@@ -65,23 +67,13 @@ function applicationStatusView(application: MyApplication | null): {
     return { label: "取得できませんでした", buttonLabel: null };
   }
   if (!application.is_editable) {
-    if (application.id === null) {
-      // 現在募集中の期間が無く、過去の提出も無い(preparing/closed/未設定)。
-      return { label: "準備中", buttonLabel: null };
-    }
-    return {
-      label:
-        application.status === "submitted" ? "提出済み(前回)" : "下書き(前回)",
-      buttonLabel: "内容を確認",
-    };
+    // 今回募集中の期間が無い(準備中/締切後)。過去の提出有無は問わない。
+    return { label: "準備中", buttonLabel: null };
   }
-  if (application.id === null) {
-    return { label: "未提出", buttonLabel: "志望を提出" };
+  if (application.status === "submitted") {
+    return { label: "提出済み", buttonLabel: "内容を編集" };
   }
-  return {
-    label: application.status === "submitted" ? "提出済み" : "下書き保存中",
-    buttonLabel: "内容を編集",
-  };
+  return { label: "未提出", buttonLabel: "志望を提出" };
 }
 
 async function getResearchTags(
@@ -105,6 +97,15 @@ export default async function Home() {
   if (!session) {
     redirect("/login");
   }
+  // マイページは学生向け(プロフィール・所属ゼミ・志望提出状況)の内容しか無く、
+  // /applications/me もteacherには403を返す。ログイン直後は常にここへ
+  // 着地する(login-button.tsxのsignIn()にcallbackUrl指定が無いため)が、
+  // teacherのナビ(menu-bar.tsxのteacherNavItems)には「マイページ」自体が
+  // 無く二度と辿り着けないので、教員だけログイン直後に自分のホームへ流す。
+  const role = await getSessionRole();
+  if (role === "teacher") {
+    redirect("/assignment");
+  }
   const [me, researchTags, myApplication] = await Promise.all([
     getMe(session),
     getResearchTags(session),
@@ -115,6 +116,9 @@ export default async function Home() {
   return (
     <main className="page-canvas relative flex flex-1 flex-col">
       <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        <h1 className="border-l-4 border-[#add8e6] pl-3 text-2xl font-bold text-zinc-800">
+          マイページ
+        </h1>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="sm:flex-1">
             {me ? (

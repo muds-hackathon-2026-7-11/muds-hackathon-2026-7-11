@@ -20,7 +20,7 @@ describe("MenuBar", () => {
   it("renders the logo and nav items with correct links", () => {
     render(<MenuBar isAdmin={false} isTeacher={false} />);
 
-    expect(screen.getByRole("link", { name: "Zemi-Match" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "ホーム" })).toHaveAttribute(
       "href",
       "/",
     );

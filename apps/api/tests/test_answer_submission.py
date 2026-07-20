@@ -4,6 +4,7 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 
+from api import auth
 from api.models import (
     AnswerRequest,
     RecruitmentTerm,
@@ -15,6 +16,13 @@ from api.models import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+_SECRET = "test-internal-secret"
+
+
+@pytest.fixture(autouse=True)
+def _set_internal_secret(monkeypatch):
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
 
 
 def _unique(prefix: str) -> str:
@@ -66,6 +74,7 @@ async def _post_question(
             "slack_user_id": slack_user_id,
             "content": content,
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     question_id: str = resp.json()["id"]
     return question_id
@@ -94,6 +103,7 @@ async def test_create_answer_success(client, db_session, fake_slack_client) -> N
             "slack_user_id": answerer_slack_id,
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 201
@@ -131,6 +141,7 @@ async def test_create_answer_notifies_asker(
             "slack_user_id": answerer_slack_id,
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 201
@@ -169,6 +180,7 @@ async def test_asker_gets_a_new_dm_for_each_answer_not_a_thread_reply(
             "slack_user_id": teacher1_slack_id,
             "content": "最初の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert first_resp.status_code == 201
     assert len(fake_slack_client.sent) == 1
@@ -181,6 +193,7 @@ async def test_asker_gets_a_new_dm_for_each_answer_not_a_thread_reply(
             "slack_user_id": teacher2_slack_id,
             "content": "2件目の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert second_resp.status_code == 201
     # 質問者へは毎回新規DMを送る(スレッド返信にはしない)
@@ -218,6 +231,7 @@ async def test_create_answer_uses_slack_display_name_in_notifications(
             "slack_user_id": answerer_slack_id,
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 201
@@ -257,6 +271,7 @@ async def test_create_answer_updates_other_pending_candidates(
             "slack_user_id": teacher1_slack_id,
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert resp.status_code == 201
 
@@ -300,6 +315,7 @@ async def test_create_answer_replies_in_thread_and_allows_additional_answers(
             "slack_user_id": teacher1_slack_id,
             "content": "最初の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert resp.status_code == 201
 
@@ -325,6 +341,7 @@ async def test_create_answer_replies_in_thread_and_allows_additional_answers(
             "slack_user_id": teacher2_slack_id,
             "content": "追加の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert other_answer_resp.status_code == 201
 
@@ -365,6 +382,7 @@ async def test_earlier_answerer_still_gets_notified_of_later_answers(
             "slack_user_id": teacher1_slack_id,
             "content": "1件目の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert first_resp.status_code == 201
 
@@ -383,6 +401,7 @@ async def test_earlier_answerer_still_gets_notified_of_later_answers(
             "slack_user_id": teacher2_slack_id,
             "content": "2件目の回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
     assert second_resp.status_code == 201
 
@@ -394,6 +413,28 @@ async def test_earlier_answerer_still_gets_notified_of_later_answers(
         if r.channel_id == teacher1_request.slack_dm_channel_id
     )
     assert "2件目の回答です" in reply_to_teacher1.text
+
+
+async def test_create_answer_rejects_missing_secret(client, db_session) -> None:
+    await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    question_id = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+
+    resp = await client.post(
+        "/answers",
+        json={
+            "question_id": question_id,
+            "slack_user_id": _unique("U-answerer"),
+            "content": "回答です",
+        },
+    )
+
+    assert resp.status_code == 403
 
 
 async def test_create_answer_unknown_slack_user_returns_404(client, db_session) -> None:
@@ -413,6 +454,7 @@ async def test_create_answer_unknown_slack_user_returns_404(client, db_session) 
             "slack_user_id": _unique("U-unknown"),
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 404
@@ -429,6 +471,7 @@ async def test_create_answer_unknown_question_returns_404(client, db_session) ->
             "slack_user_id": slack_user_id,
             "content": "回答です",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 404
@@ -452,6 +495,7 @@ async def test_create_answer_empty_content_is_rejected(client, db_session) -> No
             "slack_user_id": answerer_slack_id,
             "content": "",
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
     assert resp.status_code == 422

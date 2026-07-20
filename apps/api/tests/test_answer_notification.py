@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
+from api import auth
 from api.models import (
     AnswerRequest,
     RecruitmentTerm,
@@ -17,6 +18,13 @@ from api.models import (
 from api.slack_client import SentDM
 
 pytestmark = pytest.mark.asyncio
+
+_SECRET = "test-internal-secret"
+
+
+@pytest.fixture(autouse=True)
+def _set_internal_secret(monkeypatch):
+    monkeypatch.setattr(auth.settings, "internal_api_secret", _SECRET)
 
 
 def _unique(prefix: str) -> str:
@@ -44,7 +52,11 @@ async def _make_open_term(db_session) -> RecruitmentTerm:
 
 
 async def _make_user(
-    db_session, role: UserRole = UserRole.student, slack_user_id: str | None = None
+    db_session,
+    role: UserRole = UserRole.student,
+    slack_user_id: str | None = None,
+    *,
+    is_active: bool = True,
 ) -> User:
     user = User(
         google_id=_unique("google"),
@@ -52,6 +64,7 @@ async def _make_user(
         name=_unique("name"),
         role=role,
         slack_user_id=slack_user_id,
+        is_active=is_active,
     )
     db_session.add(user)
     await db_session.flush()
@@ -66,6 +79,7 @@ async def _post_question(client, *, seminar_id, slack_user_id: str, content: str
             "slack_user_id": slack_user_id,
             "content": content,
         },
+        headers={"X-Internal-Secret": _SECRET},
     )
 
 
@@ -105,6 +119,43 @@ async def test_notifies_current_members_and_teachers(
     requests = requests_result.scalars().all()
     assert {r.user_id for r in requests} == {member.id, teacher.id}
     assert all(r.status == "pending" for r in requests)
+
+
+async def test_does_not_notify_inactive_members_or_teachers(
+    client, db_session, fake_slack_client
+) -> None:
+    # 卒業/退職(is_active=false)後は、在籍データ(SeminarMember/SeminarTeacher)
+    # 自体は残っていても通知は届かないようにする(#171)。
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+
+    asker_slack_id = _unique("U-asker")
+    await _make_user(db_session, UserRole.student, asker_slack_id)
+
+    inactive_member = await _make_user(
+        db_session, UserRole.student, _unique("U-member"), is_active=False
+    )
+    db_session.add(
+        SeminarMember(
+            seminar_id=seminar.id,
+            student_id=inactive_member.id,
+            term_id=term.id,
+        )
+    )
+    inactive_teacher = await _make_user(
+        db_session, UserRole.teacher, _unique("U-teacher"), is_active=False
+    )
+    db_session.add(
+        SeminarTeacher(seminar_id=seminar.id, teacher_id=inactive_teacher.id)
+    )
+    await db_session.flush()
+
+    resp = await _post_question(
+        client, seminar_id=seminar.id, slack_user_id=asker_slack_id, content="質問です"
+    )
+
+    assert resp.status_code == 201
+    assert fake_slack_client.sent == []
 
 
 async def test_does_not_notify_users_without_slack_link(

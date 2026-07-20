@@ -34,7 +34,7 @@ export default async function TeacherSeminarPage() {
         <div>
           <h1 className="text-xl font-semibold text-zinc-900">ゼミ設定</h1>
           <p className="mt-2 text-sm text-zinc-500">
-            担当ゼミの紹介文・写真・紹介資料を編集できます。
+            担当ゼミの紹介文・写真・紹介資料・定員を編集できます。
           </p>
         </div>
 

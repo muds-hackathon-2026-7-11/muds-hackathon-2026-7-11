@@ -31,6 +31,18 @@ export default function AdminIndexPage() {
           >
             配属結果インポート
           </Link>
+          <Link
+            href="/admin/users"
+            className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 text-sm font-medium text-zinc-900 shadow-sm shadow-[#add8e6]/30 transition-colors hover:bg-[#add8e6]/10"
+          >
+            学生名簿インポート
+          </Link>
+          <Link
+            href="/unsubmitted"
+            className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 text-sm font-medium text-zinc-900 shadow-sm shadow-[#add8e6]/30 transition-colors hover:bg-[#add8e6]/10"
+          >
+            未提出者一覧
+          </Link>
         </div>
       </div>
     </main>

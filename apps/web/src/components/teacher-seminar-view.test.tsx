@@ -26,6 +26,7 @@ function makeSeminar(overrides: Partial<TeacherSeminar> = {}): TeacherSeminar {
     materials: [
       { id: "material-1", url: "https://example.com/slide.pdf", type: "pdf" },
     ],
+    capacity: 10,
     ...overrides,
   };
 }
@@ -181,6 +182,113 @@ describe("TeacherSeminarView", () => {
 
     expect(
       await screen.findByText("担当していないゼミは操作できません。"),
+    ).toBeInTheDocument();
+  });
+
+  it("saves the capacity", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ capacity: 20 }), { status: 200 }),
+      );
+
+    render(<TeacherSeminarView initialSeminars={[makeSeminar()]} />);
+
+    const capacityInput = screen.getByPlaceholderText("人数");
+    await user.clear(capacityInput);
+    await user.type(capacityInput, "20");
+    await user.click(screen.getByRole("button", { name: "定員を保存する" }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/teacher/seminars/seminar-1/recruitment"),
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ capacity: 20 }),
+      }),
+    );
+    await screen.findByRole("button", { name: "定員を保存する" });
+    expect(capacityInput).toHaveValue(20);
+  });
+
+  it("rejects a non-numeric capacity without calling the API", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<TeacherSeminarView initialSeminars={[makeSeminar()]} />);
+
+    const capacityInput = screen.getByPlaceholderText("人数");
+    await user.clear(capacityInput);
+    await user.click(screen.getByRole("button", { name: "定員を保存する" }));
+
+    expect(
+      await screen.findByText("定員は0以上の整数で入力してください。"),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["1.5", "小数"],
+    ["-1", "負の数"],
+  ])("rejects a %s capacity (%s) without calling the API", async (value) => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<TeacherSeminarView initialSeminars={[makeSeminar()]} />);
+
+    const capacityInput = screen.getByPlaceholderText("人数");
+    await user.clear(capacityInput);
+    await user.type(capacityInput, value);
+    await user.click(screen.getByRole("button", { name: "定員を保存する" }));
+
+    expect(
+      await screen.findByText("定員は0以上の整数で入力してください。"),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps a capacity error visible after an unrelated description save succeeds", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(makeSeminar()), { status: 200 }),
+    );
+
+    render(<TeacherSeminarView initialSeminars={[makeSeminar()]} />);
+
+    const capacityInput = screen.getByPlaceholderText("人数");
+    await user.clear(capacityInput);
+    await user.click(screen.getByRole("button", { name: "定員を保存する" }));
+    expect(
+      await screen.findByText("定員は0以上の整数で入力してください。"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    // 紹介文の保存(別フローの成功)が定員側のエラー表示を消してしまわない。
+    expect(
+      screen.getByText("定員は0以上の整数で入力してください。"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an error when there is no active recruitment round", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: "現在募集中の期間がありません。" }),
+        { status: 400 },
+      ),
+    );
+
+    render(<TeacherSeminarView initialSeminars={[makeSeminar()]} />);
+
+    const capacityInput = screen.getByPlaceholderText("人数");
+    await user.clear(capacityInput);
+    await user.type(capacityInput, "5");
+    await user.click(screen.getByRole("button", { name: "定員を保存する" }));
+
+    expect(
+      await screen.findByText("現在募集中の期間がありません。"),
     ).toBeInTheDocument();
   });
 });

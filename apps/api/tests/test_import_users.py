@@ -5,6 +5,7 @@ from api.import_users import (
     _deactivate_missing_users,
     _get_or_create_user,
     _is_deactivated_in_slack,
+    import_rows,
     parse_fullname,
 )
 from api.models import User, UserRole
@@ -144,6 +145,173 @@ async def test_get_or_create_user_creates_then_updates(db_session) -> None:
         select(User).where(User.email == "s0000000-test@stu.musashino-u.ac.jp")
     )
     assert len(result.scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_user_preserves_admin_role_on_update(db_session) -> None:
+    # adminは運営が個別に付与する権限で、Slackエクスポートの学年ブラケットは
+    # student/teacherしか表現できない。CSV再取り込みで既存adminの権限を
+    # 勝手に落としてはいけない(実際に発生した事故)。
+    admin = User(
+        google_id="google-admin-test",
+        email="s0000009-test@stu.musashino-u.ac.jp",
+        name="運営 admin太郎",
+        role=UserRole.admin,
+        grade="B3",
+    )
+    db_session.add(admin)
+    await db_session.flush()
+
+    profile = parse_fullname(
+        "[B4] 運営 admin太郎 / Admin Taro", "s0000009-test@stu.musashino-u.ac.jp"
+    )
+    assert profile is not None
+
+    updated, created = await _get_or_create_user(
+        db_session,
+        email="s0000009-test@stu.musashino-u.ac.jp",
+        slack_user_id="U0000009TEST",
+        profile=profile,
+    )
+
+    assert created is False
+    assert updated.role == UserRole.admin
+    # role以外(進級等)は通常通り反映される。
+    assert updated.grade == "B4"
+
+
+def _row(
+    *, email: str, fullname: str, status: str = "Member", userid: str | None = None
+) -> dict[str, str]:
+    return {
+        "username": email.split("@")[0],
+        "email": email,
+        "status": status,
+        "billing-active": "1",
+        "has-2fa": "0",
+        "has-sso": "0",
+        # slack_user_idはDBでUNIQUE制約があるため、行ごとに一意な値にする。
+        "userid": userid or f"U-{email.split('@')[0]}",
+        "fullname": fullname,
+        "displayname": fullname,
+        "expiration-timestamp": "",
+    }
+
+
+@pytest.mark.asyncio
+async def test_import_rows_creates_and_updates_users(db_session) -> None:
+    existing_profile = parse_fullname(
+        "[B1] 既存 花子 / Hanako Kison", "s0000005-test@stu.musashino-u.ac.jp"
+    )
+    assert existing_profile is not None
+    await _get_or_create_user(
+        db_session,
+        email="s0000005-test@stu.musashino-u.ac.jp",
+        slack_user_id="U0000005TEST",
+        profile=existing_profile,
+    )
+
+    rows = [
+        _row(
+            email="s0000005-test@stu.musashino-u.ac.jp",
+            fullname="[B2] 既存 花子 / Hanako Kison",
+        ),
+        _row(
+            email="s0000006-test@stu.musashino-u.ac.jp",
+            fullname="[B1] 新規 一郎 / Ichiro Shinki",
+        ),
+    ]
+
+    summary = await import_rows(db_session, rows)
+
+    assert summary.created == 1
+    assert summary.updated == 1
+
+    updated_user = (
+        await db_session.execute(
+            select(User).where(User.email == "s0000005-test@stu.musashino-u.ac.jp")
+        )
+    ).scalar_one()
+    assert updated_user.grade == "B2"
+
+    new_user = (
+        await db_session.execute(
+            select(User).where(User.email == "s0000006-test@stu.musashino-u.ac.jp")
+        )
+    ).scalar_one()
+    assert new_user.grade == "B1"
+
+
+@pytest.mark.asyncio
+async def test_import_rows_records_skip_reasons(db_session) -> None:
+    rows = [
+        _row(
+            email="deactivated-test@example.com",
+            fullname="[B1] 退出済み 太郎 / Taro Taishutsu",
+            status="Deactivated",
+        ),
+        _row(email="unparseable-test@example.com", fullname="山田 太郎"),
+    ]
+
+    summary = await import_rows(db_session, rows)
+
+    assert summary.created == 0
+    assert len(summary.skipped) == 2
+    reasons_by_email = {s.email: s.reason for s in summary.skipped}
+    assert "Deactivated" in reasons_by_email["deactivated-test@example.com"]
+    assert "パース" in reasons_by_email["unparseable-test@example.com"]
+
+
+@pytest.mark.asyncio
+async def test_import_rows_skips_teacher_rows(db_session) -> None:
+    # 教員は管理者画面の「教員・管理者管理」から追加する運用のため、
+    # CSVでは取り込まない(#163)。
+    email = "teacher-test@example.com"
+    rows = [
+        _row(email=email, fullname="[教員] 客員 教授 / Kyakuin Kyoju"),
+    ]
+
+    summary = await import_rows(db_session, rows)
+
+    assert summary.created == 0
+    assert summary.updated == 0
+    assert len(summary.skipped) == 1
+    assert summary.skipped[0].email == email
+    assert "教員" in summary.skipped[0].reason
+
+    result = await db_session.execute(select(User).where(User.email == email))
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_import_rows_deactivates_students_missing_from_csv(db_session) -> None:
+    profile = parse_fullname(
+        "[B4] 卒業予定 花子 / Hanako Sotsugyoyotei",
+        "s0000007-test@stu.musashino-u.ac.jp",
+    )
+    assert profile is not None
+    user, _ = await _get_or_create_user(
+        db_session,
+        email="s0000007-test@stu.musashino-u.ac.jp",
+        slack_user_id="U0000007TEST",
+        profile=profile,
+    )
+    assert user.is_active is True
+
+    # 今年のCSVにこの学生は含まれない(=卒業/退学した)。
+    rows = [
+        _row(
+            email="s0000008-test@stu.musashino-u.ac.jp",
+            fullname="[B1] 在学 次郎 / Jiro Zaigaku",
+        ),
+    ]
+
+    summary = await import_rows(db_session, rows)
+
+    # 共有DBの実データも含めて非アクティブ化されるため、この学生1人だけとは
+    # 限らない(1件以上であることのみ確認する)。
+    assert summary.deactivated >= 1
+    assert user.is_active is False
 
 
 async def _existing_active_emails(db_session, *, exclude: str) -> set[str]:

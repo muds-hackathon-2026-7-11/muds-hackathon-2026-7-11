@@ -6,6 +6,7 @@ import {
   type Seminar,
 } from "@/components/application-form";
 import { serverApiFetch } from "@/lib/api-server";
+import { getSessionRole } from "@/lib/session-role";
 import type { Session } from "next-auth";
 
 async function getSeminars(session: Session | null): Promise<Seminar[]> {
@@ -43,6 +44,14 @@ export default async function ApplyPage() {
   if (!session) {
     redirect("/login");
   }
+  // 志望提出はstudent(+実際には学生であることもあるadmin)専用。
+  // バックエンド(POST /applications/me等)もこの2ロールのみ許可しており、
+  // それ以外(教員等)は「取得できませんでした」という分かりづらい表示に
+  // なってしまうため、ここで先にリダイレクトする(#174)。
+  const role = await getSessionRole();
+  if (role !== "student" && role !== "admin") {
+    redirect("/");
+  }
 
   const [seminars, application] = await Promise.all([
     getSeminars(session),
@@ -52,6 +61,9 @@ export default async function ApplyPage() {
   return (
     <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
       <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
+        <h1 className="border-l-4 border-[#add8e6] pl-3 text-2xl font-bold text-zinc-800">
+          志望理由提出
+        </h1>
         {application ? (
           <ApplicationForm
             seminars={seminars}

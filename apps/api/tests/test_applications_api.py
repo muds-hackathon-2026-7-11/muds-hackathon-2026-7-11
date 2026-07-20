@@ -12,6 +12,7 @@ from api.models import (
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
+    SeminarMember,
     SeminarRecruitment,
     User,
     UserRole,
@@ -30,6 +31,7 @@ async def _make_student(
     is_active: bool = True,
     grade: str | None = "B1",
     slack_user_id: str | None = None,
+    research_theme: str | None = None,
 ) -> User:
     user = User(
         google_id=_unique("google"),
@@ -39,6 +41,7 @@ async def _make_student(
         is_active=is_active,
         grade=grade,
         slack_user_id=slack_user_id,
+        research_theme=research_theme,
     )
     db_session.add(user)
     await db_session.flush()
@@ -118,6 +121,15 @@ async def _make_recruitment(
     return recruitment
 
 
+async def _make_seminar_member(
+    db_session, *, term: RecruitmentTerm, seminar: Seminar, student: User
+) -> None:
+    db_session.add(
+        SeminarMember(seminar_id=seminar.id, student_id=student.id, term_id=term.id)
+    )
+    await db_session.flush()
+
+
 def _auth_headers(email: str) -> dict[str, str]:
     return {"X-Dev-User-Email": email, "X-Dev-User-Role": "student"}
 
@@ -150,7 +162,9 @@ async def test_get_returns_empty_editable_draft_when_no_form_yet(
     client, db_session
 ) -> None:
     student = await _make_student(db_session)
-    await _make_open_term(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
 
     resp = await client.get("/applications/me", headers=_auth_headers(student.email))
 
@@ -158,6 +172,26 @@ async def test_get_returns_empty_editable_draft_when_no_form_yet(
     body = resp.json()
     assert body["id"] is None
     assert body["is_editable"] is True
+
+
+async def test_get_is_not_editable_when_no_seminar_targets_students_grade(
+    client, db_session
+) -> None:
+    # このラウンドにゼミはあるが、どのゼミも自分の学年を対象にしていない
+    # (#99)。マイページでは「未提出」ではなく「準備中」を表示させたいので、
+    # is_editableはfalseになる。
+    student = await _make_student(db_session, grade="B1")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B2", "B3", "B4"]
+    )
+
+    resp = await client.get("/applications/me", headers=_auth_headers(student.email))
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_editable"] is False
 
 
 async def test_get_returns_existing_form_and_choices(client, db_session) -> None:
@@ -550,6 +584,31 @@ async def test_put_rejects_non_recruiting_seminar(client, db_session) -> None:
     assert resp.status_code == 400
 
 
+async def test_put_rejects_when_no_seminar_targets_students_grade_at_all(
+    client, db_session
+) -> None:
+    # ゼミ自体はあるが、どれも自分の学年を対象にしていないラウンド(#99)。
+    # 個別ゼミの募集有無ではなく、ラウンド自体が対象外という専用メッセージ
+    # になる。
+    student = await _make_student(db_session, grade="B1")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B2", "B3", "B4"]
+    )
+
+    resp = await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "対象としていません" in resp.json()["detail"]
+
+
 async def test_put_rejects_seminar_not_targeting_students_grade(
     client, db_session
 ) -> None:
@@ -771,7 +830,9 @@ async def test_submit_succeeds_even_if_slack_notification_fails(
 
 async def test_submit_without_draft_returns_404(client, db_session) -> None:
     student = await _make_student(db_session)
-    await _make_open_term(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
 
     resp = await client.post(
         "/applications/me/submit", headers=_auth_headers(student.email)
@@ -794,6 +855,103 @@ async def test_submit_without_choices_returns_400(client, db_session) -> None:
     assert resp.status_code == 400
 
 
+async def test_submit_requires_research_theme_when_enrolled_in_seminar(
+    client, db_session
+) -> None:
+    # 現在ゼミ所属中の学生は、教員が応募者一覧で参考にする研究概要が
+    # 空のままだと提出できない(#188)。
+    student = await _make_student(db_session, research_theme=None)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 400
+    assert "研究概要" in resp.json()["detail"]
+
+
+async def test_submit_requires_research_theme_treats_whitespace_as_empty(
+    client, db_session
+) -> None:
+    student = await _make_student(db_session, research_theme="   ")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 400
+
+
+async def test_submit_succeeds_when_enrolled_and_research_theme_filled(
+    client, db_session
+) -> None:
+    student = await _make_student(
+        db_session, research_theme="機械学習の研究をしています。"
+    )
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 200
+
+
+async def test_submit_allows_empty_research_theme_when_not_enrolled(
+    client, db_session
+) -> None:
+    # 配属前(ゼミ未所属)の学生はまだ研究概要が無くて当然なので対象外。
+    student = await _make_student(db_session, research_theme=None)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 200
+
+
 async def test_submit_requires_active_term(client, db_session) -> None:
     await _close_all_open_terms(db_session)
     student = await _make_student(db_session)
@@ -803,6 +961,40 @@ async def test_submit_requires_active_term(client, db_session) -> None:
     )
 
     assert resp.status_code == 400
+
+
+async def test_submit_rejects_when_no_seminar_targets_students_grade_at_all(
+    client, db_session
+) -> None:
+    # 下書き保存時は対象学年に入っていたが、提出前にラウンド全体の対象学年が
+    # 変わり、自分の学年を対象とするゼミが1件も無くなったケース(#99)。
+    student = await _make_student(db_session, grade="B1")
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=term, seminar=seminar, target_grades=["B1"]
+    )
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    result = await db_session.execute(
+        select(SeminarRecruitment).where(SeminarRecruitment.seminar_id == seminar.id)
+    )
+    recruitment = result.scalar_one()
+    recruitment.target_grades = ["B2", "B3", "B4"]
+    await db_session.flush()
+
+    resp = await client.post(
+        "/applications/me/submit", headers=_auth_headers(student.email)
+    )
+
+    assert resp.status_code == 400
+    assert "対象としていません" in resp.json()["detail"]
 
 
 async def test_submit_rejects_seminar_that_stopped_recruiting_after_draft_saved(

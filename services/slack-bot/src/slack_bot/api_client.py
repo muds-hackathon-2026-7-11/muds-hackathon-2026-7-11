@@ -22,6 +22,8 @@ def fetch_seminars() -> list[dict]:
 def submit_question(
     *, seminar_id: str, slack_user_id: str, content: str
 ) -> httpx.Response:
+    # slack_user_id自体は秘密情報ではないため、fetch_seminarsと同じく
+    # require_internal_secretで「Bot経由の呼び出しであること」を保証する(#170)。
     return httpx.post(
         f"{API_BASE_URL}/questions",
         json={
@@ -29,6 +31,7 @@ def submit_question(
             "slack_user_id": slack_user_id,
             "content": content,
         },
+        headers={"X-Internal-Secret": INTERNAL_API_SECRET},
         timeout=5.0,
     )
 
@@ -43,5 +46,6 @@ def submit_answer(
             "slack_user_id": slack_user_id,
             "content": content,
         },
+        headers={"X-Internal-Secret": INTERNAL_API_SECRET},
         timeout=5.0,
     )
