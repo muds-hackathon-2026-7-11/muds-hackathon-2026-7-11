@@ -130,7 +130,7 @@ export function AiSeminarChatView() {
   const canSend = input.trim() !== "" && !isSending;
 
   return (
-    <section className="flex h-[75vh] flex-col rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+    <section className="flex h-[75vh] flex-col rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
       <div
         aria-live="polite"
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"

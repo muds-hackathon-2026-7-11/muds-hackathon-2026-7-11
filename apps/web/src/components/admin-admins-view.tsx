@@ -167,7 +167,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label="管理者を追加"
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">管理者を追加</h2>
             <p className="mt-1 text-sm text-zinc-600">

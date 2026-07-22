@@ -50,10 +50,10 @@ export default async function SeminarDetailPage({
   }
 
   return (
-    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+    <main className="page-canvas relative flex flex-1 flex-col">
       <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 sm:p-6">
         {result.status === "error" ? (
-          <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+          <section className="rounded-2xl border border-line bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
             ゼミ情報を取得できませんでした。時間をおいて再度お試しください。
           </section>
         ) : (

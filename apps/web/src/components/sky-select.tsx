@@ -104,7 +104,7 @@ export function SkySelect({
           id={listboxId}
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute left-0 top-full z-50 mt-2 flex w-max min-w-full flex-col overflow-hidden rounded-2xl border-2 border-[#add8e6] bg-white p-1 shadow-lg shadow-[#add8e6]/30"
+          className="absolute left-0 top-full z-50 mt-2 flex w-max min-w-full flex-col overflow-hidden rounded-2xl border border-line bg-white p-1 shadow-lg shadow-[#add8e6]/30"
         >
           {options.map((option) => {
             const isSelected = option.value === value;

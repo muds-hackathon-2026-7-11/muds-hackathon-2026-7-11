@@ -355,7 +355,7 @@ export function AdminSeminarsView({
             role="dialog"
             aria-modal="true"
             aria-label="新規ゼミ作成"
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">新規ゼミ作成</h2>
             <div className="mt-4 flex flex-col gap-2">

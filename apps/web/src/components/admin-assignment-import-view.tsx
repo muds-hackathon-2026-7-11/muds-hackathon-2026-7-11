@@ -150,7 +150,7 @@ export function AdminAssignmentImportView({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-zinc-800">配属結果CSVアップロード</h2>
         <p className="mt-1 text-sm text-zinc-500">
           列: student_id, seminar_id。どちらもIDと人が読める文字列の両方に
@@ -239,7 +239,7 @@ export function AdminAssignmentImportView({
       )}
 
       {result && (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
           <h2 className="font-semibold text-zinc-800">結果</h2>
           {resultTerm && (
             <p className="mt-1 text-sm text-zinc-500">

@@ -106,7 +106,7 @@ export function AdminUsersImportView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-zinc-800">学生名簿CSVアップロード</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Slack管理画面からエクスポートした、ワークスペースメンバー一覧CSVを
@@ -174,7 +174,7 @@ export function AdminUsersImportView() {
       )}
 
       {result && (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
           <h2 className="font-semibold text-zinc-800">結果</h2>
           <dl className="mt-2 flex flex-col gap-1 text-sm">
             <div className="flex gap-2">

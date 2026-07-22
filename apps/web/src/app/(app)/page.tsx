@@ -132,14 +132,14 @@ export default async function Home() {
                 allTags={researchTags}
               />
             ) : (
-              <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+              <section className="rounded-2xl border border-line bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
                 プロフィールを取得できませんでした。
               </section>
             )}
           </div>
 
           <div className="flex flex-col gap-6 sm:w-72">
-            <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+            <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Current Assignment
               </p>
@@ -148,7 +148,7 @@ export default async function Home() {
               </p>
             </section>
 
-            <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+            <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Application Status
               </p>

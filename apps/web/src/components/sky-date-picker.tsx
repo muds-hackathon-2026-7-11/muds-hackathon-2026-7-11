@@ -210,7 +210,7 @@ export function SkyDatePicker({
           id={dialogId}
           role="dialog"
           aria-label={ariaLabel ?? "カレンダー"}
-          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border-2 border-[#add8e6] bg-white p-3 shadow-lg shadow-[#add8e6]/30"
+          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-lg shadow-[#add8e6]/30"
         >
           <div className="flex items-center justify-between">
             <button

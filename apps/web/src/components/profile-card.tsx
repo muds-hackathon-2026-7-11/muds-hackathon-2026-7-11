@@ -161,7 +161,7 @@ export function ProfileCard({
   const displayedTags = allTags.filter((tag) => savedTagIds.has(tag.id));
 
   return (
-    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+    <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
       <div className="border-b border-[#add8e6]/40 pb-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Profile
@@ -229,7 +229,7 @@ export function ProfileCard({
             role="dialog"
             aria-modal="true"
             aria-label="プロフィールを編集"
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <p className="font-semibold text-zinc-800">プロフィールを編集</p>
 

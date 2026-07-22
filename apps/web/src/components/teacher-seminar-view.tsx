@@ -259,7 +259,7 @@ export function TeacherSeminarView({
           return (
             <section
               key={seminar.id}
-              className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30"
+              className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30"
             >
               <h2 className="text-lg font-bold text-zinc-900">
                 {seminar.name}

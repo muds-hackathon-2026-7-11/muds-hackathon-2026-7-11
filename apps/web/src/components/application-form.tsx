@@ -582,7 +582,7 @@ export function ApplicationForm({
                 return (
                   <section
                     key={PRIORITY_LABELS[index]}
-                    className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                    className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
                   >
                     <p className="text-lg font-bold text-zinc-700">
                       {PRIORITY_LABELS[index]}
@@ -625,7 +625,7 @@ export function ApplicationForm({
             return (
               <section
                 key={PRIORITY_LABELS[index]}
-                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 <label
                   htmlFor={seminarSelectId}

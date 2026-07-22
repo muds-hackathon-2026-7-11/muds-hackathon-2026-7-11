@@ -62,7 +62,7 @@ export function TeacherUnsubmittedView({
       {filtered.length === 0 ? (
         <p className="text-sm text-zinc-500">未提出の学生はいません。</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border-2 border-[#add8e6] bg-white shadow-sm shadow-[#add8e6]/30">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white shadow-sm shadow-[#add8e6]/30">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="border-b border-[#add8e6]/40 text-left text-xs font-semibold text-zinc-500">

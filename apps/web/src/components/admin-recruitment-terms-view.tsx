@@ -579,7 +579,7 @@ export function AdminRecruitmentTermsView({
       )}
 
       {isCreateFormOpen ? (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30">
           <h2 className="font-semibold text-zinc-800">新規募集ラウンド作成</h2>
           <div className="mt-3 flex flex-col gap-2">
             <label className="flex flex-col gap-1 text-sm">
@@ -693,7 +693,7 @@ export function AdminRecruitmentTermsView({
             return (
               <section
                 key={term.id}
-                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 {isEditing ? (
                   <div className="flex flex-col gap-2">

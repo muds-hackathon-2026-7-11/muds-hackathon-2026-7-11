@@ -4,10 +4,11 @@
   --background: #ffffff;
   --foreground: #171717;
 
-  /* マイページのカラーパレット: 白 / 淡いグレー / ライトブルー */
+  /* マイページのカラーパレット: 白 / 淡いグレー / ライトブルー / カード枠線 */
   --color-white: #ffffff;
-  --color-mist: #e6e6e6;
+  --color-mist: #f3f3f3;
   --color-sky: #add8e6;
+  --color-line: #d9d9d9;
 }
 
 @theme inline {
@@ -16,9 +17,10 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Tailwindユーティリティ用(bg-mist, text-sky など) */
+  /* Tailwindユーティリティ用(bg-mist, text-sky, border-line など) */
   --color-mist: var(--color-mist);
   --color-sky: var(--color-sky);
+  --color-line: var(--color-line);
 }
 
 @media (prefers-color-scheme: dark) {

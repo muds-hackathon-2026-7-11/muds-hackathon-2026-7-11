@@ -132,7 +132,7 @@ export function FaqList({
             role="dialog"
             aria-modal="true"
             aria-label="質問する"
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">質問する</h2>
             <p className="mt-1 text-xs text-zinc-500">
@@ -189,7 +189,7 @@ export function FaqList({
           {filtered.map((question) => (
             <section
               key={question.id}
-              className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+              className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
             >
               <p className="whitespace-pre-wrap font-semibold text-zinc-800">
                 {question.content}

@@ -180,7 +180,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         </Link>
       </div>
 
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
         <h2 className="text-lg font-bold text-zinc-900">教員紹介</h2>
         {seminar.teachers.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
@@ -217,7 +217,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         )}
       </section>
 
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
         <h2 className="text-lg font-bold text-zinc-900">研究内容</h2>
         {seminar.description && (
           <p className="mt-2 whitespace-pre-wrap text-zinc-900">
@@ -257,7 +257,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         )}
       </section>
 
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
         <h2 className="text-lg font-bold text-zinc-900">
           現在のゼミ生の研究分野
         </h2>
@@ -313,7 +313,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
         )}
       </section>
 
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
         <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
         {seminar.current_members.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
@@ -357,7 +357,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`${openMember.name}の研究概要`}
-            className="w-full max-w-2xl rounded-2xl border-2 border-[#add8e6] bg-white p-8 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-2xl rounded-2xl border border-line bg-white p-8 shadow-lg shadow-[#add8e6]/30"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -430,7 +430,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`${openTag}の研究をしているゼミ生`}
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <div className="flex items-start justify-between gap-4">
               <p className="text-xl font-bold text-zinc-900">{openTag}</p>
