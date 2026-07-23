@@ -143,7 +143,7 @@ export function FaqList({
               onChange={(e) => setContent(e.target.value)}
               placeholder="ゼミへの質問を入力してください"
               rows={4}
-              className="mt-3 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+              className="mt-3 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
             />
             {errorMessage && (
               <p className="mt-2 text-sm text-red-600">{errorMessage}</p>
@@ -175,7 +175,7 @@ export function FaqList({
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
         placeholder="質問を検索"
-        className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+        className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
       />
 
       {questions.length === 0 ? (
@@ -203,7 +203,7 @@ export function FaqList({
                   まだ回答がありません。
                 </p>
               ) : (
-                <div className="mt-3 flex flex-col gap-3 border-t border-[#add8e6]/40 pt-3">
+                <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
                   {question.answers.map((answer) => (
                     <div key={answer.id}>
                       <p className="whitespace-pre-wrap text-sm text-zinc-700">

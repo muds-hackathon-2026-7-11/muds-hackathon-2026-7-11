@@ -72,7 +72,7 @@ function StatsTooltip({
   }
   const total = payload.reduce((sum, entry) => sum + (entry.value ?? 0), 0);
   return (
-    <div className="rounded-lg border border-[#add8e6] bg-white px-3 py-2 text-sm shadow">
+    <div className="rounded-lg border border-line bg-white px-3 py-2 text-sm shadow">
       <p className="font-semibold text-zinc-800">
         {label}: {total}人
       </p>

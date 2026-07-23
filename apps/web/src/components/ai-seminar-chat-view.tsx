@@ -133,7 +133,7 @@ export function AiSeminarChatView() {
     <section className="flex h-[75vh] flex-col rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
       <div
         aria-live="polite"
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-line bg-[#add8e6]/[.06] p-3"
       >
         <ChatBubble speaker="assistant" content={GREETING} />
         {messages.map((message) => (
@@ -144,7 +144,7 @@ export function AiSeminarChatView() {
                 {message.recommendations.map((rec) => (
                   <li
                     key={`${message.id}-${rec.seminar_name}`}
-                    className="max-w-[85%] rounded-2xl border border-[#add8e6]/60 bg-white p-3 shadow-sm"
+                    className="max-w-[85%] rounded-2xl border border-line bg-white p-3 shadow-sm"
                   >
                     <p className="text-sm font-bold text-sky-900">
                       {rec.seminar_name}
@@ -170,7 +170,7 @@ export function AiSeminarChatView() {
           rows={1}
           maxLength={MESSAGE_MAX_LENGTH}
           placeholder="やりたいことを入力"
-          className="max-h-40 flex-1 resize-none rounded-2xl border border-[#add8e6]/60 bg-white px-4 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50 disabled:bg-[#e6e6e6]/40"
+          className="max-h-40 flex-1 resize-none rounded-2xl border border-line bg-white px-4 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50 disabled:bg-[#e6e6e6]/40"
         />
         <button
           type="button"

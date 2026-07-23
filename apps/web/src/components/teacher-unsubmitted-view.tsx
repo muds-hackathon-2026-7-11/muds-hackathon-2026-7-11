@@ -65,7 +65,7 @@ export function TeacherUnsubmittedView({
         <div className="overflow-x-auto rounded-2xl border border-line bg-white shadow-sm shadow-[#add8e6]/30">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
-              <tr className="border-b border-[#add8e6]/40 text-left text-xs font-semibold text-zinc-500">
+              <tr className="border-b border-line text-left text-xs font-semibold text-zinc-500">
                 <th scope="col" className="px-4 py-2">
                   氏名
                 </th>
@@ -81,7 +81,7 @@ export function TeacherUnsubmittedView({
               {filtered.map((applicant) => (
                 <tr
                   key={applicant.student_id ?? applicant.name}
-                  className="border-b border-[#add8e6]/20 last:border-0"
+                  className="border-b border-line last:border-0"
                 >
                   <td className="px-4 py-2 font-medium text-zinc-800">
                     {applicant.name}

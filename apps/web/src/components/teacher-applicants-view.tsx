@@ -158,7 +158,7 @@ export function TeacherApplicantsView({
                   return (
                     <div
                       key={key}
-                      className="rounded-lg border border-[#add8e6]/60"
+                      className="rounded-lg border border-line"
                     >
                       <button
                         type="button"
@@ -195,7 +195,7 @@ export function TeacherApplicantsView({
                       </button>
 
                       {isExpanded && (
-                        <div className="border-t border-[#add8e6]/40 px-3 py-3">
+                        <div className="border-t border-line px-3 py-3">
                           <p className="text-xs font-semibold text-zinc-500">
                             志望理由
                           </p>

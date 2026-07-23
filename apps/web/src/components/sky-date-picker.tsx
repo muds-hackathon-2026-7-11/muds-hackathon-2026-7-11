@@ -182,7 +182,7 @@ export function SkyDatePicker({
         aria-expanded={isOpen}
         aria-label={ariaLabel}
         className={[
-          "flex w-full items-center justify-between gap-2 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-[#add8e6] focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50",
+          "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-left text-sm transition-colors hover:border-[#add8e6] focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50",
           className ?? "",
         ].join(" ")}
       >

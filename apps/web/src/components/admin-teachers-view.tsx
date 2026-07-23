@@ -197,14 +197,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="名前"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <input
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="メールアドレス"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -244,14 +244,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="名前"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="メールアドレス"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <label className="flex items-center gap-1.5 text-sm text-zinc-700">
                     <input

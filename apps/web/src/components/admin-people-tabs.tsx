@@ -25,7 +25,7 @@ export function AdminPeopleTabs({
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="tablist" className="flex gap-2 border-b border-[#add8e6]/60">
+      <div role="tablist" className="flex gap-2 border-b border-line">
         <button
           type="button"
           role="tab"

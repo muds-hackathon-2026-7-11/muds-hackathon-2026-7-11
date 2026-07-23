@@ -291,7 +291,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   contentStyle={{
                     background: "#ffffff",
                     color: "#3f3f46",
-                    border: "1px solid #add8e6",
+                    border: "1px solid #d9d9d9",
                     borderRadius: 8,
                     fontSize: 12,
                   }}
@@ -324,7 +324,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 key={member.id}
                 type="button"
                 onClick={() => setOpenMemberId(member.id)}
-                className="rounded-xl border border-[#add8e6]/50 px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
+                className="rounded-xl border border-line px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
               >
                 <span className="block truncate font-semibold text-zinc-900">
                   {member.grade

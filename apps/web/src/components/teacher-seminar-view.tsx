@@ -272,14 +272,14 @@ export function TeacherSeminarView({
                     onChange={(e) => setEditDescription(e.target.value)}
                     placeholder="研究内容・ゼミ紹介文"
                     rows={4}
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <input
                     type="text"
                     value={editPhotoUrl}
                     onChange={(e) => setEditPhotoUrl(e.target.value)}
                     placeholder="研究室写真のURL(任意)"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <div className="mt-1 flex gap-2">
                     <button
@@ -327,7 +327,7 @@ export function TeacherSeminarView({
                 </div>
               )}
 
-              <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
+              <div className="mt-4 border-t border-line pt-3">
                 <p className="text-sm font-semibold text-zinc-700">
                   定員(今回の募集ラウンド)
                 </p>
@@ -349,7 +349,7 @@ export function TeacherSeminarView({
                       }))
                     }
                     placeholder="人数"
-                    className="w-28 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
+                    className="w-28 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
                   />
                   <button
                     type="button"
@@ -369,7 +369,7 @@ export function TeacherSeminarView({
                 )}
               </div>
 
-              <div className="mt-4 border-t border-[#add8e6]/40 pt-3">
+              <div className="mt-4 border-t border-line pt-3">
                 <p className="text-sm font-semibold text-zinc-700">紹介資料</p>
                 {seminar.materials.length === 0 ? (
                   <p className="mt-1 text-sm text-zinc-500">
@@ -426,7 +426,7 @@ export function TeacherSeminarView({
                           .value as TeacherSeminarMaterial["type"],
                       }))
                     }
-                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm"
+                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm"
                   >
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
@@ -442,7 +442,7 @@ export function TeacherSeminarView({
                       }))
                     }
                     placeholder="資料のURL"
-                    className="min-w-0 flex-1 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
                   />
                   <button
                     type="button"

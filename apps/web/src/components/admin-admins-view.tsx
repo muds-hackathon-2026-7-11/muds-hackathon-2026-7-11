@@ -139,7 +139,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
   return (
     <div className="flex flex-col gap-4">
       {!isCreateFormOpen && errorMessage && (
-        <p className="rounded-lg border border-[#add8e6]/60 bg-white p-4 text-sm">
+        <p className="rounded-lg border border-line bg-white p-4 text-sm">
           {errorMessage}
         </p>
       )}
@@ -174,14 +174,14 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
               既に登録されている学生のメールアドレスを入力してください(教員は選べません)。
             </p>
             {errorMessage && (
-              <p className="mt-3 rounded-lg border border-[#add8e6]/60 bg-white p-3 text-sm">
+              <p className="mt-3 rounded-lg border border-line bg-white p-3 text-sm">
                 {errorMessage}
               </p>
             )}
             <div className="mt-4 flex flex-col gap-2">
               {candidate ? (
                 <>
-                  <div className="rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/10 p-3">
+                  <div className="rounded-lg border border-line bg-[#add8e6]/10 p-3">
                     <p className="text-sm text-zinc-600">
                       この人を管理者にします
                     </p>
@@ -216,7 +216,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     placeholder="メールアドレス"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                   />
                   <div className="mt-2 flex gap-2">
                     <button
@@ -250,7 +250,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
           admins.map((admin) => (
             <section
               key={admin.id}
-              className="flex items-center justify-between gap-4 rounded-lg border border-[#add8e6]/60 bg-white p-4"
+              className="flex items-center justify-between gap-4 rounded-lg border border-line bg-white p-4"
             >
               <div>
                 <p className="font-semibold text-zinc-900">

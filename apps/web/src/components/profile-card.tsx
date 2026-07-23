@@ -162,7 +162,7 @@ export function ProfileCard({
 
   return (
     <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-      <div className="border-b border-[#add8e6]/40 pb-5">
+      <div className="border-b border-line pb-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           Profile
         </p>
@@ -255,7 +255,7 @@ export function ProfileCard({
                   disabled={isSaving}
                   placeholder="研究タイトルを入力してください"
                   maxLength={200}
-                  className="mt-1 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                  className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                 />
 
                 <label
@@ -270,7 +270,7 @@ export function ProfileCard({
                   onChange={(e) => setTheme(e.target.value)}
                   disabled={isSaving}
                   placeholder="研究概要を入力してください"
-                  className="mt-1 min-h-64 w-full flex-1 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                  className="mt-1 min-h-64 w-full flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                 />
               </div>
 
@@ -278,7 +278,7 @@ export function ProfileCard({
                 <p className="text-sm text-zinc-500">
                   タグ({tagIds.size}/{MAX_TAGS})
                 </p>
-                <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3">
+                <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-line bg-[#add8e6]/[.06] p-3">
                   {groupTagsByCategory(allTags).map(([category, tags]) => (
                     <div key={category}>
                       <p className="text-xs font-medium text-zinc-400">
