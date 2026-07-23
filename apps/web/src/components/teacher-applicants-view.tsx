@@ -156,10 +156,7 @@ export function TeacherApplicantsView({
                   const key = `${seminar.seminar_id}-${index}`;
                   const isExpanded = expandedKey === key;
                   return (
-                    <div
-                      key={key}
-                      className="rounded-lg border border-line"
-                    >
+                    <div key={key} className="rounded-lg border border-line">
                       <button
                         type="button"
                         onClick={() => toggleExpanded(key)}
