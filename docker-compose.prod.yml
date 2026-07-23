@@ -1,0 +1,137 @@
+# spark サーバ(202.240.109.50)本番用。ローカル開発の docker-compose.yml とは別物として扱う
+# (base+override マージにすると ports/volumes がリストとして合算され、devの
+# bind mount やポートが残ってしまうため、あえて独立ファイルにしている)。
+#
+# 使い方は docs/deployment.md 参照。手元では動かさない想定(ポート・ホスト名がspark前提)。
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-seminar_platform}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-seminar_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.production}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.production}@db:5432/${POSTGRES_DB:-seminar_platform}
+    # ホストへは公開しない(nginxが転送してくるのはwebの公開ポートのみ)。
+    # デバッグ時は `docker compose -f docker-compose.prod.yml --env-file .env.production exec api ...` を使う。
+    volumes:
+      # 個人情報を含む実データCSV(data/、git管理外)とゼミ知識(docs/seminars/knowledge、git管理下)を
+      # 投入コマンドから読めるようにする。読み取り専用。
+      - ./data:/app/data:ro
+      - ./docs/seminars/knowledge:/app/docs/seminars/knowledge:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  slack-bot:
+    build:
+      context: .
+      dockerfile: services/slack-bot/Dockerfile
+      target: prod
+    # SLACK_BOT_TOKEN/SLACK_APP_TOKEN未設定だと起動できない(意図的にexit 1する)。
+    # unless-stoppedだと無限リトライしてログが埋まるので、数回で諦めるようにする
+    # (docker-compose.ymlのdev用slack-botと同じ理由)。
+    restart: on-failure:3
+    env_file:
+      - .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      # 割当ポート帯(20200-20299)の先頭ポートのみ公開URLに紐づく。0.0.0.0必須
+      # (127.0.0.1だとnginxコンテナから届かない)。
+      - "0.0.0.0:20200:3000"
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  db-data:
