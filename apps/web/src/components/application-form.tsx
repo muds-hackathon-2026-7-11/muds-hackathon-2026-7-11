@@ -629,7 +629,7 @@ export function ApplicationForm({
               >
                 <label
                   htmlFor={seminarSelectId}
-                  className="block text-2xl font-bold text-zinc-800"
+                  className="block text-xl font-bold text-zinc-800"
                 >
                   {PRIORITY_LABELS[index]}
                 </label>
