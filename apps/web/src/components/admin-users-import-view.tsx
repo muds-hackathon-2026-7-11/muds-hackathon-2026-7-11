@@ -106,7 +106,7 @@ export function AdminUsersImportView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-zinc-800">学生名簿CSVアップロード</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Slack管理画面からエクスポートした、ワークスペースメンバー一覧CSVを
@@ -144,7 +144,7 @@ export function AdminUsersImportView() {
             className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isDraggingOver
                 ? "border-[#add8e6] bg-[#add8e6]/10"
-                : "border-[#add8e6]/60 hover:border-[#add8e6] hover:bg-[#add8e6]/[.06]"
+                : "border-line hover:border-[#add8e6] hover:bg-[#add8e6]/[.06]"
             }`}
           >
             <span className="text-sm text-zinc-700">
@@ -174,7 +174,7 @@ export function AdminUsersImportView() {
       )}
 
       {result && (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
           <h2 className="font-semibold text-zinc-800">結果</h2>
           <dl className="mt-2 flex flex-col gap-1 text-sm">
             <div className="flex gap-2">
@@ -199,7 +199,7 @@ export function AdminUsersImportView() {
               {result.skipped.map((skip) => (
                 <li
                   key={skip.row}
-                  className="rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] px-3 py-1.5 text-zinc-700"
+                  className="rounded-lg border border-line bg-[#add8e6]/[.06] px-3 py-1.5 text-zinc-700"
                 >
                   {skip.row}行目({skip.email}): {skip.reason}
                 </li>

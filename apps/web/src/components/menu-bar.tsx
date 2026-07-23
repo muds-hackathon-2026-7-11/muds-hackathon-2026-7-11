@@ -86,7 +86,7 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
           href="/chat"
           aria-label="AIゼミ相談"
           title="AIゼミ相談"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900"
+          className="hidden h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900 sm:flex"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -204,6 +204,16 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
               </Link>
             );
           })}
+          <Link
+            href="/chat"
+            aria-current={
+              isNavItemActive(pathname, "/chat") ? "page" : undefined
+            }
+            onClick={() => setIsMobileMenuOpen(false)}
+            className={navLinkClassName(isNavItemActive(pathname, "/chat"))}
+          >
+            AIゼミ相談
+          </Link>
 
           <div className="my-1 border-t border-[#e6e6e6]" />
 

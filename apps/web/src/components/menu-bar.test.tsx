@@ -198,6 +198,18 @@ describe("MenuBar", () => {
     expect(adminLinks[adminLinks.length - 1]).toHaveAttribute("href", "/admin");
   });
 
+  it("shows the AI consult link inside the mobile menu", async () => {
+    const user = userEvent.setup();
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "メニューを開閉する" }),
+    );
+
+    const chatLinks = screen.getAllByRole("link", { name: "AIゼミ相談" });
+    expect(chatLinks[chatLinks.length - 1]).toHaveAttribute("href", "/chat");
+  });
+
   it("closes the mobile menu after selecting a nav item", async () => {
     const user = userEvent.setup();
     render(<MenuBar isAdmin={false} isTeacher={false} />);

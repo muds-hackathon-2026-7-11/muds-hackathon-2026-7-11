@@ -582,7 +582,7 @@ export function ApplicationForm({
                 return (
                   <section
                     key={PRIORITY_LABELS[index]}
-                    className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                    className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
                   >
                     <p className="text-lg font-bold text-zinc-700">
                       {PRIORITY_LABELS[index]}
@@ -625,11 +625,11 @@ export function ApplicationForm({
             return (
               <section
                 key={PRIORITY_LABELS[index]}
-                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 <label
                   htmlFor={seminarSelectId}
-                  className="block text-2xl font-bold text-zinc-800"
+                  className="block text-xl font-bold text-zinc-800"
                 >
                   {PRIORITY_LABELS[index]}
                 </label>
@@ -641,7 +641,7 @@ export function ApplicationForm({
                     updateSlot(index, { seminarId: e.target.value })
                   }
                   disabled={isBusy}
-                  className="mt-2 w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                  className="mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                 >
                   <option value="">選択してください</option>
                   {options.map((seminar) => (
@@ -673,7 +673,7 @@ export function ApplicationForm({
                     rows={8}
                     maxLength={REASON_MAX_LENGTH}
                     placeholder="このゼミを志望する理由を入力してください"
-                    className="mt-1 min-h-40 w-full resize-y rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="mt-1 min-h-40 w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-sm leading-relaxed text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <div className="mt-2 flex justify-end">
                     <button
@@ -751,7 +751,7 @@ const RUBRIC_LABELS: [string, string][] = [
 // その理由に相性の良い他ゼミTop3(第1〜3志望を除く)を表示する。
 function ReasonMatchPanel({ result }: { result: ReasonMatchResult }) {
   return (
-    <div className="mt-3 rounded-xl border border-[#add8e6]/60 bg-[#add8e6]/10 p-3">
+    <div className="mt-3 rounded-xl border border-line bg-[#add8e6]/10 p-3">
       {result.selected_score !== null && (
         <div>
           <div className="flex items-end justify-between">
@@ -787,7 +787,7 @@ function ReasonMatchPanel({ result }: { result: ReasonMatchResult }) {
       )}
 
       {result.recommendations.length > 0 && (
-        <div className="mt-3 border-t border-dashed border-[#add8e6]/60 pt-2.5">
+        <div className="mt-3 border-t border-dashed border-line pt-2.5">
           <p className="text-xs font-bold text-zinc-700">
             この志望理由に相性の良いゼミ{" "}
             <span className="font-medium text-zinc-500">

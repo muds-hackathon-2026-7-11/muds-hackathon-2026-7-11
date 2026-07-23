@@ -49,7 +49,7 @@ export default async function AdminSeminarsPage() {
   ]);
 
   return (
-    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+    <main className="page-canvas relative flex flex-1 flex-col">
       <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
         <Link
           href="/admin"

@@ -9,7 +9,7 @@ export default async function ChatPage() {
   }
 
   return (
-    <main className="relative flex flex-1 flex-col bg-[#e6e6e6]">
+    <main className="page-canvas relative flex flex-1 flex-col">
       <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 sm:p-6">
         <h1 className="border-l-4 border-[#add8e6] pl-3 text-2xl font-bold text-zinc-800">
           AIゼミ相談

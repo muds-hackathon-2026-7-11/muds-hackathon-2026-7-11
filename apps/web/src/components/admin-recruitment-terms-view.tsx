@@ -579,7 +579,7 @@ export function AdminRecruitmentTermsView({
       )}
 
       {isCreateFormOpen ? (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30">
           <h2 className="font-semibold text-zinc-800">新規募集ラウンド作成</h2>
           <div className="mt-3 flex flex-col gap-2">
             <label className="flex flex-col gap-1 text-sm">
@@ -589,7 +589,7 @@ export function AdminRecruitmentTermsView({
                 value={newAcademicYear}
                 onChange={(e) => setNewAcademicYear(e.target.value)}
                 placeholder="2027"
-                className="w-32 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                className="w-32 rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
               />
             </label>
             <div className="flex flex-wrap gap-2">
@@ -693,7 +693,7 @@ export function AdminRecruitmentTermsView({
             return (
               <section
                 key={term.id}
-                className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm shadow-[#add8e6]/30"
+                className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30"
               >
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
@@ -794,7 +794,7 @@ export function AdminRecruitmentTermsView({
                 )}
 
                 {isSelected && (
-                  <div className="mt-3 flex flex-col gap-2 border-t border-[#add8e6]/40 pt-3">
+                  <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
                     <p className="text-sm text-zinc-500">
                       ゼミ別の定員・対象学年
                     </p>
@@ -808,7 +808,7 @@ export function AdminRecruitmentTermsView({
                         return (
                           <div
                             key={r.seminar_id}
-                            className="flex flex-col gap-1 rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] p-3"
+                            className="flex flex-col gap-1 rounded-lg border border-line bg-[#add8e6]/[.06] p-3"
                           >
                             <p className="text-sm font-medium text-zinc-800">
                               {r.seminar_name}
@@ -824,7 +824,7 @@ export function AdminRecruitmentTermsView({
                                   })
                                 }
                                 placeholder="人数"
-                                className="w-24 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                                className="w-24 rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                               />
                               {GRADE_OPTIONS.map((grade) => (
                                 <label

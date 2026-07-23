@@ -182,7 +182,7 @@ export function SkyDatePicker({
         aria-expanded={isOpen}
         aria-label={ariaLabel}
         className={[
-          "flex w-full items-center justify-between gap-2 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-[#add8e6] focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50",
+          "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-left text-sm transition-colors hover:border-[#add8e6] focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50",
           className ?? "",
         ].join(" ")}
       >
@@ -210,7 +210,7 @@ export function SkyDatePicker({
           id={dialogId}
           role="dialog"
           aria-label={ariaLabel ?? "カレンダー"}
-          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border-2 border-[#add8e6] bg-white p-3 shadow-lg shadow-[#add8e6]/30"
+          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border border-line bg-white p-3 shadow-lg shadow-[#add8e6]/30"
         >
           <div className="flex items-center justify-between">
             <button

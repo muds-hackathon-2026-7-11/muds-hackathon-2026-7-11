@@ -150,7 +150,7 @@ export function AdminAssignmentImportView({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-zinc-800">配属結果CSVアップロード</h2>
         <p className="mt-1 text-sm text-zinc-500">
           列: student_id, seminar_id。どちらもIDと人が読める文字列の両方に
@@ -208,7 +208,7 @@ export function AdminAssignmentImportView({
               className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 isDraggingOver
                   ? "border-[#add8e6] bg-[#add8e6]/10"
-                  : "border-[#add8e6]/60 hover:border-[#add8e6] hover:bg-[#add8e6]/[.06]"
+                  : "border-line hover:border-[#add8e6] hover:bg-[#add8e6]/[.06]"
               }`}
             >
               <span className="text-sm text-zinc-700">
@@ -239,7 +239,7 @@ export function AdminAssignmentImportView({
       )}
 
       {result && (
-        <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-line bg-white p-4 shadow-sm">
           <h2 className="font-semibold text-zinc-800">結果</h2>
           {resultTerm && (
             <p className="mt-1 text-sm text-zinc-500">
@@ -265,7 +265,7 @@ export function AdminAssignmentImportView({
               {result.errors.map((error) => (
                 <li
                   key={error.row}
-                  className="rounded-lg border border-[#add8e6]/60 bg-[#add8e6]/[.06] px-3 py-1.5 text-zinc-700"
+                  className="rounded-lg border border-line bg-[#add8e6]/[.06] px-3 py-1.5 text-zinc-700"
                 >
                   {error.row}行目: {error.reason}
                 </li>

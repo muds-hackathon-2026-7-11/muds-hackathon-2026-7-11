@@ -188,7 +188,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label="教員を追加"
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">教員を追加</h2>
             <div className="mt-4 flex flex-col gap-2">
@@ -197,14 +197,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="名前"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <input
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="メールアドレス"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -235,7 +235,7 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
           return (
             <section
               key={teacher.id}
-              className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30"
+              className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30"
             >
               {isEditing ? (
                 <div className="flex flex-col gap-2">
@@ -244,14 +244,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="名前"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="メールアドレス"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
                   />
                   <label className="flex items-center gap-1.5 text-sm text-zinc-700">
                     <input

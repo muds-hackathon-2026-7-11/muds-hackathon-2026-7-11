@@ -140,7 +140,7 @@ export function TeacherApplicantsView({
         initialData.map((seminar) => (
           <section
             key={seminar.seminar_id}
-            className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30"
+            className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">
               {seminar.seminar_name}
@@ -156,10 +156,7 @@ export function TeacherApplicantsView({
                   const key = `${seminar.seminar_id}-${index}`;
                   const isExpanded = expandedKey === key;
                   return (
-                    <div
-                      key={key}
-                      className="rounded-lg border border-[#add8e6]/60"
-                    >
+                    <div key={key} className="rounded-lg border border-line">
                       <button
                         type="button"
                         onClick={() => toggleExpanded(key)}
@@ -195,7 +192,7 @@ export function TeacherApplicantsView({
                       </button>
 
                       {isExpanded && (
-                        <div className="border-t border-[#add8e6]/40 px-3 py-3">
+                        <div className="border-t border-line px-3 py-3">
                           <p className="text-xs font-semibold text-zinc-500">
                             志望理由
                           </p>

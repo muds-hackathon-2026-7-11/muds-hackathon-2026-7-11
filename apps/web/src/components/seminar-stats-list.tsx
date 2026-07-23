@@ -72,7 +72,7 @@ function StatsTooltip({
   }
   const total = payload.reduce((sum, entry) => sum + (entry.value ?? 0), 0);
   return (
-    <div className="rounded-lg border border-[#add8e6] bg-white px-3 py-2 text-sm shadow">
+    <div className="rounded-lg border border-line bg-white px-3 py-2 text-sm shadow">
       <p className="font-semibold text-zinc-800">
         {label}: {total}人
       </p>
@@ -163,7 +163,7 @@ type SeminarStatsListProps = {
 export function SeminarStatsList({ stats }: SeminarStatsListProps) {
   if (stats.length === 0) {
     return (
-      <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
+      <section className="rounded-2xl border border-line bg-white p-6 text-zinc-500 shadow-sm shadow-[#add8e6]/30">
         応募状況を取得できませんでした。
       </section>
     );
@@ -202,7 +202,7 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
   const yAxisTicks = Array.from({ length: yAxisMax / 5 + 1 }, (_, i) => i * 5);
 
   return (
-    <section className="rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-sm shadow-[#add8e6]/30">
+    <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
       <div className="flex items-center gap-4">
         <SeminarAvatar seminar={seminar} />
         <Link

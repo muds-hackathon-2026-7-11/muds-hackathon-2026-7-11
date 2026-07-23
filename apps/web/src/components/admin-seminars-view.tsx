@@ -327,7 +327,7 @@ export function AdminSeminarsView({
       </p>
 
       {errorMessage && (
-        <p className="rounded-lg border border-[#add8e6]/60 bg-white p-4 text-sm">
+        <p className="rounded-lg border border-line bg-white p-4 text-sm">
           {errorMessage}
         </p>
       )}
@@ -355,7 +355,7 @@ export function AdminSeminarsView({
             role="dialog"
             aria-modal="true"
             aria-label="新規ゼミ作成"
-            className="w-full max-w-lg rounded-2xl border-2 border-[#add8e6] bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <h2 className="text-lg font-bold text-zinc-900">新規ゼミ作成</h2>
             <div className="mt-4 flex flex-col gap-2">
@@ -364,21 +364,21 @@ export function AdminSeminarsView({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="ゼミ名"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <textarea
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="説明(任意)"
                 rows={2}
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <input
                 type="text"
                 value={newPhotoUrl}
                 onChange={(e) => setNewPhotoUrl(e.target.value)}
                 placeholder="アイコン画像のURL(任意)"
-                className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -411,7 +411,7 @@ export function AdminSeminarsView({
           return (
             <section
               key={seminar.id}
-              className="rounded-lg border border-[#add8e6]/60 bg-white p-4"
+              className="rounded-lg border border-line bg-white p-4"
             >
               {isEditing ? (
                 <div className="flex flex-col gap-2">
@@ -419,20 +419,20 @@ export function AdminSeminarsView({
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                   />
                   <textarea
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
                     rows={2}
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                   />
                   <input
                     type="text"
                     value={editPhotoUrl}
                     onChange={(e) => setEditPhotoUrl(e.target.value)}
                     placeholder="アイコン画像のURL(任意)"
-                    className="w-full rounded-lg border border-[#add8e6]/60 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                   />
                   <div className="flex gap-2">
                     <button
@@ -619,7 +619,7 @@ export function AdminSeminarsView({
                           .value as AdminSeminarMaterial["type"],
                       }))
                     }
-                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm"
+                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm"
                   >
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
@@ -635,7 +635,7 @@ export function AdminSeminarsView({
                       }))
                     }
                     placeholder="資料のURL"
-                    className="min-w-0 flex-1 rounded-lg border border-[#add8e6]/60 bg-white px-3 py-1.5 text-sm"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
                   />
                   <button
                     type="button"
