@@ -90,10 +90,10 @@ services:
       context: .
       dockerfile: services/slack-bot/Dockerfile
       target: prod
-    # SLACK_BOT_TOKEN/SLACK_APP_TOKEN未設定だと起動できない(意図的にexit 1する)。
-    # unless-stoppedだと無限リトライしてログが埋まるので、数回で諦めるようにする
-    # (docker-compose.ymlのdev用slack-botと同じ理由)。
-    restart: on-failure:3
+    # devのslack-botはon-failure:3(トークン未設定時の無限リトライ防止)だが、
+    # 本番はログ上限(下記logging)で既にディスク保護されているので、spark運用ルールの
+    # 「再起動時に上がってくる」を優先してunless-stoppedにする。
+    restart: unless-stopped
     env_file:
       - .env.production
     depends_on:
