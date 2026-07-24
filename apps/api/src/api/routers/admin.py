@@ -6,9 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import require_role
 from api.db import get_db
-from api.models import Seminar, SeminarMaterial, SeminarTeacher, User, UserRole
+from api.models import (
+    Seminar,
+    SeminarJointGroup,
+    SeminarMaterial,
+    SeminarTeacher,
+    User,
+    UserRole,
+)
 from api.schemas import (
     AdminSeminarCreate,
+    AdminSeminarJointGroupSet,
+    AdminSeminarJointOut,
     AdminSeminarOut,
     AdminSeminarTeacherOut,
     AdminSeminarUpdate,
@@ -73,10 +82,41 @@ async def _materials_by_seminar(
     return materials_by_seminar
 
 
+async def _joint_seminars_by_seminar(
+    db: AsyncSession, *, seminars: list[Seminar]
+) -> dict[uuid.UUID, list[AdminSeminarJointOut]]:
+    """複数ゼミ分の「同じ合同グループの相手ゼミ」を1クエリでまとめて取得する。"""
+    group_ids = {s.joint_group_id for s in seminars if s.joint_group_id is not None}
+    if not group_ids:
+        return {}
+
+    result = await db.execute(
+        select(Seminar)
+        .where(Seminar.joint_group_id.in_(group_ids))
+        .order_by(Seminar.name)
+    )
+    seminars_by_group: dict[uuid.UUID, list[Seminar]] = {}
+    for s in result.scalars().all():
+        assert s.joint_group_id is not None
+        seminars_by_group.setdefault(s.joint_group_id, []).append(s)
+
+    joint_by_seminar: dict[uuid.UUID, list[AdminSeminarJointOut]] = {}
+    for seminar in seminars:
+        if seminar.joint_group_id is None:
+            continue
+        joint_by_seminar[seminar.id] = [
+            AdminSeminarJointOut.model_validate(s)
+            for s in seminars_by_group.get(seminar.joint_group_id, [])
+            if s.id != seminar.id
+        ]
+    return joint_by_seminar
+
+
 def _to_seminar_out(
     seminar: Seminar,
     teachers: list[AdminSeminarTeacherOut],
     materials: list[SeminarMaterialOut],
+    joint_seminars: list[AdminSeminarJointOut],
 ) -> AdminSeminarOut:
     return AdminSeminarOut(
         id=seminar.id,
@@ -85,6 +125,7 @@ def _to_seminar_out(
         photo_url=seminar.photo_url,
         teachers=teachers,
         materials=materials,
+        joint_seminars=joint_seminars,
     )
 
 
@@ -100,7 +141,7 @@ async def create_seminar(
     )
     db.add(seminar)
     await db.flush()
-    return _to_seminar_out(seminar, [], [])
+    return _to_seminar_out(seminar, [], [], [])
 
 
 @router.get("/seminars", response_model=list[AdminSeminarOut])
@@ -110,9 +151,13 @@ async def list_seminars(db: AsyncSession = Depends(get_db)) -> list[AdminSeminar
     seminar_ids = [s.id for s in seminars]
     teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=seminar_ids)
     materials_by_seminar = await _materials_by_seminar(db, seminar_ids=seminar_ids)
+    joint_by_seminar = await _joint_seminars_by_seminar(db, seminars=seminars)
     return [
         _to_seminar_out(
-            s, teachers_by_seminar.get(s.id, []), materials_by_seminar.get(s.id, [])
+            s,
+            teachers_by_seminar.get(s.id, []),
+            materials_by_seminar.get(s.id, []),
+            joint_by_seminar.get(s.id, []),
         )
         for s in seminars
     ]
@@ -132,10 +177,115 @@ async def update_seminar(
     await db.flush()
     teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=[seminar.id])
     materials_by_seminar = await _materials_by_seminar(db, seminar_ids=[seminar.id])
+    joint_by_seminar = await _joint_seminars_by_seminar(db, seminars=[seminar])
     return _to_seminar_out(
         seminar,
         teachers_by_seminar.get(seminar.id, []),
         materials_by_seminar.get(seminar.id, []),
+        joint_by_seminar.get(seminar.id, []),
+    )
+
+
+@router.put(
+    "/seminars/{seminar_id}/joint-group",
+    response_model=AdminSeminarOut,
+)
+async def set_joint_group(
+    seminar_id: uuid.UUID,
+    payload: AdminSeminarJointGroupSet,
+    db: AsyncSession = Depends(get_db),
+) -> AdminSeminarOut:
+    """このゼミを、指定したゼミと同じ合同グループにする(対等な関係)。
+
+    相手ゼミが既にグループに属していればそこへ合流し、属していなければ
+    新しいグループを作って両者をそこへ入れる。このゼミが既に(別の)グループに
+    属していた場合は、そのグループから抜けて指定先のグループへ移る
+    (元のグループはメンバーが1つ以下になったら削除する)。
+    """
+    if seminar_id == payload.joint_with_seminar_id:
+        raise HTTPException(status_code=400, detail="自分自身とは合同にできません。")
+    seminar = await db.get(Seminar, seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+    target = await db.get(Seminar, payload.joint_with_seminar_id)
+    if target is None:
+        raise HTTPException(
+            status_code=404, detail="合同先に指定されたゼミが見つかりません。"
+        )
+
+    previous_group_id = seminar.joint_group_id
+
+    if target.joint_group_id is not None:
+        seminar.joint_group_id = target.joint_group_id
+    else:
+        group = SeminarJointGroup()
+        db.add(group)
+        await db.flush()
+        seminar.joint_group_id = group.id
+        target.joint_group_id = group.id
+    await db.flush()
+
+    if previous_group_id is not None and previous_group_id != seminar.joint_group_id:
+        await _delete_joint_group_if_orphaned(db, group_id=previous_group_id)
+
+    teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=[seminar.id])
+    materials_by_seminar = await _materials_by_seminar(db, seminar_ids=[seminar.id])
+    joint_by_seminar = await _joint_seminars_by_seminar(db, seminars=[seminar])
+    return _to_seminar_out(
+        seminar,
+        teachers_by_seminar.get(seminar.id, []),
+        materials_by_seminar.get(seminar.id, []),
+        joint_by_seminar.get(seminar.id, []),
+    )
+
+
+async def _delete_joint_group_if_orphaned(
+    db: AsyncSession, *, group_id: uuid.UUID
+) -> None:
+    """グループのメンバーが1つ以下になっていたら、そのグループごと削除する
+    (合同ではなくなった1ゼミだけのグループを残さないため)。"""
+    result = await db.execute(
+        select(Seminar.id).where(Seminar.joint_group_id == group_id)
+    )
+    remaining = result.all()
+    if len(remaining) <= 1:
+        if remaining:
+            (only_seminar_id,) = remaining[0]
+            only_seminar = await db.get(Seminar, only_seminar_id)
+            if only_seminar is not None:
+                only_seminar.joint_group_id = None
+        group = await db.get(SeminarJointGroup, group_id)
+        if group is not None:
+            await db.delete(group)
+        await db.flush()
+
+
+@router.delete(
+    "/seminars/{seminar_id}/joint-group",
+    response_model=AdminSeminarOut,
+)
+async def remove_joint_group(
+    seminar_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> AdminSeminarOut:
+    """このゼミを合同グループから外す(単独のゼミに戻す)。"""
+    seminar = await db.get(Seminar, seminar_id)
+    if seminar is None:
+        raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+
+    previous_group_id = seminar.joint_group_id
+    seminar.joint_group_id = None
+    await db.flush()
+
+    if previous_group_id is not None:
+        await _delete_joint_group_if_orphaned(db, group_id=previous_group_id)
+
+    teachers_by_seminar = await _teachers_by_seminar(db, seminar_ids=[seminar.id])
+    materials_by_seminar = await _materials_by_seminar(db, seminar_ids=[seminar.id])
+    return _to_seminar_out(
+        seminar,
+        teachers_by_seminar.get(seminar.id, []),
+        materials_by_seminar.get(seminar.id, []),
+        [],
     )
 
 
@@ -147,8 +297,14 @@ async def delete_seminar(
     seminar = await db.get(Seminar, seminar_id)
     if seminar is None:
         raise HTTPException(status_code=404, detail="指定されたゼミが見つかりません。")
+    joint_group_id = seminar.joint_group_id
     await db.delete(seminar)
     await db.flush()
+    if joint_group_id is not None:
+        # 削除したゼミが合同グループに属していた場合、残ったゼミが
+        # 1つ以下になっていればグループごと解消する(孤立したグループを
+        # 残さないため。set_joint_group/remove_joint_groupと同じ後始末)。
+        await _delete_joint_group_if_orphaned(db, group_id=joint_group_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -44,8 +44,9 @@ class MeOut(BaseModel):
     research_theme: str | None
     interest_tags: list[ResearchTagOut]
     slack_user_id: str | None
-    # 現在の年度に所属しているゼミ(学生のみ。無ければNone)。
-    current_seminar: CurrentSeminarOut | None
+    # 現在の年度に所属しているゼミ(学生のみ。合同ゼミの分割等で複数に
+    # 所属することがあるためリスト。無ければ空リスト)。
+    current_seminars: list[CurrentSeminarOut]
 
 
 class MeUpdateIn(BaseModel):
@@ -409,6 +410,21 @@ class AdminSeminarTeacherOut(BaseModel):
     name: str
 
 
+class AdminSeminarJointOut(BaseModel):
+    """合同グループを共有する、自分以外のゼミ(表示用)。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
+class AdminSeminarJointGroupSet(BaseModel):
+    """このゼミを、指定したゼミと同じ合同グループにする。"""
+
+    joint_with_seminar_id: uuid.UUID
+
+
 class SeminarMaterialCreate(BaseModel):
     url: str = Field(min_length=1)
     type: MaterialType
@@ -434,6 +450,8 @@ class AdminSeminarOut(BaseModel):
     photo_url: str | None
     teachers: list[AdminSeminarTeacherOut]
     materials: list[SeminarMaterialOut]
+    # 同じ合同グループに属する、自分以外のゼミ(無ければ空リスト)。
+    joint_seminars: list[AdminSeminarJointOut]
 
 
 class TeacherSeminarOut(BaseModel):

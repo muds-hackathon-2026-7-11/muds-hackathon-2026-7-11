@@ -26,6 +26,7 @@ function makeSeminar(overrides: Partial<AdminSeminar> = {}): AdminSeminar {
     photo_url: null,
     teachers: [],
     materials: [],
+    joint_seminars: [],
     ...overrides,
   };
 }
@@ -128,6 +129,7 @@ describe("AdminSeminarsView", () => {
           photo_url: "https://example.com/icon.png",
           teachers: [],
           materials: [],
+          joint_seminars: [],
         }),
         { status: 201 },
       ),

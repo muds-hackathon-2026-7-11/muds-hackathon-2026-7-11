@@ -28,6 +28,8 @@ export type AdminSeminar = {
   photo_url: string | null;
   teachers: { id: string; name: string }[];
   materials: AdminSeminarMaterial[];
+  // 同じ合同グループに属する、自分以外のゼミ(無ければ空配列)。
+  joint_seminars: { id: string; name: string }[];
 };
 
 const MATERIAL_TYPE_LABEL: Record<AdminSeminarMaterial["type"], string> = {
@@ -84,6 +86,13 @@ export function AdminSeminarsView({
   >({});
   const [addingMaterialId, setAddingMaterialId] = useState<string | null>(null);
   const [deletingMaterialKey, setDeletingMaterialKey] = useState<string | null>(
+    null,
+  );
+
+  const [jointTargetInputs, setJointTargetInputs] = useState<
+    Record<string, string>
+  >({});
+  const [savingJointGroupId, setSavingJointGroupId] = useState<string | null>(
     null,
   );
 
@@ -310,6 +319,68 @@ export function AdminSeminarsView({
       setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setDeletingMaterialKey(null);
+    }
+  }
+
+  async function refreshSeminars(): Promise<void> {
+    // 合同グループの設定/解除は自分以外のゼミの表示にも影響するため
+    // (合流・グループ解消の巻き添え等)、ローカルでの部分更新はせず
+    // 一覧を取り直して整合性を保つ。
+    const res = await apiFetch("/admin/seminars", session);
+    if (res.ok) {
+      setSeminars((await res.json()) as AdminSeminar[]);
+    }
+  }
+
+  async function handleSetJointGroup(seminar: AdminSeminar): Promise<void> {
+    const targetId = jointTargetInputs[seminar.id];
+    setErrorMessage(null);
+    if (!targetId) {
+      setErrorMessage("合同にするゼミを選択してください。");
+      return;
+    }
+    setSavingJointGroupId(seminar.id);
+    try {
+      const res = await apiFetch(
+        `/admin/seminars/${seminar.id}/joint-group`,
+        session,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ joint_with_seminar_id: targetId }),
+        },
+      );
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      await refreshSeminars();
+      setJointTargetInputs((prev) => ({ ...prev, [seminar.id]: "" }));
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setSavingJointGroupId(null);
+    }
+  }
+
+  async function handleRemoveJointGroup(seminar: AdminSeminar): Promise<void> {
+    setErrorMessage(null);
+    setSavingJointGroupId(seminar.id);
+    try {
+      const res = await apiFetch(
+        `/admin/seminars/${seminar.id}/joint-group`,
+        session,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        setErrorMessage(await extractErrorDetail(res));
+        return;
+      }
+      await refreshSeminars();
+    } catch {
+      setErrorMessage("通信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setSavingJointGroupId(null);
     }
   }
 
@@ -644,6 +715,67 @@ export function AdminSeminarsView({
                     className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {addingMaterialId === seminar.id ? "追加中..." : "追加"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="text-sm text-zinc-700">
+                  合同ゼミ
+                  {seminar.joint_seminars.length > 0 && (
+                    <span className="ml-1 text-xs text-zinc-600">
+                      ({seminar.joint_seminars.map((s) => s.name).join("・")}
+                      と合同)
+                    </span>
+                  )}
+                </p>
+                {seminar.joint_seminars.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveJointGroup(seminar)}
+                    disabled={savingJointGroupId === seminar.id}
+                    className="mt-1 text-xs text-red-600 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingJointGroupId === seminar.id
+                      ? "解除中..."
+                      : "合同を解除する(単独のゼミに戻す)"}
+                  </button>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <select
+                    value={jointTargetInputs[seminar.id] ?? ""}
+                    onChange={(e) =>
+                      setJointTargetInputs((prev) => ({
+                        ...prev,
+                        [seminar.id]: e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm"
+                  >
+                    <option value="">合同にするゼミを選択</option>
+                    {seminars
+                      .filter(
+                        (candidate) =>
+                          candidate.id !== seminar.id &&
+                          !seminar.joint_seminars.some(
+                            (joint) => joint.id === candidate.id,
+                          ),
+                      )
+                      .map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleSetJointGroup(seminar)}
+                    disabled={savingJointGroupId === seminar.id}
+                    className="shrink-0 rounded-full bg-[#add8e6] px-5 py-2 text-sm font-semibold text-sky-950 shadow-sm transition-all hover:bg-[#9bcfe0] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingJointGroupId === seminar.id
+                      ? "設定中..."
+                      : "合同にする"}
                   </button>
                 </div>
               </div>

@@ -33,13 +33,18 @@ async def _get_interest_tags(
     return list(result.scalars().all())
 
 
-async def _get_current_seminar(
+async def _get_current_seminars(
     db: AsyncSession, *, user_id: uuid.UUID
-) -> Seminar | None:
-    """現在の年度に所属しているゼミを返す(無ければNone)。"""
+) -> list[Seminar]:
+    """現在の年度に実際に所属している(SeminarMemberがある)ゼミを返す。
+
+    合同グループでは展開しない(本人のマイページには実際の所属ゼミだけを
+    出す。合同グループはゼミ詳細ページの「ゼミ生一覧」表示のみに使う)。
+    無ければ空リスト。
+    """
     academic_year = await current_academic_year(db)
     if academic_year is None:
-        return None
+        return []
 
     result = await db.execute(
         select(Seminar)
@@ -49,13 +54,13 @@ async def _get_current_seminar(
             SeminarMember.student_id == user_id,
             RecruitmentTerm.academic_year == academic_year,
         )
-        .limit(1)
+        .order_by(Seminar.name)
     )
-    return result.scalar_one_or_none()
+    return list(result.scalars().all())
 
 
 def _me_out(
-    user: User, tags: list[ResearchTag], current_seminar: Seminar | None
+    user: User, tags: list[ResearchTag], current_seminars: list[Seminar]
 ) -> MeOut:
     return MeOut(
         id=user.id,
@@ -68,11 +73,9 @@ def _me_out(
         research_theme=user.research_theme,
         interest_tags=[ResearchTagOut.model_validate(tag) for tag in tags],
         slack_user_id=user.slack_user_id,
-        current_seminar=(
-            CurrentSeminarOut.model_validate(current_seminar)
-            if current_seminar is not None
-            else None
-        ),
+        current_seminars=[
+            CurrentSeminarOut.model_validate(seminar) for seminar in current_seminars
+        ],
     )
 
 
@@ -83,8 +86,8 @@ async def read_me(
 ) -> MeOut:
     """認証済みユーザー自身の情報を返す。"""
     tags = await _get_interest_tags(db, user_id=user.id)
-    current_seminar = await _get_current_seminar(db, user_id=user.id)
-    return _me_out(user, tags, current_seminar)
+    current_seminars = await _get_current_seminars(db, user_id=user.id)
+    return _me_out(user, tags, current_seminars)
 
 
 @router.patch("/me", response_model=MeOut)
@@ -120,5 +123,5 @@ async def update_me(
     await db.flush()
 
     tags = await _get_interest_tags(db, user_id=user.id)
-    current_seminar = await _get_current_seminar(db, user_id=user.id)
-    return _me_out(user, tags, current_seminar)
+    current_seminars = await _get_current_seminars(db, user_id=user.id)
+    return _me_out(user, tags, current_seminars)

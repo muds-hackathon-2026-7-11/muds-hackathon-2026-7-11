@@ -172,7 +172,7 @@ async def student_has_current_seminar(
 ) -> bool:
     """現在の年度に所属しているゼミが1件でもあるか(#188)。
 
-    routers/me.pyの_get_current_seminarと同じ「現在年度のSeminarMemberが
+    routers/me.pyの_get_current_seminarsと同じ「現在年度のSeminarMemberが
     あるか」の判定だが、こちらは表示用にSeminarの中身までは要らないので
     存在チェックだけの軽量版にしている。
     """
