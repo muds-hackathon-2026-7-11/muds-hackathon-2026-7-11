@@ -137,26 +137,34 @@ async def test_get_seminar_detail_includes_joint_seminar_members(
     client, db_session
 ) -> None:
     """合同グループに属するゼミは、お互いのゼミ生一覧に相手の学生も含む
-    (合同ゼミを分割してもゼミ生の見え方を変えないための仕組み)。"""
+    (合同ゼミを分割してもゼミ生の見え方を変えないための仕組み)。
+    実際の想定(6教員合同ゼミを3ゼミに分割)に合わせ、3ゼミの相互合同で検証する。
+    """
     academic_year = 3000 + int(uuid.uuid4().int % 1000)
     term = await _make_open_term(db_session, academic_year)
 
     seminar_a = await _make_seminar(db_session)
     seminar_b = await _make_seminar(db_session)
+    seminar_c = await _make_seminar(db_session)
     group = SeminarJointGroup()
     db_session.add(group)
     await db_session.flush()
     seminar_a.joint_group_id = group.id
     seminar_b.joint_group_id = group.id
+    seminar_c.joint_group_id = group.id
     await db_session.flush()
 
     student_a = await _make_user(db_session, UserRole.student, "Aの研究テーマ")
     student_b = await _make_user(db_session, UserRole.student, "Bの研究テーマ")
+    student_c = await _make_user(db_session, UserRole.student, "Cの研究テーマ")
     db_session.add(
         SeminarMember(seminar_id=seminar_a.id, student_id=student_a.id, term_id=term.id)
     )
     db_session.add(
         SeminarMember(seminar_id=seminar_b.id, student_id=student_b.id, term_id=term.id)
+    )
+    db_session.add(
+        SeminarMember(seminar_id=seminar_c.id, student_id=student_c.id, term_id=term.id)
     )
     await db_session.flush()
 
@@ -166,13 +174,17 @@ async def test_get_seminar_detail_includes_joint_seminar_members(
     resp_b = await client.get(
         f"/seminars/{seminar_b.id}", headers=_auth_headers(student_b.email)
     )
+    resp_c = await client.get(
+        f"/seminars/{seminar_c.id}", headers=_auth_headers(student_c.email)
+    )
 
     assert resp_a.status_code == 200
     assert resp_b.status_code == 200
-    members_a = {m["name"] for m in resp_a.json()["current_members"]}
-    members_b = {m["name"] for m in resp_b.json()["current_members"]}
-    assert members_a == {student_a.name, student_b.name}
-    assert members_b == {student_a.name, student_b.name}
+    assert resp_c.status_code == 200
+    expected = {student_a.name, student_b.name, student_c.name}
+    assert {m["name"] for m in resp_a.json()["current_members"]} == expected
+    assert {m["name"] for m in resp_b.json()["current_members"]} == expected
+    assert {m["name"] for m in resp_c.json()["current_members"]} == expected
 
 
 async def test_get_seminar_detail_excludes_inactive_teachers_and_members(

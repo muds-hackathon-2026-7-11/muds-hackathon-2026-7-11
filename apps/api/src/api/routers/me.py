@@ -36,8 +36,11 @@ async def _get_interest_tags(
 async def _get_current_seminars(
     db: AsyncSession, *, user_id: uuid.UUID
 ) -> list[Seminar]:
-    """現在の年度に所属しているゼミを全て返す(合同グループに属していれば、
-    実際に所属しているゼミだけでなく相手ゼミも含める。無ければ空リスト)。
+    """現在の年度に実際に所属している(SeminarMemberがある)ゼミを返す。
+
+    合同グループでは展開しない(本人のマイページには実際の所属ゼミだけを
+    出す。合同グループはゼミ詳細ページの「ゼミ生一覧」表示のみに使う)。
+    無ければ空リスト。
     """
     academic_year = await current_academic_year(db)
     if academic_year is None:
@@ -51,24 +54,9 @@ async def _get_current_seminars(
             SeminarMember.student_id == user_id,
             RecruitmentTerm.academic_year == academic_year,
         )
+        .order_by(Seminar.name)
     )
-    seminars_by_id = {s.id: s for s in result.scalars().all()}
-    if not seminars_by_id:
-        return []
-
-    group_ids = {
-        s.joint_group_id
-        for s in seminars_by_id.values()
-        if s.joint_group_id is not None
-    }
-    if group_ids:
-        joint_result = await db.execute(
-            select(Seminar).where(Seminar.joint_group_id.in_(group_ids))
-        )
-        for s in joint_result.scalars().all():
-            seminars_by_id[s.id] = s
-
-    return sorted(seminars_by_id.values(), key=lambda s: s.name)
+    return list(result.scalars().all())
 
 
 def _me_out(
