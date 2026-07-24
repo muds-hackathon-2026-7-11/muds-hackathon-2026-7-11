@@ -18,7 +18,8 @@ type Me = {
   research_title: string | null;
   research_theme: string | null;
   interest_tags: ResearchTag[];
-  current_seminar: CurrentSeminar | null;
+  // 合同ゼミの場合は複数になりうる(#合同グループ機能)。
+  current_seminars: CurrentSeminar[];
 };
 
 type MyApplication = {
@@ -144,7 +145,9 @@ export default async function Home() {
                 Current Assignment
               </p>
               <p className="mt-2 text-lg font-semibold text-zinc-800">
-                {me?.current_seminar?.name ?? "未配属"}
+                {me && me.current_seminars.length > 0
+                  ? me.current_seminars.map((s) => s.name).join("・")
+                  : "未配属"}
               </p>
             </section>
 

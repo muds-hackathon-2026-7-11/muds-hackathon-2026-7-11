@@ -98,8 +98,8 @@ async def test_get_me_includes_current_seminar_when_assigned(
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["current_seminar"] is not None
-    assert body["current_seminar"]["name"] == seminar.name
+    assert len(body["current_seminars"]) == 1
+    assert body["current_seminars"][0]["name"] == seminar.name
 
 
 async def test_get_me_current_seminar_is_null_when_not_assigned(
@@ -112,7 +112,7 @@ async def test_get_me_current_seminar_is_null_when_not_assigned(
     resp = await client.get("/me", headers=_auth_headers(user.email))
 
     assert resp.status_code == 200
-    assert resp.json()["current_seminar"] is None
+    assert resp.json()["current_seminars"] == []
 
 
 async def test_get_me_current_seminar_ignores_a_newer_preparing_term(
@@ -138,8 +138,8 @@ async def test_get_me_current_seminar_ignores_a_newer_preparing_term(
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["current_seminar"] is not None
-    assert body["current_seminar"]["name"] == seminar.name
+    assert len(body["current_seminars"]) == 1
+    assert body["current_seminars"][0]["name"] == seminar.name
 
 
 async def test_get_me_current_seminar_ignores_a_newer_term_opened_before_it_starts(
@@ -169,8 +169,8 @@ async def test_get_me_current_seminar_ignores_a_newer_term_opened_before_it_star
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["current_seminar"] is not None
-    assert body["current_seminar"]["name"] == seminar.name
+    assert len(body["current_seminars"]) == 1
+    assert body["current_seminars"][0]["name"] == seminar.name
 
 
 # --- GET /me ---

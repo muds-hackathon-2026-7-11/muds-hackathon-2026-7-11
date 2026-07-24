@@ -9,6 +9,7 @@ from api.models import (
     RecruitmentTerm,
     RecruitmentTermStatus,
     Seminar,
+    SeminarJointGroup,
     SeminarMaterial,
     SeminarMember,
     SeminarRecruitment,
@@ -130,6 +131,48 @@ async def test_get_seminar_detail_includes_teachers_materials_and_current_member
     member_names = {m["name"] for m in body["current_members"]}
     assert member_names == {current_student.name}
     assert past_student.name not in member_names
+
+
+async def test_get_seminar_detail_includes_joint_seminar_members(
+    client, db_session
+) -> None:
+    """合同グループに属するゼミは、お互いのゼミ生一覧に相手の学生も含む
+    (合同ゼミを分割してもゼミ生の見え方を変えないための仕組み)。"""
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    term = await _make_open_term(db_session, academic_year)
+
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    group = SeminarJointGroup()
+    db_session.add(group)
+    await db_session.flush()
+    seminar_a.joint_group_id = group.id
+    seminar_b.joint_group_id = group.id
+    await db_session.flush()
+
+    student_a = await _make_user(db_session, UserRole.student, "Aの研究テーマ")
+    student_b = await _make_user(db_session, UserRole.student, "Bの研究テーマ")
+    db_session.add(
+        SeminarMember(seminar_id=seminar_a.id, student_id=student_a.id, term_id=term.id)
+    )
+    db_session.add(
+        SeminarMember(seminar_id=seminar_b.id, student_id=student_b.id, term_id=term.id)
+    )
+    await db_session.flush()
+
+    resp_a = await client.get(
+        f"/seminars/{seminar_a.id}", headers=_auth_headers(student_a.email)
+    )
+    resp_b = await client.get(
+        f"/seminars/{seminar_b.id}", headers=_auth_headers(student_b.email)
+    )
+
+    assert resp_a.status_code == 200
+    assert resp_b.status_code == 200
+    members_a = {m["name"] for m in resp_a.json()["current_members"]}
+    members_b = {m["name"] for m in resp_b.json()["current_members"]}
+    assert members_a == {student_a.name, student_b.name}
+    assert members_b == {student_a.name, student_b.name}
 
 
 async def test_get_seminar_detail_excludes_inactive_teachers_and_members(

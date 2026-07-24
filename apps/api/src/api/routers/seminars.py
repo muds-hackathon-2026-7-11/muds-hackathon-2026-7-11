@@ -370,6 +370,15 @@ async def get_seminar(
         SeminarMaterialOut.model_validate(m) for m in materials_result.scalars().all()
     ]
 
+    # 合同グループに属していれば、相手ゼミの学生もゼミ生一覧に含める
+    # (対等な関係。合同ゼミを分割してもゼミ生の見え方を変えないための仕組み)。
+    roster_seminar_ids: list[uuid.UUID] = [seminar_id]
+    if seminar.joint_group_id is not None:
+        group_result = await db.execute(
+            select(Seminar.id).where(Seminar.joint_group_id == seminar.joint_group_id)
+        )
+        roster_seminar_ids = [row[0] for row in group_result.all()]
+
     current_members: list[SeminarMemberOut] = []
     academic_year = await current_academic_year(db)
     if academic_year is not None:
@@ -378,7 +387,7 @@ async def get_seminar(
             .join(SeminarMember, SeminarMember.student_id == User.id)
             .join(RecruitmentTerm, SeminarMember.term_id == RecruitmentTerm.id)
             .where(
-                SeminarMember.seminar_id == seminar_id,
+                SeminarMember.seminar_id.in_(roster_seminar_ids),
                 RecruitmentTerm.academic_year == academic_year,
                 User.is_active.is_(True),
             )

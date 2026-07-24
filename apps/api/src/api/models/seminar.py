@@ -10,6 +10,18 @@ from api.db import Base
 from api.models.mixins import IDMixin, TimestampMixin
 
 
+class SeminarJointGroup(IDMixin, TimestampMixin, Base):
+    """合同ゼミのグループ。
+
+    同じグループに属するゼミ同士は対等な関係(代表ゼミという概念はない)。
+    グループに属するゼミは、お互いのゼミ生一覧にも相手の学生が表示される
+    (元は1つの合同ゼミだったものを分割しても、ゼミ生の見え方を変えない
+    ための仕組み)。
+    """
+
+    __tablename__ = "seminar_joint_groups"
+
+
 class Seminar(IDMixin, TimestampMixin, Base):
     """ゼミ情報。
 
@@ -25,6 +37,12 @@ class Seminar(IDMixin, TimestampMixin, Base):
     # ゼミ資料(PDF)から生成したAI用の要約知識。マッチ度診断・相談チャットの
     # 文脈として使う。import_seminar_docs で投入する(未投入なら NULL)。
     knowledge: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 合同ゼミのグループ(任意)。同じgroup_idを持つゼミ同士が合同。
+    joint_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("seminar_joint_groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
 
 class SeminarTeacher(IDMixin, Base):

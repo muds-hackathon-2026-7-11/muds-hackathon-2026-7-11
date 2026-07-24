@@ -9,6 +9,7 @@ from api.main import app
 from api.models import (
     MaterialType,
     Seminar,
+    SeminarJointGroup,
     SeminarMaterial,
     SeminarTeacher,
     User,
@@ -150,6 +151,143 @@ async def test_delete_seminar_unknown_returns_404(client, db_session) -> None:
     _authenticate_as(await _make_admin(db_session))
     resp = await client.delete(f"/admin/seminars/{uuid.uuid4()}")
     assert resp.status_code == 404
+
+
+# --- 合同グループ ---
+
+
+async def test_set_joint_group_creates_new_group(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+
+    resp = await client.put(
+        f"/admin/seminars/{seminar_a.id}/joint-group",
+        json={"joint_with_seminar_id": str(seminar_b.id)},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["joint_seminars"] == [
+        {"id": str(seminar_b.id), "name": seminar_b.name}
+    ]
+    await db_session.refresh(seminar_a)
+    await db_session.refresh(seminar_b)
+    assert seminar_a.joint_group_id is not None
+    assert seminar_a.joint_group_id == seminar_b.joint_group_id
+
+
+async def test_set_joint_group_joins_existing_group(client, db_session) -> None:
+    """3ゼミ目を追加すると、既存の2ゼミと同じグループに合流する(対等な関係)。"""
+    _authenticate_as(await _make_admin(db_session))
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    seminar_c = await _make_seminar(db_session)
+    await client.put(
+        f"/admin/seminars/{seminar_a.id}/joint-group",
+        json={"joint_with_seminar_id": str(seminar_b.id)},
+    )
+
+    resp = await client.put(
+        f"/admin/seminars/{seminar_c.id}/joint-group",
+        json={"joint_with_seminar_id": str(seminar_b.id)},
+    )
+
+    assert resp.status_code == 200
+    joint_names = {s["name"] for s in resp.json()["joint_seminars"]}
+    assert joint_names == {seminar_a.name, seminar_b.name}
+    await db_session.refresh(seminar_a)
+    await db_session.refresh(seminar_c)
+    assert seminar_a.joint_group_id == seminar_c.joint_group_id
+
+
+async def test_set_joint_group_rejects_self(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+
+    resp = await client.put(
+        f"/admin/seminars/{seminar.id}/joint-group",
+        json={"joint_with_seminar_id": str(seminar.id)},
+    )
+
+    assert resp.status_code == 400
+
+
+async def test_set_joint_group_unknown_seminar_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+
+    resp = await client.put(
+        f"/admin/seminars/{uuid.uuid4()}/joint-group",
+        json={"joint_with_seminar_id": str(seminar.id)},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_set_joint_group_unknown_target_returns_404(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar = await _make_seminar(db_session)
+
+    resp = await client.put(
+        f"/admin/seminars/{seminar.id}/joint-group",
+        json={"joint_with_seminar_id": str(uuid.uuid4())},
+    )
+
+    assert resp.status_code == 404
+
+
+async def test_remove_joint_group_clears_relation(client, db_session) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    group = SeminarJointGroup()
+    db_session.add(group)
+    await db_session.flush()
+    seminar_a.joint_group_id = group.id
+    seminar_b.joint_group_id = group.id
+    await db_session.flush()
+
+    resp = await client.delete(f"/admin/seminars/{seminar_a.id}/joint-group")
+
+    assert resp.status_code == 200
+    assert resp.json()["joint_seminars"] == []
+    await db_session.refresh(seminar_a)
+    await db_session.refresh(seminar_b)
+    assert seminar_a.joint_group_id is None
+    # 残り1ゼミだけになったグループは解消される(相手も単独ゼミに戻る)。
+    assert seminar_b.joint_group_id is None
+    assert await db_session.get(SeminarJointGroup, group.id) is None
+
+
+async def test_remove_joint_group_unknown_seminar_returns_404(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.delete(f"/admin/seminars/{uuid.uuid4()}/joint-group")
+    assert resp.status_code == 404
+
+
+async def test_delete_seminar_cleans_up_orphaned_joint_group(
+    client, db_session
+) -> None:
+    """合同グループの片方を「ゼミ削除」(合同解除ボタンではない方)で消したら、
+    残った側が孤立した1ゼミだけのグループに取り残されないこと。"""
+    _authenticate_as(await _make_admin(db_session))
+    seminar_a = await _make_seminar(db_session)
+    seminar_b = await _make_seminar(db_session)
+    group = SeminarJointGroup()
+    db_session.add(group)
+    await db_session.flush()
+    seminar_a.joint_group_id = group.id
+    seminar_b.joint_group_id = group.id
+    await db_session.flush()
+
+    resp = await client.delete(f"/admin/seminars/{seminar_a.id}")
+
+    assert resp.status_code == 204
+    await db_session.refresh(seminar_b)
+    assert seminar_b.joint_group_id is None
+    assert await db_session.get(SeminarJointGroup, group.id) is None
 
 
 # --- 担当割当 ---
