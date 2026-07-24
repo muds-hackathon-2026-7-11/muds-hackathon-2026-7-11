@@ -10,8 +10,8 @@
 
 ```sh
 make migrate       # テーブル作成
-# data/seminar_teacher.csv と data/slack_member.csv をこのディレクトリに置く(下記参照)
-make import-data   # ゼミ・教員・学生データをまとめて投入
+# data/seminar_teacher.csv, slack_member.csv, users_seminar.csv をこのディレクトリに置く(下記参照)
+make import-data   # ゼミ・教員・学生＋ゼミ知識をまとめて投入
 ```
 
 募集期間(recruitment_terms)・ゼミごとの定員(seminar_recruitments)は運営向けAPI/UI
@@ -58,6 +58,34 @@ make import-data   # ゼミ・教員・学生データをまとめて投入
    - **教員は非アクティブ化の対象外**(Slack在籍と実際の在職状況が一致しない
      ケースがあるため)。教員の退職時は手動で`is_active`を`false`にすること
 
+## 学生の所属ゼミデータ
+
+学生が現在どのゼミに所属しているかを投入する。マッチ度診断や、提出時の研究概要必須化
+などの判定に使われる。
+
+1. `data/users_seminar.csv`という名前のcsvを置く
+   (列: `学籍番号, 名前, 配属先`)
+   - `学籍番号`は数字のみ(例: `2522091`)。DBの`student_id`(`s`/`g`接頭辞付き)とは
+     両方の接頭辞を試して照合する
+   - `名前`は照合には使わず、学生が見つからない場合の警告表示にのみ使う
+     (氏名の正本は`import_users`が管理する)
+   - `配属先`はゼミ名と**完全一致**で照合する(先に`import-seminars`でゼミを作成しておくこと)
+2. DBに投入する:
+
+   ```sh
+   make import-seminar-members
+   ```
+
+   別名のファイルを使う場合は `make import-seminar-members csv=data/<ファイル名>.csv`、
+   年度を指定する場合は `make import-seminar-members year=2026` のように指定する
+   (年度は既定で現在の暦年)。
+
+   このスクリプトは以下を自動で行う:
+   - 指定年度の募集期間(`recruitment_terms`)が無ければ作成する
+   - 学生・ゼミのどちらかが見つからない行は、エラーで止めずスキップして警告を出す
+   - 同一学生が当該年度に既に別ゼミへ登録されていればCSVの内容で上書きする
+     (配属訂正・異動を想定したべき等処理)
+
 ## ゼミ資料(PDF) — AI用の要約知識
 
 マッチ度診断・AIゼミ相談アシスタントが参照する「ゼミの要約知識」を、ゼミ紹介PDFから
@@ -79,10 +107,17 @@ make import-data   # ゼミ・教員・学生データをまとめて投入
 
 ## まとめて投入
 
-デフォルトのファイル名(`seminar_teacher.csv`, `slack_member.csv`)で両方揃っていれば、
+デフォルトのファイル名(`seminar_teacher.csv`, `slack_member.csv`, `users_seminar.csv`)が
+揃っていれば、
 
 ```sh
 make import-data
 ```
 
-で`import-seminars`→`import-users`の順にまとめて実行できる。
+で`import-seminars`→`import-users`→`import-seminar-members`→`import-seminar-knowledge`
+の順にまとめて実行できる。
+
+- `import-seminar-knowledge`はリポジトリ管理下の`docs/seminars/knowledge/`を読むため、
+  `data/`への追加配置は不要。
+- OpenAIを使うPDF要約(`make import-seminar-docs`)は`import-data`に**含まれない**ため、
+  必要な場合のみ個別に実行する。
