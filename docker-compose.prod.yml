@@ -114,6 +114,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       target: prod
+      args:
+        # NEXT_PUBLIC_接頭辞の変数はnext build時に焼き込まれるため、env_fileではなく
+        # build argsとして渡す必要がある(--env-fileで読み込んだ.env.productionの値を
+        # ここで補間できる)。
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set in .env.production}
     restart: unless-stopped
     env_file:
       - .env.production

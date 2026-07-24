@@ -13,6 +13,10 @@ CMD ["pnpm", "dev"]
 
 FROM base AS builder
 WORKDIR /app/apps/web
+# NEXT_PUBLIC_接頭辞の変数はnext build時にブラウザ向けJSへ焼き込まれるため、
+# docker-compose側のenv_file(コンテナ起動時にしか効かない)ではなくbuild argsで渡す。
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm build
 
 FROM builder AS prod
