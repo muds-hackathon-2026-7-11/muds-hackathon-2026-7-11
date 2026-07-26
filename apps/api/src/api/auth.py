@@ -93,14 +93,23 @@ async def _provision_user(
 
     google_id(=sub)で検索し、無ければemailで既存レコードに紐付け、
     それも無ければ新規作成する。初回同時ログインの競合はSAVEPOINTで吸収する。
+
+    email はここで正規化する(strip+lower、#198)。routers/users.pyの
+    check_user_exists・admin.pyの管理者検索・import_users.py/
+    import_seminars.pyのCSV投入もすべて同じ正規化をしており、ここだけ
+    生のメールで照合すると、Google側の表記(大文字混在等)と事前登録データの
+    表記差で既存ユーザーに紐付かず、role/student_id等を引き継がない
+    別ユーザーが作られてしまう。
     """
+    normalized_email = email.strip().lower()
+
     result = await db.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
     if user is not None:
         return user
 
-    if email:
-        result = await db.execute(select(User).where(User.email == email))
+    if normalized_email:
+        result = await db.execute(select(User).where(User.email == normalized_email))
         user = result.scalar_one_or_none()
         if user is not None:
             user.google_id = google_id
@@ -109,8 +118,8 @@ async def _provision_user(
 
     user = User(
         google_id=google_id,
-        email=email,
-        name=name or email or google_id,
+        email=normalized_email,
+        name=name or normalized_email or google_id,
         role=role,
     )
     try:
@@ -118,15 +127,31 @@ async def _provision_user(
             db.add(user)
             await db.flush()
     except IntegrityError:
-        # 別リクエストが先に作成したケース。作成済みのレコードを取得し直す。
+        # 別リクエストが先に作成したケース。google_idの競合が典型的だが、
+        # email側のunique制約(#198の正規化で複数の異なる生表記が同じ
+        # 正規化後emailに集約されるようになった分、ここで衝突する余地も
+        # 増えている)で失敗した場合はgoogle_idでは見つからないため、
+        # emailでもフォールバック検索する。
         result = await db.execute(select(User).where(User.google_id == google_id))
-        user = result.scalar_one()
+        user = result.scalar_one_or_none()
+        if user is None and normalized_email:
+            result = await db.execute(
+                select(User).where(User.email == normalized_email)
+            )
+            user = result.scalar_one_or_none()
+        if user is None:
+            raise
     return user
 
 
 async def _authenticate_dev(request: Request, db: AsyncSession) -> User:
     """開発用ダミー認証。X-Dev-User-Email / X-Dev-User-Role でユーザーを特定する。"""
     email = request.headers.get("X-Dev-User-Email") or settings.auth_dev_user_email
+    # google_idも正規化後のemailから組み立てる(#198)。ここを生emailのままに
+    # すると、大文字小文字違いのヘッダごとに別のgoogle_idになり、
+    # _provision_userのgoogle_id一致(早期return)を素通りしてemail一致の
+    # フォールバックに落ち、その都度google_idが上書きされ続けてしまう。
+    normalized_email = email.strip().lower()
     role_raw = request.headers.get("X-Dev-User-Role", UserRole.student.value)
     try:
         role = UserRole(role_raw)
@@ -135,9 +160,9 @@ async def _authenticate_dev(request: Request, db: AsyncSession) -> User:
 
     user = await _provision_user(
         db,
-        google_id=f"dev|{email}",
-        email=email,
-        name=email.split("@")[0],
+        google_id=f"dev|{normalized_email}",
+        email=normalized_email,
+        name=normalized_email.split("@")[0],
         role=role,
     )
     # 開発時はヘッダのroleで都度上書きし、role別の動作確認をしやすくする。

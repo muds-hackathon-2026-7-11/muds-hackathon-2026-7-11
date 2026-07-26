@@ -121,6 +121,34 @@ async def test_me_dev_mode_provisions_user(client, db_session, monkeypatch) -> N
     assert result.scalar_one_or_none() is not None
 
 
+async def test_me_dev_mode_case_insensitive_email_resolves_to_same_user(
+    client, db_session, monkeypatch
+) -> None:
+    """#198: X-Dev-User-Emailの大文字小文字が違っても同一ユーザーに解決される
+    (_authenticate_devがgoogle_idを生emailから組み立てて別ユーザーを
+    作ってしまわないこと)。"""
+    monkeypatch.setattr(auth.settings, "auth_dev_mode", True)
+
+    first = await client.get(
+        "/me", headers={"X-Dev-User-Email": "Dev-Case@Example.com"}
+    )
+    second = await client.get(
+        "/me", headers={"X-Dev-User-Email": "dev-case@example.com"}
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+
+    # 生表記のまま保存された別行が無いことも含めて確認する。
+    result = await db_session.execute(
+        select(User).where(
+            User.email.in_(["dev-case@example.com", "Dev-Case@Example.com"])
+        )
+    )
+    assert len(result.scalars().all()) == 1
+
+
 async def test_me_dev_mode_default_email(client, monkeypatch) -> None:
     monkeypatch.setattr(auth.settings, "auth_dev_mode", True)
     monkeypatch.setattr(auth.settings, "auth_dev_user_email", "fallback@example.com")
@@ -248,6 +276,79 @@ async def test_me_links_existing_email_user(client, db_session, monkeypatch) -> 
         select(User).where(User.email == "jwt-user@example.com")
     )
     assert len(result.scalars().all()) == 1
+
+
+async def test_me_links_existing_email_user_case_insensitively(
+    client, db_session, monkeypatch
+) -> None:
+    """#198: CSVインポート(import_users.py等)で正規化(小文字)保存された既存
+    データに対し、Google側が大文字混在のメールで返してきても既存ユーザーに
+    紐付く(別ユーザーが新規作成されない)。"""
+    _use_jwks(monkeypatch)
+    existing = User(
+        google_id=_unique("placeholder"),
+        email="jwt-user@example.com",
+        name="Seeded User",
+        role=UserRole.teacher,
+    )
+    db_session.add(existing)
+    await db_session.flush()
+
+    # トークン内のemailは大文字混在("JWT-User@Example.com")、事前登録は小文字。
+    token = _make_token(overrides={"email": "JWT-User@Example.com"})
+    resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert resp.status_code == 200
+    assert resp.json()["id"] == str(existing.id)
+    assert resp.json()["role"] == "teacher"
+    # 大文字小文字違いの重複ユーザーは作られない。正規化後emailだけで
+    # フィルタすると「生表記のまま別行が作られた」ケースを見逃すため、
+    # 生表記・正規化後表記の両方を対象に数える(DBは共有シードデータを
+    # 含むため、テーブル全件カウントは使えない)。
+    result = await db_session.execute(
+        select(User).where(
+            User.email.in_(["jwt-user@example.com", "JWT-User@Example.com"])
+        )
+    )
+    assert len(result.scalars().all()) == 1
+
+
+async def test_me_new_user_email_is_stored_normalized(
+    client, db_session, monkeypatch
+) -> None:
+    """#198: 新規作成時もemailを正規化して保存する(以後の検索と表記を揃える)。"""
+    _use_jwks(monkeypatch)
+    token = _make_token(
+        overrides={"sub": "new-user-sub", "email": "New-User@Example.com"}
+    )
+
+    resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "new-user@example.com"
+
+
+async def test_me_returning_user_email_is_not_overwritten_by_google_id_match(
+    client, db_session, monkeypatch
+) -> None:
+    """#198: google_idで既に一致する返り客ユーザーは、JWTのメール表記が
+    違っていてもemail列を書き換えない(JITプロビジョニングはgoogle_id一致
+    時に他のフィールドへ手を入れない、という既存の設計を確認する回帰テスト)。"""
+    _use_jwks(monkeypatch)
+    token = _make_token()  # sub="google-sub-123", email="jwt-user@example.com"
+
+    first = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
+    assert first.status_code == 200
+    user_id = first.json()["id"]
+
+    # 2回目は同じgoogle_id(sub)だが、大文字混在のメールで来たとする。
+    token2 = _make_token(overrides={"email": "JWT-User@Example.com"})
+    second = await client.get("/me", headers={"Authorization": f"Bearer {token2}"})
+
+    assert second.status_code == 200
+    assert second.json()["id"] == user_id
+    # google_id一致で早期returnするため、emailは初回登録時のまま。
+    assert second.json()["email"] == "jwt-user@example.com"
 
 
 async def test_me_with_wrong_audience_is_401(client, monkeypatch) -> None:
