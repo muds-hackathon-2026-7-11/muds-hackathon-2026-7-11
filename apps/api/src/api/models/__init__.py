@@ -1,3 +1,4 @@
+from api.models.ai_usage import AiFeature, AiUsage
 from api.models.application import ApplicationChoice, ApplicationForm, ApplicationStatus
 from api.models.chat_log import ChatLog
 from api.models.match_evaluation import MatchEvaluation
@@ -27,6 +28,8 @@ from api.models.seminar import (
 from api.models.user import User, UserRole
 
 __all__ = [
+    "AiFeature",
+    "AiUsage",
     "Answer",
     "AnswerRequest",
     "AnswerRequestStatus",

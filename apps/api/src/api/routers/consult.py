@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from api.consult_client import ConsultClient, ConsultTurn, get_consult_client
 from api.db import get_db
-from api.models import Seminar, User
+from api.models import AiFeature, Seminar, User
 from api.schemas import ConsultIn, ConsultOut, ConsultRecommendation
+from api.usage import UsageLimitReached, consume
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,12 @@ _NO_SEMINARS_REPLY = (
 )
 # LLM呼び出し失敗時のフォールバック。
 _ERROR_REPLY = "現在相談アシスタントを利用できません。しばらくして再度お試しください。"
+# 募集期間あたりの利用上限に達したとき(#201)。エラーではなく仕様なので、
+# 何が起きたのかと次にどうすればよいかが分かる文言にする。
+_LIMIT_REACHED_REPLY = (
+    "今回の募集期間に利用できる相談回数の上限に達しました。"
+    "ゼミ選びで迷っていることがあれば、ゼミの質問機能や運営への問い合わせをご利用ください。"
+)
 
 
 async def _seminars_context(db: AsyncSession) -> str:
@@ -51,6 +58,12 @@ async def consult(
     context = await _seminars_context(db)
     if not context:
         return ConsultOut(reply=_NO_SEMINARS_REPLY, recommendations=[])
+
+    # LLMを呼ぶことが確定してから消費する(上のreturnはOpenAIを呼んでいない)。
+    try:
+        await consume(db, user=user, feature=AiFeature.consult)
+    except UsageLimitReached:
+        return ConsultOut(reply=_LIMIT_REACHED_REPLY, recommendations=[])
 
     history = [ConsultTurn(role=t.role, content=t.content) for t in payload.history]
     try:
