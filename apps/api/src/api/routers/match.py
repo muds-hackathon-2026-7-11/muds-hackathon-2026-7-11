@@ -237,7 +237,6 @@ async def post_reason_matches(
     if not scorable:
         return ReasonMatchesOut(results=[], message=_NO_SEMINARS_MESSAGE)
 
-    profile = await _student_text(db, user)
     name_by_id = {s.id: s.name for (s, _text) in scorable}
     chosen_ids = {c.seminar_id for c in payload.choices}
 
@@ -249,8 +248,9 @@ async def post_reason_matches(
         if not reason:
             continue
         had_reason = True
-        # 学生プロフィール(あれば)＋その志望の理由を問い合わせ文にする。
-        query = "\n".join(p for p in [profile, f"志望理由: {reason}"] if p)
+        # 研究概要は使わず、その志望の理由だけを問い合わせ文にする(#196)。
+        # ゼミ移動時は研究内容も変わることが多いため、志望理由のみを根拠にする。
+        query = f"志望理由: {reason}"
         rows = await _score_all(
             db,
             user_id=user.id,
