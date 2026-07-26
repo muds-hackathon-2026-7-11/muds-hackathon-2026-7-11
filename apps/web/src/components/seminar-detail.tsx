@@ -66,9 +66,11 @@ function TeacherAvatar({
   photoUrl: string | null;
   seminarPhotoUrl: string | null;
 }) {
-  // ゼミの研究室写真があればそちらを優先し、無ければ教員本人の写真、
-  // それも無ければ頭文字にフォールバックする。
-  const src = seminarPhotoUrl ?? photoUrl;
+  // 教員本人の写真があればそれを優先し、無ければゼミの写真、それも
+  // 無ければ頭文字にフォールバックする。ゼミ写真を優先すると、担当教員が
+  // 複数いるゼミでゼミ写真を設定した途端、全教員の顔写真欄が同じゼミ写真に
+  // 置き換わってしまう不具合があったため、教員本人の写真を優先する。
+  const src = photoUrl ?? seminarPhotoUrl;
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
 
   if (src && src !== erroredSrc) {
