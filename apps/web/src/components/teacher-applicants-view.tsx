@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 
 export type PastSeminar = {
   seminar_name: string;
@@ -29,15 +30,6 @@ const PRIORITY_LABEL: Record<number, string> = {
   2: "第2志望",
   3: "第3志望",
 };
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
-}
 
 type TeacherApplicantsViewProps = {
   initialData: SeminarApplicants[];

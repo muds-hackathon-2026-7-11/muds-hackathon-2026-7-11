@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 import { SkySelect } from "@/components/sky-select";
 
 export type AdminTermOption = {
@@ -23,15 +24,6 @@ export type AssignmentImportResult = {
   existing: number;
   errors: AssignmentImportError[];
 };
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
-}
 
 function formatDate(value: string): string {
   const d = new Date(value);

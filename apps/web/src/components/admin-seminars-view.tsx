@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 import { isSafeHttpUrl } from "@/lib/safe-url";
 
 export type AdminTeacherOption = {
@@ -38,15 +39,6 @@ const MATERIAL_TYPE_LABEL: Record<AdminSeminarMaterial["type"], string> = {
   video: "動画",
   website: "Webサイト",
 };
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
-}
 
 type AdminSeminarsViewProps = {
   initialSeminars: AdminSeminar[];
