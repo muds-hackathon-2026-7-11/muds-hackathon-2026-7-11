@@ -57,14 +57,28 @@ def _empty_form_out(*, is_editable: bool) -> ApplicationFormOut:
 
 
 async def _get_form(
-    db: AsyncSession, *, term_id: uuid.UUID, student_id: uuid.UUID
+    db: AsyncSession,
+    *,
+    term_id: uuid.UUID,
+    student_id: uuid.UUID,
+    for_update: bool = False,
 ) -> ApplicationForm | None:
-    result = await db.execute(
-        select(ApplicationForm).where(
-            ApplicationForm.term_id == term_id,
-            ApplicationForm.student_id == student_id,
-        )
+    """for_update=Trueのとき、行ロック(SELECT ... FOR UPDATE)を取得する。
+
+    同一学生から2件のPUT /applications/meが同時に来た場合、既存フォームの
+    delete-then-insert(#199)がロック無しだと互いに素通りして片方の保存内容が
+    無言で消える(lost update)。行ロックで直列化し、後から実行された方の
+    内容で確定するという一貫した動作を保証する(新規作成は
+    uq_application_form_term_studentのIntegrityErrorで既に競合を吸収済み
+    のため対象外)。
+    """
+    query = select(ApplicationForm).where(
+        ApplicationForm.term_id == term_id,
+        ApplicationForm.student_id == student_id,
     )
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -224,7 +238,10 @@ async def upsert_my_application(
         student_grade=student_grade,
     )
 
-    form = await _get_form(db, term_id=term.id, student_id=user.id)
+    # for_update=True: 既存フォームがあれば行ロックを取得する(#199)。
+    # まだ無ければロックのしようがないのでNoneのまま(新規作成パスの競合は
+    # 従来通りSAVEPOINT+IntegrityErrorで吸収する)。
+    form = await _get_form(db, term_id=term.id, student_id=user.id, for_update=True)
     if form is None:
         form = ApplicationForm(
             term_id=term.id, student_id=user.id, status=ApplicationStatus.draft
@@ -236,7 +253,12 @@ async def upsert_my_application(
                 db.add(form)
                 await db.flush()
         except IntegrityError:
-            form = await _get_form(db, term_id=term.id, student_id=user.id)
+            # 別リクエストが先に作成したケース。以降のdelete-insertで
+            # 同じ理由(#199)の競合を起こさないよう、ここも行ロック付きで
+            # 取得し直す。
+            form = await _get_form(
+                db, term_id=term.id, student_id=user.id, for_update=True
+            )
             if form is None:
                 raise
     else:
@@ -275,7 +297,11 @@ async def submit_my_application(
 ) -> ApplicationFormOut:
     term = await _require_targeted_term(db, student_grade=normalize_grade(user.grade))
 
-    form = await _get_form(db, term_id=term.id, student_id=user.id)
+    # for_update=True: PUT /applications/me(#199で行ロック化済み)と競合すると、
+    # ロック無しのままだとここで読む選択肢がPUTのcommit前の古いスナップショットに
+    # なり得る(通知・レスポンスが実際の保存内容と食い違う)。同じ行ロックで
+    # 直列化し、PUTのcommit後の最新状態を確実に読む。
+    form = await _get_form(db, term_id=term.id, student_id=user.id, for_update=True)
     if form is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
