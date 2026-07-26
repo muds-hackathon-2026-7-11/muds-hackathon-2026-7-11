@@ -75,7 +75,7 @@ import-seminar-docs: ## summarize seminar PDF materials into seminars.knowledge 
 import-seminar-knowledge: ## load seminar summary docs into seminars.knowledge (default dir docs/seminars/knowledge; override with dir=...)
 	cd apps/api && uv run python -m api.import_seminar_knowledge "../../$(or $(dir),docs/seminars/knowledge)"
 
-import-data: import-seminars import-users import-seminar-members ## run import-seminars, import-users, then import-seminar-members with default CSV paths
+import-data: import-seminars import-users import-seminar-members import-seminar-knowledge ## run import-seminars, import-users, import-seminar-members, then import-seminar-knowledge with default paths
 
 backup: ## take an on-demand DB backup into ./backups (pg_dump, custom format)
 	mkdir -p backups
