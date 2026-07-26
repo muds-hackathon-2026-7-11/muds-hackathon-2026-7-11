@@ -17,6 +17,7 @@ from api.models import (
     User,
     UserRole,
 )
+from api.routers.applications import _get_form
 
 pytestmark = pytest.mark.asyncio
 
@@ -410,6 +411,71 @@ async def test_put_replaces_existing_choices(client, db_session) -> None:
     body = resp.json()
     assert len(body["choices"]) == 1
     assert body["choices"][0]["seminar_id"] == str(seminar_b.id)
+
+
+async def test_get_form_for_update_true_locks_row(db_session) -> None:
+    """#199: for_update=Trueのとき、実際にSELECT...FOR UPDATEでフォームを
+    取得することをクエリレベルで確認する(将来for_updateの配線が誤って
+    外れる/呼び出し側で渡し忘れるリグレッションを検知するための回帰テスト。
+    真の同時実行(2つの独立したDBセッション)によるブロッキングの検証は、
+    本プロジェクトのテストが実データ共有DBに接続する設計のため、
+    commitを伴う検証がデータ汚染リスクを持ち見送っている)。"""
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    form = ApplicationForm(
+        term_id=term.id, student_id=student.id, status=ApplicationStatus.draft
+    )
+    db_session.add(form)
+    await db_session.flush()
+
+    captured_queries = []
+    original_execute = db_session.execute
+
+    async def _spy(query, *args, **kwargs):
+        captured_queries.append(query)
+        return await original_execute(query, *args, **kwargs)
+
+    db_session.execute = _spy
+    try:
+        result = await _get_form(
+            db_session, term_id=term.id, student_id=student.id, for_update=True
+        )
+    finally:
+        db_session.execute = original_execute
+
+    assert result is not None
+    assert result.id == form.id
+    assert any(
+        getattr(q, "_for_update_arg", None) is not None for q in captured_queries
+    )
+
+
+async def test_get_form_for_update_false_does_not_lock_row(db_session) -> None:
+    """for_update未指定(既定False)では行ロックを取らない
+    (GET /applications/me等の読み取り専用パスに影響しないことの確認)。"""
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    form = ApplicationForm(
+        term_id=term.id, student_id=student.id, status=ApplicationStatus.draft
+    )
+    db_session.add(form)
+    await db_session.flush()
+
+    captured_queries = []
+    original_execute = db_session.execute
+
+    async def _spy(query, *args, **kwargs):
+        captured_queries.append(query)
+        return await original_execute(query, *args, **kwargs)
+
+    db_session.execute = _spy
+    try:
+        result = await _get_form(db_session, term_id=term.id, student_id=student.id)
+    finally:
+        db_session.execute = original_execute
+
+    assert result is not None
+    assert all(getattr(q, "_for_update_arg", None) is None for q in captured_queries)
 
 
 async def test_put_keeps_submitted_status_and_refreshes_submitted_at(
@@ -961,6 +1027,44 @@ async def test_submit_requires_active_term(client, db_session) -> None:
     )
 
     assert resp.status_code == 400
+
+
+async def test_submit_locks_form_row(client, db_session) -> None:
+    """#199: submit_my_applicationも(PUTと同じ行を取り合うため)
+    for_update=Trueでフォームを取得することを確認する。ロック無しのまま
+    だと、直前のPUTがcommitする前の古い選択肢スナップショットを読んで
+    Slack通知・レスポンスに使ってしまう恐れがあった。"""
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+
+    captured_queries = []
+    original_execute = db_session.execute
+
+    async def _spy(query, *args, **kwargs):
+        captured_queries.append(query)
+        return await original_execute(query, *args, **kwargs)
+
+    db_session.execute = _spy
+    try:
+        resp = await client.post(
+            "/applications/me/submit", headers=_auth_headers(student.email)
+        )
+    finally:
+        db_session.execute = original_execute
+
+    assert resp.status_code == 200
+    assert any(
+        getattr(q, "_for_update_arg", None) is not None for q in captured_queries
+    )
 
 
 async def test_submit_rejects_when_no_seminar_targets_students_grade_at_all(
