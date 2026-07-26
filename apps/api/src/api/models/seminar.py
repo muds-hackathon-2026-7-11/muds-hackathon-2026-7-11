@@ -65,6 +65,7 @@ class MaterialType(str, enum.Enum):
     slide = "slide"
     pdf = "pdf"
     video = "video"
+    website = "website"
 
 
 class SeminarMaterial(IDMixin, Base):

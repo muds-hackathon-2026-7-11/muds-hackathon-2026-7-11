@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 
 export type AdminTeacher = {
   id: string;
@@ -11,15 +12,6 @@ export type AdminTeacher = {
   photo_url: string | null;
   is_active: boolean;
 };
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
-}
 
 type AdminTeachersViewProps = {
   initialTeachers: AdminTeacher[];

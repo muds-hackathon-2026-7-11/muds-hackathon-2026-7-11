@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 
 export type Answer = {
   id: string;
@@ -33,15 +34,6 @@ function formatDate(iso: string): string {
     // SSRとハイドレーション時で表示がずれるため、明示的に固定する。
     timeZone: "Asia/Tokyo",
   });
-}
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
 }
 
 export function FaqList({

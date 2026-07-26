@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 import { SkyDatePicker } from "@/components/sky-date-picker";
 import { SkySelect } from "@/components/sky-select";
 
@@ -112,15 +113,6 @@ function statusLabel(term: AdminRecruitmentTerm): string {
     return STATUS_LABEL.closed;
   }
   return STATUS_LABEL[term.status];
-}
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
 }
 
 function formatPeriod(startsAt: string, endsAt: string): string {

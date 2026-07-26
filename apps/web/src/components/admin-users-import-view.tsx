@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 
 export type UserImportSkip = {
   row: number;
@@ -17,15 +18,6 @@ export type UserImportResult = {
   deactivated: number;
   skipped: UserImportSkip[];
 };
-
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
-}
 
 export function AdminUsersImportView() {
   const { data: session } = useSession();

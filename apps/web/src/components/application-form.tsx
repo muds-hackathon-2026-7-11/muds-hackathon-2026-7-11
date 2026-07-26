@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { extractErrorDetail } from "@/lib/extract-error-detail";
 
 // バックエンドは画面を開いた後に募集期間が終了した場合、保存・提出時に
 // このエラーを返す(現在募集中の期間がないため)。生のエラー文言のままだと
@@ -71,16 +72,8 @@ function scrollToTop(): void {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function extractErrorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string };
-    if (body.detail === TERM_CLOSED_DETAIL) {
-      return TERM_CLOSED_MESSAGE;
-    }
-    return body.detail ?? "エラーが発生しました。";
-  } catch {
-    return "エラーが発生しました。";
-  }
+function extractApplicationErrorDetail(res: Response): Promise<string> {
+  return extractErrorDetail(res, { [TERM_CLOSED_DETAIL]: TERM_CLOSED_MESSAGE });
 }
 
 export type Seminar = {
@@ -351,7 +344,7 @@ export function ApplicationForm({
             }),
           });
           if (!res.ok) {
-            setErrorMessage(await extractErrorDetail(res));
+            setErrorMessage(await extractApplicationErrorDetail(res));
             return false;
           }
           const data = (await res.json()) as ApplicationFormData;
@@ -461,7 +454,7 @@ export function ApplicationForm({
         method: "POST",
       });
       if (!res.ok) {
-        setErrorMessage(await extractErrorDetail(res));
+        setErrorMessage(await extractApplicationErrorDetail(res));
         scrollToTop();
         return;
       }
