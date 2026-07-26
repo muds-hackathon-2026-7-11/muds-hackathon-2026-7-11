@@ -18,7 +18,7 @@ export type AdminTeacherOption = {
 export type AdminSeminarMaterial = {
   id: string;
   url: string;
-  type: "slide" | "pdf" | "video";
+  type: "slide" | "pdf" | "video" | "website";
 };
 
 export type AdminSeminar = {
@@ -36,6 +36,7 @@ const MATERIAL_TYPE_LABEL: Record<AdminSeminarMaterial["type"], string> = {
   slide: "スライド",
   pdf: "PDF",
   video: "動画",
+  website: "Webサイト",
 };
 
 async function extractErrorDetail(res: Response): Promise<string> {
@@ -695,6 +696,7 @@ export function AdminSeminarsView({
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
                     <option value="video">動画</option>
+                    <option value="website">Webサイト</option>
                   </select>
                   <input
                     type="text"

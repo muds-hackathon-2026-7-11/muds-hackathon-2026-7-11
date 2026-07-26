@@ -8,7 +8,7 @@ import { isSafeHttpUrl } from "@/lib/safe-url";
 export type TeacherSeminarMaterial = {
   id: string;
   url: string;
-  type: "slide" | "pdf" | "video";
+  type: "slide" | "pdf" | "video" | "website";
 };
 
 export type TeacherSeminar = {
@@ -26,6 +26,7 @@ const MATERIAL_TYPE_LABEL: Record<TeacherSeminarMaterial["type"], string> = {
   slide: "スライド",
   pdf: "PDF",
   video: "動画",
+  website: "Webサイト",
 };
 
 async function extractErrorDetail(res: Response): Promise<string> {
@@ -431,6 +432,7 @@ export function TeacherSeminarView({
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
                     <option value="video">動画</option>
+                    <option value="website">Webサイト</option>
                   </select>
                   <input
                     type="text"

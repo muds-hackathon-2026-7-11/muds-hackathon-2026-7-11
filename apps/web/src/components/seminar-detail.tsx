@@ -29,7 +29,7 @@ type Teacher = {
 type Material = {
   id: string;
   url: string;
-  type: "slide" | "pdf" | "video";
+  type: "slide" | "pdf" | "video" | "website";
 };
 
 type Member = {
@@ -55,6 +55,7 @@ const MATERIAL_TYPE_LABEL: Record<Material["type"], string> = {
   slide: "スライド",
   pdf: "PDF",
   video: "動画",
+  website: "Webサイト",
 };
 
 function TeacherAvatar({
