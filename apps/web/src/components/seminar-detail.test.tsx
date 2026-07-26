@@ -133,7 +133,10 @@ describe("SeminarDetailView", () => {
     );
   });
 
-  it("prefers the seminar's own photo over the teacher's photo", () => {
+  it("prefers the teacher's own photo over the seminar's photo", () => {
+    // 担当教員が複数いるゼミでゼミ写真を設定すると、教員写真を優先しない限り
+    // 全教員の顔写真欄が同じゼミ写真になってしまう不具合があったため、
+    // 教員本人の写真がある場合は必ずそちらを表示する。
     const withBothPhotos: SeminarDetail = {
       ...seminar,
       photo_url: "https://example.com/seminar.jpg",
@@ -145,6 +148,25 @@ describe("SeminarDetailView", () => {
       ],
     };
     render(<SeminarDetailView seminar={withBothPhotos} />);
+
+    expect(screen.getByAltText("山田教授")).toHaveAttribute(
+      "src",
+      "https://example.com/teacher.jpg",
+    );
+  });
+
+  it("falls back to the seminar's photo when the teacher has no photo", () => {
+    const withSeminarPhotoOnly: SeminarDetail = {
+      ...seminar,
+      photo_url: "https://example.com/seminar.jpg",
+      teachers: [
+        {
+          ...seminar.teachers[0],
+          photo_url: null,
+        },
+      ],
+    };
+    render(<SeminarDetailView seminar={withSeminarPhotoOnly} />);
 
     expect(screen.getByAltText("山田教授")).toHaveAttribute(
       "src",
