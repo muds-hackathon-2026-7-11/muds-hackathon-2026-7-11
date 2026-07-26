@@ -71,6 +71,29 @@ async def test_reason_matches_returns_selected_and_recommendations(
     assert len(fake_match_client.bulk_calls) == 2
 
 
+async def test_reason_matches_uses_reason_only_not_research_theme(
+    client, db_session, fake_match_client
+) -> None:
+    # 研究概要(research_theme)はマッチ度の根拠に使わず、志望理由のみを渡す(#196)。
+    # ゼミ移動時は研究内容も変わることが多いため。
+    user = await _make_user(db_session)  # research_theme="推薦システムに興味"
+    seminar = await _make_seminar(db_session)
+    _authenticate_as(user)
+
+    body = {
+        "choices": [
+            {"seminar_id": str(seminar.id), "reason": "画像認識を研究したい"},
+        ]
+    }
+    resp = await client.post("/seminars/reason-matches", json=body)
+
+    assert resp.status_code == 200
+    assert len(fake_match_client.bulk_calls) == 1
+    student_text, _names = fake_match_client.bulk_calls[0]
+    assert "画像認識を研究したい" in student_text  # 志望理由は渡す
+    assert "推薦システムに興味" not in student_text  # 研究概要は渡さない
+
+
 async def test_reason_matches_skips_empty_reason(
     client, db_session, fake_match_client
 ) -> None:
