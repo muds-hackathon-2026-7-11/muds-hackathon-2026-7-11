@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from conftest import jst_today
 from sqlalchemy import update
 
 from api.models import (
@@ -148,7 +149,7 @@ async def _close_all_open_terms(db_session) -> None:
 async def test_find_students_without_submission_excludes_submitted(
     db_session,
 ) -> None:
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     not_submitted = await _make_student(db_session)
     submitted = await _make_student(db_session)
@@ -165,7 +166,7 @@ async def test_find_students_without_submission_excludes_submitted(
 async def test_find_students_without_submission_excludes_unlinked_and_inactive(
     db_session,
 ) -> None:
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     unlinked = await _make_student(db_session, slack_user_id=None)
     inactive = await _make_student(db_session, is_active=False)
@@ -183,7 +184,7 @@ async def test_find_students_without_submission_includes_admin_role(
 ) -> None:
     # role=adminであっても実際には在学中の学生であるユーザーがいるため、
     # applications.pyの各エンドポイントと同様に対象に含める。
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     admin_student = await _make_student(db_session, role=UserRole.admin)
     teacher = await _make_student(db_session, role=UserRole.teacher)
@@ -203,7 +204,7 @@ async def test_find_students_without_submission_excludes_grade_not_targeted(
     # (マイページで「準備中」表示)。提出できない学生にリマインダーで
     # 「まだの場合はご提出ください」と催促するのはおかしいため、対象外の
     # 学年は除外する。
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     targeted = await _make_student(db_session, grade="B3")
     not_targeted = await _make_student(db_session, grade="B4")
@@ -223,7 +224,7 @@ async def test_find_students_without_submission_matches_mids_style_grade(
 ) -> None:
     # 表記揺れ(#99)。"MIDS/B3"のような学生もnormalize_grade経由でB3として
     # 対象学年判定される。
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     mids_student = await _make_student(db_session, grade="MIDS/B3")
 
@@ -238,7 +239,7 @@ async def test_find_students_without_submission_empty_when_term_has_no_recruitme
 ) -> None:
     # SeminarRecruitmentが1件も無い(=対象学年が定義できない)募集ラウンドでは、
     # 「全学生が対象」にフォールバックしてはいけない。
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_student(db_session, grade="B3")
 
     result = await find_students_without_submission(db_session, term_id=term.id)
@@ -254,7 +255,7 @@ async def test_send_deadline_reminders_sends_on_deadline_day(
     db_session, fake_slack_client
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     student = await _make_student(db_session)
 
@@ -270,7 +271,7 @@ async def test_send_deadline_reminders_sends_the_day_before_deadline(
     db_session, fake_slack_client
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today() + timedelta(days=1))
+    term = await _make_term(db_session, ends_at=jst_today() + timedelta(days=1))
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     student = await _make_student(db_session)
 
@@ -286,7 +287,7 @@ async def test_send_deadline_reminders_ignores_terms_two_days_out(
     db_session, fake_slack_client
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today() + timedelta(days=2))
+    term = await _make_term(db_session, ends_at=jst_today() + timedelta(days=2))
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     student = await _make_student(db_session)
 
@@ -302,7 +303,7 @@ async def test_send_deadline_reminders_ignores_closed_terms(
 ) -> None:
     await _close_all_open_terms(db_session)
     term = await _make_term(
-        db_session, ends_at=date.today(), status=RecruitmentTermStatus.closed
+        db_session, ends_at=jst_today(), status=RecruitmentTermStatus.closed
     )
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     student = await _make_student(db_session)
@@ -318,7 +319,7 @@ async def test_send_deadline_reminders_skips_students_who_submitted(
     db_session, fake_slack_client
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     submitted = await _make_student(db_session)
     await _submit(db_session, term=term, student=submitted)
@@ -334,7 +335,7 @@ async def test_send_deadline_reminders_skips_students_whose_grade_is_not_targete
     db_session, fake_slack_client
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     not_targeted = await _make_student(db_session, grade="B4")
 
@@ -349,7 +350,7 @@ async def test_send_deadline_reminders_continues_after_individual_failure(
     db_session, fake_slack_client, monkeypatch
 ) -> None:
     await _close_all_open_terms(db_session)
-    term = await _make_term(db_session, ends_at=date.today())
+    term = await _make_term(db_session, ends_at=jst_today())
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     failing_student = await _make_student(db_session)
     other_student = await _make_student(db_session)
@@ -386,7 +387,7 @@ async def test_get_current_term_prefers_latest_created_at_when_academic_year_tie
     # を3000+乱数にしているのは、実DBに残っている本物の募集ラウンドより
     # 必ず新しい年度にして、そちらを誤って拾わないようにするため。
     academic_year = 3000 + int(uuid.uuid4().int % 1000)
-    today = date.today()
+    today = jst_today()
     now = datetime.now(UTC)
     older = RecruitmentTerm(
         academic_year=academic_year,
@@ -422,7 +423,7 @@ async def test_get_current_term_is_deterministic_even_when_fully_tied(
     # 同じ行を返すことを確認する(#182)。業務的な「正しさ」は無いが、
     # 同じリクエストのたびに結果が変わらないことが重要。
     academic_year = 3000 + int(uuid.uuid4().int % 1000)
-    today = date.today()
+    today = jst_today()
     same_created_at = datetime.now(UTC)
     first = RecruitmentTerm(
         academic_year=academic_year,
