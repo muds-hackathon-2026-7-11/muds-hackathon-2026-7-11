@@ -26,7 +26,7 @@ def _home_view() -> dict:
         "blocks": [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": "🎓 ゼミナビ"},
+                "text": {"type": "plain_text", "text": "🎓 ゼミ選択・配属支援システム"},
             },
             {
                 "type": "section",
