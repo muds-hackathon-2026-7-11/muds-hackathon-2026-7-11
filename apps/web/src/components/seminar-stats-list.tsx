@@ -17,7 +17,9 @@ import {
 export type SeminarStats = {
   id: string;
   name: string;
-  capacity: number | null;
+  // 募集人数(capacity)は学生向け画面では非表示にする方針のため、
+  // このコンポーネントの型からは意図的に外している(APIレスポンス自体には
+  // まだ含まれるが、フロントでは使わない)。
   // アイコン表示用(#139)。ゼミ自体の写真を最優先で使う。
   photo_url: string | null;
   // アイコン表示用(#139)。担当教員が1人だけの場合のみ、その教員の写真を
@@ -213,13 +215,7 @@ function SeminarStatsCard({ seminar }: { seminar: SeminarStats }) {
         </Link>
       </div>
 
-      <dl className="mt-4 ml-2 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600 sm:grid-cols-3">
-        <div>
-          <dt className="text-xs text-zinc-600">上限人数</dt>
-          <dd className="text-base font-medium text-zinc-900">
-            {seminar.capacity != null ? `${seminar.capacity}人` : "未設定"}
-          </dd>
-        </div>
+      <dl className="mt-4 ml-2 grid grid-cols-2 gap-x-4 gap-y-3 text-zinc-600">
         <div>
           <dt className="text-xs text-zinc-600">第1志望</dt>
           <dd className="text-base font-medium text-zinc-900">
