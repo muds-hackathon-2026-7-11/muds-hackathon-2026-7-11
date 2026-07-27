@@ -88,6 +88,8 @@ make clean      # コンテナ・volume・ビルド成果物を削除
 
 `make help` で全コマンド一覧を表示できる。
 
+`make`の各コマンドは**すべてローカル開発用**(`docker-compose.yml`を見る)。本番(大学サーバー)は`docker-compose.prod.yml`と`.env.production`で動いており、更新デプロイ・マイグレーション適用・ロールバックの手順は [docs/deployment.md](docs/deployment.md) を参照。
+
 ## Backup / Restore
 
 `docker-compose.yml`の`backup`サービス(`prodrigestivill/postgres-backup-local`)が自動でDBをバックアップする。
