@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import logo from "@/app/logo.png";
+import { AI_FEATURES_DISABLED } from "@/lib/feature-flags";
 
 const baseNavItems = [
   { label: "マイページ", href: "/" },
@@ -82,26 +83,48 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
           })}
         </nav>
 
-        <Link
-          href="/chat"
-          aria-label="AIゼミ相談"
-          title="AIゼミ相談"
-          className="hidden h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900 sm:flex"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-            aria-hidden="true"
+        {AI_FEATURES_DISABLED ? (
+          <span
+            aria-disabled="true"
+            title="AIゼミ相談(準備中)"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-zinc-300 sm:flex"
           >
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-          </svg>
-        </Link>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
+          </span>
+        ) : (
+          <Link
+            href="/chat"
+            aria-label="AIゼミ相談"
+            title="AIゼミ相談"
+            className="hidden h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-[#e6e6e6]/60 hover:text-zinc-900 sm:flex"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
+          </Link>
+        )}
 
         <div className="relative hidden sm:block">
           <button
@@ -204,16 +227,25 @@ export function MenuBar({ isAdmin, isTeacher }: MenuBarProps) {
               </Link>
             );
           })}
-          <Link
-            href="/chat"
-            aria-current={
-              isNavItemActive(pathname, "/chat") ? "page" : undefined
-            }
-            onClick={() => setIsMobileMenuOpen(false)}
-            className={navLinkClassName(isNavItemActive(pathname, "/chat"))}
-          >
-            AIゼミ相談
-          </Link>
+          {AI_FEATURES_DISABLED ? (
+            <span
+              aria-disabled="true"
+              className="rounded-full px-4 py-2 text-sm font-medium text-zinc-300"
+            >
+              AIゼミ相談(準備中)
+            </span>
+          ) : (
+            <Link
+              href="/chat"
+              aria-current={
+                isNavItemActive(pathname, "/chat") ? "page" : undefined
+              }
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={navLinkClassName(isNavItemActive(pathname, "/chat"))}
+            >
+              AIゼミ相談
+            </Link>
+          )}
 
           <div className="my-1 border-t border-[#e6e6e6]" />
 
