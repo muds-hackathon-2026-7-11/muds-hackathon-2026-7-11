@@ -6,7 +6,6 @@ const stats: SeminarStats[] = [
   {
     id: "seminar-1",
     name: "AIゼミ",
-    capacity: 10,
     applicant_count: 5,
     priority_counts: { first: 2, second: 2, third: 1 },
     grade_counts: { B1: 1, B2: 1, B3: 2, B4: 1 },
@@ -24,7 +23,6 @@ const stats: SeminarStats[] = [
   {
     id: "seminar-2",
     name: "Webゼミ",
-    capacity: null,
     applicant_count: 0,
     priority_counts: { first: 0, second: 0, third: 0 },
     grade_counts: {},
@@ -43,17 +41,18 @@ describe("SeminarStatsList", () => {
 
     expect(screen.getByText("AIゼミ")).toBeInTheDocument();
     expect(screen.getByText("Webゼミ")).toBeInTheDocument();
-    expect(screen.getByText("10人")).toBeInTheDocument();
 
     const labels = screen.getAllByText("第1志望");
     expect(labels[0].nextElementSibling).toHaveTextContent("2人");
     expect(labels[1].nextElementSibling).toHaveTextContent("0人");
   });
 
-  it("falls back to a placeholder for missing capacity", () => {
+  it("does not show the recruitment capacity", () => {
+    // 募集人数(上限人数)は学生向け画面では非表示にする方針。
     render(<SeminarStatsList stats={stats} />);
 
-    expect(screen.getAllByText("未設定")).toHaveLength(1);
+    expect(screen.queryByText("上限人数")).not.toBeInTheDocument();
+    expect(screen.queryByText("10人")).not.toBeInTheDocument();
   });
 
   it("links each seminar name to its detail page", () => {
