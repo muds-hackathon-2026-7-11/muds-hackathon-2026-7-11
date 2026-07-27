@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { Session } from "next-auth";
 import { useSession } from "next-auth/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as featureFlags from "@/lib/feature-flags";
 import {
   ApplicationForm,
   type ApplicationFormData,
@@ -12,6 +13,10 @@ import {
 vi.mock("next-auth/react", () => ({
   useSession: vi.fn(),
 }));
+
+// 既存のテストは「AI機能が有効な通常状態」を検証する。無効化フラグ自体の
+// 挙動は末尾の別describeで検証する。
+vi.mock("@/lib/feature-flags", () => ({ AI_FEATURES_DISABLED: false }));
 
 const seminars: Seminar[] = [
   { id: "sem-1", name: "福原ゼミ" },
@@ -771,5 +776,27 @@ describe("ApplicationForm", () => {
     await user.type(screen.getByDisplayValue("機械学習をやりたい"), "追記");
 
     expect(screen.queryByText("マッチ度（福原ゼミ）")).not.toBeInTheDocument();
+  });
+});
+
+describe("ApplicationForm with AI_FEATURES_DISABLED", () => {
+  beforeEach(() => {
+    vi.mocked(featureFlags).AI_FEATURES_DISABLED = true;
+  });
+
+  it("shows the match diagnosis buttons as disabled placeholders", () => {
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    // 志望3スロット分 + 「まとめて」ボタンの計4つが全て「準備中」になる。
+    const buttons = screen.getAllByRole("button", { name: "準備中" });
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button).toBeDisabled();
+    }
+    expect(
+      screen.queryByRole("button", { name: "マッチ度診断（まとめて）" }),
+    ).not.toBeInTheDocument();
   });
 });

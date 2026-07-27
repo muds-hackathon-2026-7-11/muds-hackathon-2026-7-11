@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { extractErrorDetail } from "@/lib/extract-error-detail";
+import { AI_FEATURES_DISABLED } from "@/lib/feature-flags";
 
 // バックエンドは画面を開いた後に募集期間が終了した場合、保存・提出時に
 // このエラーを返す(現在募集中の期間がないため)。生のエラー文言のままだと
@@ -673,6 +674,7 @@ export function ApplicationForm({
                       type="button"
                       onClick={() => void handleMatchDiagnose(index)}
                       disabled={
+                        AI_FEATURES_DISABLED ||
                         isBusy ||
                         isDiagnosing ||
                         slot.seminarId === "" ||
@@ -680,7 +682,11 @@ export function ApplicationForm({
                       }
                       className="rounded-full border border-[#add8e6] bg-white px-3 py-1 text-xs font-semibold text-sky-900 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isDiagnosing ? "診断中..." : "◎ マッチ度診断"}
+                      {AI_FEATURES_DISABLED
+                        ? "準備中"
+                        : isDiagnosing
+                          ? "診断中..."
+                          : "◎ マッチ度診断"}
                     </button>
                   </div>
                 </div>
@@ -703,10 +709,14 @@ export function ApplicationForm({
             <button
               type="button"
               onClick={() => void handleMatchDiagnose()}
-              disabled={isBusy || isDiagnosing}
+              disabled={AI_FEATURES_DISABLED || isBusy || isDiagnosing}
               className="rounded-full border border-[#add8e6] bg-white px-5 py-2 text-sm font-medium text-sky-900 hover:bg-[#add8e6]/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isDiagnosing ? "診断中..." : "マッチ度診断（まとめて）"}
+              {AI_FEATURES_DISABLED
+                ? "準備中"
+                : isDiagnosing
+                  ? "診断中..."
+                  : "マッチ度診断（まとめて）"}
             </button>
             {snapshotSlots && (
               <button

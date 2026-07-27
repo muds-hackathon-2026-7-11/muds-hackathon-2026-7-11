@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { usePathname } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as featureFlags from "@/lib/feature-flags";
 import { MenuBar } from "./menu-bar";
 
 vi.mock("next/navigation", () => ({
@@ -11,6 +12,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-auth/react", () => ({
   signOut: vi.fn(),
 }));
+
+// 既存のテストは「AI機能が有効な通常状態」を検証する。無効化フラグ自体の
+// 挙動は末尾の別describeで検証する(このモックにより本番の実際の値
+// (AI_FEATURES_DISABLED=true)に依存せずテストできる)。
+vi.mock("@/lib/feature-flags", () => ({ AI_FEATURES_DISABLED: false }));
 
 describe("MenuBar", () => {
   beforeEach(() => {
@@ -221,5 +227,27 @@ describe("MenuBar", () => {
     await user.click(mobileLinks[mobileLinks.length - 1]);
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("MenuBar with AI_FEATURES_DISABLED", () => {
+  beforeEach(() => {
+    vi.mocked(usePathname).mockReturnValue("/");
+    vi.mocked(featureFlags).AI_FEATURES_DISABLED = true;
+  });
+
+  it("shows the AI consult entry as a disabled placeholder, not a link", async () => {
+    const user = userEvent.setup();
+    render(<MenuBar isAdmin={false} isTeacher={false} />);
+
+    expect(
+      screen.queryByRole("link", { name: "AIゼミ相談" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTitle("AIゼミ相談(準備中)")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "メニューを開閉する" }),
+    );
+    expect(screen.getByText("AIゼミ相談(準備中)")).toBeInTheDocument();
   });
 });
