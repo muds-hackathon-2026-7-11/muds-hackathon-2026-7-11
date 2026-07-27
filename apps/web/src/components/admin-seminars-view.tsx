@@ -529,7 +529,9 @@ export function AdminSeminarsView({
                       />
                     )}
                     <div>
-                      <p className="font-semibold text-zinc-900">{seminar.name}</p>
+                      <p className="font-semibold text-zinc-900">
+                        {seminar.name}
+                      </p>
                       <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
                         {seminar.description ?? "説明は未設定です。"}
                       </p>
