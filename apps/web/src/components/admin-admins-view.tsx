@@ -131,7 +131,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
   return (
     <div className="flex flex-col gap-4">
       {!isCreateFormOpen && errorMessage && (
-        <p className="rounded-lg border border-line bg-white p-4 text-sm">
+        <p className="rounded-lg border border-line bg-white p-4 text-sm text-red-600">
           {errorMessage}
         </p>
       )}
@@ -166,7 +166,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
               既に登録されている学生のメールアドレスを入力してください(教員は選べません)。
             </p>
             {errorMessage && (
-              <p className="mt-3 rounded-lg border border-line bg-white p-3 text-sm">
+              <p className="mt-3 rounded-lg border border-line bg-white p-3 text-sm text-red-600">
                 {errorMessage}
               </p>
             )}
@@ -208,7 +208,7 @@ export function AdminAdminsView({ initialAdmins }: AdminAdminsViewProps) {
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     placeholder="メールアドレス"
-                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
                   />
                   <div className="mt-2 flex gap-2">
                     <button

@@ -189,14 +189,14 @@ export function AdminTeachersView({ initialTeachers }: AdminTeachersViewProps) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="名前"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
               />
               <input
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="メールアドレス"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
               />
               <div className="mt-2 flex gap-2">
                 <button

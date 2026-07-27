@@ -342,7 +342,7 @@ export function TeacherSeminarView({
                       }))
                     }
                     placeholder="人数"
-                    className="w-28 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
+                    className="w-28 rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-zinc-800"
                   />
                   <button
                     type="button"
@@ -375,7 +375,7 @@ export function TeacherSeminarView({
                       return (
                         <li
                           key={material.id}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex items-center gap-2 text-sm text-zinc-800"
                         >
                           <span className="shrink-0 text-xs text-zinc-400">
                             {MATERIAL_TYPE_LABEL[material.type]}
@@ -419,7 +419,7 @@ export function TeacherSeminarView({
                           .value as TeacherSeminarMaterial["type"],
                       }))
                     }
-                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm"
+                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm text-zinc-800"
                   >
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
@@ -436,7 +436,7 @@ export function TeacherSeminarView({
                       }))
                     }
                     placeholder="資料のURL"
-                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-zinc-800"
                   />
                   <button
                     type="button"

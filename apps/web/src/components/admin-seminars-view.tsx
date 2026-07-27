@@ -391,7 +391,7 @@ export function AdminSeminarsView({
       </p>
 
       {errorMessage && (
-        <p className="rounded-lg border border-line bg-white p-4 text-sm">
+        <p className="rounded-lg border border-line bg-white p-4 text-sm text-red-600">
           {errorMessage}
         </p>
       )}
@@ -428,21 +428,21 @@ export function AdminSeminarsView({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="ゼミ名"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
               />
               <textarea
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="説明(任意)"
                 rows={2}
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
               />
               <input
                 type="text"
                 value={newPhotoUrl}
                 onChange={(e) => setNewPhotoUrl(e.target.value)}
                 placeholder="アイコン画像のURL(任意)"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -483,20 +483,20 @@ export function AdminSeminarsView({
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
                   />
                   <textarea
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
                     rows={2}
-                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
                   />
                   <input
                     type="text"
                     value={editPhotoUrl}
                     onChange={(e) => setEditPhotoUrl(e.target.value)}
                     placeholder="アイコン画像のURL(任意)"
-                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-zinc-800"
                   />
                   <div className="flex gap-2">
                     <button
@@ -511,7 +511,7 @@ export function AdminSeminarsView({
                       type="button"
                       onClick={cancelEdit}
                       disabled={isSavingEdit}
-                      className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium hover:bg-[#add8e6]/10"
+                      className="rounded-full border border-[#add8e6]/60 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-[#add8e6]/10"
                     >
                       キャンセル
                     </button>
@@ -529,7 +529,7 @@ export function AdminSeminarsView({
                       />
                     )}
                     <div>
-                      <p className="font-semibold">{seminar.name}</p>
+                      <p className="font-semibold text-zinc-900">{seminar.name}</p>
                       <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
                         {seminar.description ?? "説明は未設定です。"}
                       </p>
@@ -543,7 +543,7 @@ export function AdminSeminarsView({
                     <button
                       type="button"
                       onClick={() => startEdit(seminar)}
-                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium hover:bg-[#add8e6]/10"
+                      className="rounded-full border border-[#add8e6]/60 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-[#add8e6]/10"
                     >
                       編集
                     </button>
@@ -598,7 +598,7 @@ export function AdminSeminarsView({
                         return (
                           <label
                             key={teacher.id}
-                            className="flex items-center gap-1.5 text-sm"
+                            className="flex items-center gap-1.5 text-sm text-zinc-800"
                           >
                             <input
                               type="checkbox"
@@ -639,7 +639,7 @@ export function AdminSeminarsView({
                       return (
                         <li
                           key={material.id}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex items-center gap-2 text-sm text-zinc-800"
                         >
                           <span className="shrink-0 text-xs text-zinc-600">
                             {MATERIAL_TYPE_LABEL[material.type]}
@@ -683,7 +683,7 @@ export function AdminSeminarsView({
                           .value as AdminSeminarMaterial["type"],
                       }))
                     }
-                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm"
+                    className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm text-zinc-800"
                   >
                     <option value="slide">スライド</option>
                     <option value="pdf">PDF</option>
@@ -700,7 +700,7 @@ export function AdminSeminarsView({
                       }))
                     }
                     placeholder="資料のURL"
-                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-zinc-800"
                   />
                   <button
                     type="button"
@@ -744,7 +744,7 @@ export function AdminSeminarsView({
                         [seminar.id]: e.target.value,
                       }))
                     }
-                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm"
+                    className="rounded-lg border border-[#add8e6]/60 bg-white px-2 py-1.5 text-sm text-zinc-800"
                   >
                     <option value="">合同にするゼミを選択</option>
                     {seminars

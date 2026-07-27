@@ -574,7 +574,7 @@ export function AdminRecruitmentTermsView({
         <section className="rounded-2xl border border-line bg-white p-4 shadow-sm shadow-[#add8e6]/30">
           <h2 className="font-semibold text-zinc-800">新規募集ラウンド作成</h2>
           <div className="mt-3 flex flex-col gap-2">
-            <label className="flex flex-col gap-1 text-sm">
+            <label className="flex flex-col gap-1 text-sm text-zinc-800">
               年度
               <input
                 type="number"
@@ -628,7 +628,7 @@ export function AdminRecruitmentTermsView({
                   {GRADE_OPTIONS.map((grade) => (
                     <label
                       key={grade}
-                      className="flex items-center gap-1.5 text-sm"
+                      className="flex items-center gap-1.5 text-sm text-zinc-800"
                     >
                       <input
                         type="checkbox"
@@ -821,7 +821,7 @@ export function AdminRecruitmentTermsView({
                               {GRADE_OPTIONS.map((grade) => (
                                 <label
                                   key={grade}
-                                  className="flex items-center gap-1.5 text-sm"
+                                  className="flex items-center gap-1.5 text-sm text-zinc-800"
                                 >
                                   <input
                                     type="checkbox"
