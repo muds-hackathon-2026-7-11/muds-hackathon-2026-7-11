@@ -5,6 +5,7 @@ import pytest
 from api import auth
 from api.auth import get_current_user
 from api.main import app
+from api.match_client import SeminarInput, _bulk_user_message
 from api.models import ResearchTag, Seminar, User, UserInterestTag, UserRole
 
 pytestmark = pytest.mark.asyncio
@@ -158,3 +159,26 @@ async def test_matches_requires_authentication(client, monkeypatch) -> None:
     monkeypatch.setattr(auth.settings, "auth_dev_mode", False)
     resp = await client.get("/seminars/matches")
     assert resp.status_code == 401
+
+
+async def test_bulk_prompt_places_variable_profile_last() -> None:
+    """prompt cachingは先頭からの完全一致プレフィックスにしか効かないため、
+    リクエストごとに変わる学生プロフィールは必ずゼミ一覧より後ろに置く(#200)。
+
+    並び順が戻ってもレスポンスは正常なままで、影響が請求額にしか現れないため、
+    テストで固定する。
+    """
+    profile = "画像認識と深層学習"
+    message = _bulk_user_message(
+        profile,
+        [
+            SeminarInput(index=0, name="ゼミA", text="機械学習のゼミ"),
+            SeminarInput(index=1, name="ゼミB", text="データベースのゼミ"),
+        ],
+    )
+
+    assert message.index("# ゼミ一覧") < message.index("# 学生プロフィール")
+    # 可変部分はプレフィックスを断ち切らないよう末尾に置く
+    assert message.rstrip().endswith(profile)
+    # ゼミ内容そのものも可変部分より前にあること
+    assert message.index("データベースのゼミ") < message.index(profile)
