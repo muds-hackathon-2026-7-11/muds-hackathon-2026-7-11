@@ -51,7 +51,7 @@ flowchart LR
 cp .env.example .env
 make install     # pnpm install + uv sync
 make setup-auth  # ローカル認証キー(AUTH_SECRET/AUTH_JWT_PRIVATE_KEY)を.envに自動生成
-make dev         # docker compose up --build (db / api / web / slack-bot)
+make dev         # docker compose up --build (db / api / web)
 make migrate     # DBマイグレーションを適用(初回起動時)
 make seed        # 開発用のゼミデータを投入(べき等・任意)
 ```
@@ -67,7 +67,12 @@ make seed        # 開発用のゼミデータを投入(べき等・任意)
 | Web | http://localhost:3100 |
 | API | http://localhost:8100 (ヘルスチェック: `/health`) |
 | DB (Postgres) | localhost:5442 |
-| Slack Bot | (Socket Modeのためポート公開なし。`SLACK_BOT_TOKEN`/`SLACK_APP_TOKEN`を`.env`に設定して接続) |
+| Slack Bot | `make dev`では起動しない(下記参照)。Socket Modeのためポート公開なし |
+
+> `.env`の`SLACK_BOT_TOKEN`/`SLACK_APP_TOKEN`は本番と同じ実トークンを使う(Slack実DMでの動作確認のため)。
+> そのため`slack-bot`は`make dev`では起動せず、実際にSlack動作確認したい時だけ`make dev-slack-test`
+> (別ターミナルで`make dev`と併用)で明示的に起動する。常時起動すると本番のslack-botと同じSlack Appに
+> 二重接続し、イベントの取りこぼし・競合が起きるため。
 
 ## Development
 
