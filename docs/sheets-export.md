@@ -30,13 +30,19 @@
    以下の2つを追加する:
    - `API_URL`: `https://<本番ドメイン>/backend/teacher/applicants/export`
    - `EXPORT_KEY`: 手順1で発行したキー(管理者画面からコピーできる)
-6. 上部の「実行」ボタンを1回押し、Googleアカウントへのアクセス許可を承認する
-   (スプレッドシートへの書き込み権限を求められる)
+6. 上部の関数選択プルダウンで `syncApplicants` を選び、▶(実行)ボタンを
+   1回押す。Googleアカウントへのアクセス許可を求められるので承認する
+   (スプレッドシートへの書き込み権限)。これでシートに1回分のデータが入る
 7. 左メニューの時計アイコン(トリガー)→「トリガーを追加」で、
    関数 `syncApplicants`・イベントのソース「時間主導型」・
    「分ベースのタイマー」→「5分おき」等を選んで保存する
 
 これで、以降は放っておけば自動的にシートが更新され続ける。
+
+**「デプロイ」は不要**: 右上の「デプロイ」ボタン(Webアプリとして公開する機能)は
+使わない。あれはApps Script自体を外部からアクセスできるサーバーにする機能で、
+今回の仕組み(Apps Script側からうちのAPIを呼びに行くだけ)とは無関係。
+手順6・7(実行ボタン・トリガー)だけで完結する。
 
 ### Apps Scriptのひな形
 
@@ -58,10 +64,23 @@ function syncApplicants() {
 
   const seminars = JSON.parse(response.getContentText());
   const rows = [
-    ["ゼミ", "志望順位", "学年", "学籍番号", "氏名", "研究タイトル", "研究概要", "志望理由"],
+    [
+      "ゼミ",
+      "志望順位",
+      "学年",
+      "学籍番号",
+      "氏名",
+      "研究タイトル",
+      "研究概要",
+      "志望理由",
+      "前回所属ゼミ",
+    ],
   ];
   for (const seminar of seminars) {
     for (const applicant of seminar.applicants) {
+      // past_seminarsはacademic_year降順なので、先頭が前回(直近)の所属。
+      const lastSeminar =
+        applicant.past_seminars.length > 0 ? applicant.past_seminars[0] : null;
       rows.push([
         seminar.seminar_name,
         applicant.priority,
@@ -71,6 +90,7 @@ function syncApplicants() {
         applicant.research_title || "",
         applicant.research_theme || "",
         applicant.reason,
+        lastSeminar ? lastSeminar.seminar_name : "",
       ]);
     }
   }
