@@ -69,6 +69,28 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("B4 学生B")).toBeInTheDocument();
   });
 
+  it("shows the total member count and a per-grade breakdown", () => {
+    render(<SeminarDetailView seminar={seminar} />);
+
+    expect(screen.getByText(/全2名/)).toBeInTheDocument();
+    expect(screen.getByText(/B3 1名/)).toBeInTheDocument();
+    expect(screen.getByText(/B4 1名/)).toBeInTheDocument();
+  });
+
+  it("groups members with no grade under 学年不明 in the breakdown", () => {
+    const withUnknownGrade: SeminarDetail = {
+      ...seminar,
+      current_members: [
+        ...seminar.current_members,
+        { ...seminar.current_members[0], id: "member-3", grade: null },
+      ],
+    };
+    render(<SeminarDetailView seminar={withUnknownGrade} />);
+
+    expect(screen.getByText(/全3名/)).toBeInTheDocument();
+    expect(screen.getByText(/学年不明 1名/)).toBeInTheDocument();
+  });
+
   it("does not render an unsafe material URL as a clickable link", () => {
     const withUnsafeMaterial: SeminarDetail = {
       ...seminar,
@@ -88,6 +110,20 @@ describe("SeminarDetailView", () => {
     render(<SeminarDetailView seminar={seminar} />);
 
     expect(screen.getByText("研究タイトル未設定")).toBeInTheDocument();
+  });
+
+  it("dims a member's card when their research theme is not set", () => {
+    const withUnsetTheme: SeminarDetail = {
+      ...seminar,
+      current_members: [
+        { ...seminar.current_members[0], research_theme: null },
+        seminar.current_members[1],
+      ],
+    };
+    render(<SeminarDetailView seminar={withUnsetTheme} />);
+
+    expect(screen.getByText("B3 学生A")).toHaveClass("text-zinc-400");
+    expect(screen.getByText("B4 学生B")).toHaveClass("text-zinc-900");
   });
 
   it("shows the teacher's initial when neither teacher nor seminar photo is set", () => {

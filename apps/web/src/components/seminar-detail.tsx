@@ -139,6 +139,17 @@ function membersByTag(members: Member[]): Map<string, string[]> {
   return map;
 }
 
+// 学年ごとのゼミ生数。APIが学年昇順(nullは末尾)で返す前提で、Mapの
+// 挿入順=出現順をそのまま表示順として使う(ここで並べ替えはしない)。
+function gradeCounts(members: Member[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const key = member.grade ?? "学年不明";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries());
+}
+
 type SeminarDetailViewProps = {
   seminar: SeminarDetail;
 };
@@ -146,6 +157,10 @@ type SeminarDetailViewProps = {
 export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
   const chartData = useMemo(
     () => tagChartData(seminar.current_members),
+    [seminar.current_members],
+  );
+  const memberGradeCounts = useMemo(
+    () => gradeCounts(seminar.current_members),
     [seminar.current_members],
   );
   // クリックで研究概要モーダルを開いているゼミ生のid。
@@ -331,30 +346,54 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </section>
 
       <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
+          {seminar.current_members.length > 0 && (
+            <p className="text-sm text-zinc-500">
+              全{seminar.current_members.length}名
+              {memberGradeCounts.map(([grade, count]) => (
+                <span key={grade}>{` ・ ${grade} ${count}名`}</span>
+              ))}
+            </p>
+          )}
+        </div>
         {seminar.current_members.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
         ) : (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {seminar.current_members.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => setOpenMemberId(member.id)}
-                className="rounded-xl border border-line px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
-              >
-                <span className="block truncate font-semibold text-zinc-900">
-                  {member.grade
-                    ? `${member.grade} ${member.name}`
-                    : member.name}
-                </span>
-                {/* 研究タイトルは研究概要(research_theme)とは別項目。
-                    詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
-                <span className="mt-0.5 block truncate text-xs text-zinc-900">
-                  {member.research_title ?? "研究タイトル未設定"}
-                </span>
-              </button>
-            ))}
+            {seminar.current_members.map((member) => {
+              // 研究概要(research_theme)を未設定のまま放置しているゼミ生が
+              // 一覧上でわかりにくいという指摘があったため、文字色を薄くして
+              // 目立たせる(名前クリックのモーダルで詳しい研究概要を見せる)。
+              const hasResearchTheme = member.research_theme !== null;
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => setOpenMemberId(member.id)}
+                  className="rounded-xl border border-line px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
+                >
+                  <span
+                    className={`block truncate font-semibold ${
+                      hasResearchTheme ? "text-zinc-900" : "text-zinc-400"
+                    }`}
+                  >
+                    {member.grade
+                      ? `${member.grade} ${member.name}`
+                      : member.name}
+                  </span>
+                  {/* 研究タイトルは研究概要(research_theme)とは別項目。
+                      詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
+                  <span
+                    className={`mt-0.5 block truncate text-xs ${
+                      hasResearchTheme ? "text-zinc-900" : "text-zinc-400"
+                    }`}
+                  >
+                    {member.research_title ?? "研究タイトル未設定"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>
