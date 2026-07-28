@@ -18,6 +18,7 @@ from api.match_client import (
     get_match_client,
 )
 from api.models import (
+    AiFeature,
     MatchEvaluation,
     Seminar,
     User,
@@ -31,6 +32,7 @@ from api.schemas import (
     SeminarMatchesOut,
     SeminarMatchOut,
 )
+from api.usage import UsageLimitReached, consume
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,12 @@ _ERROR_MESSAGE = "現在マッチ度を算出できません。しばらくし�
 _NO_PROFILE_MESSAGE = "研究テーマ・興味分野が未設定のため、マッチ度を算出できません。"
 _NO_SEMINARS_MESSAGE = "評価できるゼミ情報がありません。"
 _NO_REASON_MESSAGE = "ゼミと志望理由を入力してから診断してください。"
+# 募集期間あたりの利用上限に達したとき(#201)。エラーではなく仕様なので、
+# 何が起きたのかが分かる文言にする。
+_LIMIT_REACHED_MESSAGE = (
+    "今回の募集期間に利用できるマッチ度診断の回数の上限に達しました。"
+    "志望理由の入力・提出はこれまでどおり行えます。"
+)
 
 
 def _input_hash(student_text: str, seminar_text: str, model: str) -> str:
@@ -121,7 +129,7 @@ async def _load_scorable(db: AsyncSession) -> list[tuple[Seminar, str]]:
 async def _score_all(
     db: AsyncSession,
     *,
-    user_id: uuid.UUID,
+    user: User,
     client: MatchClient,
     query_text: str,
     scorable: list[tuple[Seminar, str]],
@@ -130,13 +138,14 @@ async def _score_all(
     """query_text で scorable 全ゼミを1コール採点し、seminar_id -> 行 を返す。
 
     同一入力(bundle)のキャッシュがあれば再計算しない。LLM失敗時は None。
+    募集期間あたりの利用上限に達している場合は UsageLimitReached(#201)。
     """
     bundle = _bundle_hash(query_text, [(s.name, t) for (s, t) in scorable], model)
     cached = (
         (
             await db.execute(
                 select(MatchEvaluation).where(
-                    MatchEvaluation.user_id == user_id,
+                    MatchEvaluation.user_id == user.id,
                     MatchEvaluation.input_hash == bundle,
                 )
             )
@@ -147,6 +156,12 @@ async def _score_all(
     rows = {row.seminar_id: row for row in cached}
     if len(rows) >= len(scorable):
         return rows
+
+    # ここから先で初めてOpenAIを呼ぶ。上のキャッシュヒットは課金されないので
+    # 消費しない(#201)。同一入力の再診断で上限が減らないのは意図した挙動。
+    # 下のリトライは不正JSON時の1回だけの救済で、利用者から見れば1回の診断
+    # なので、コールごとではなく採点1回につき1消費とする。
+    await consume(db, user=user, feature=AiFeature.match)
 
     inputs = [
         SeminarInput(index=i, name=s.name, text=text)
@@ -168,7 +183,7 @@ async def _score_all(
         if item is None:  # モデルが一部ゼミを返さなかった場合はスキップ
             continue
         row = MatchEvaluation(
-            user_id=user_id,
+            user_id=user.id,
             seminar_id=seminar.id,
             input_hash=bundle,
             score=_weighted_total(item.rubric),
@@ -196,14 +211,17 @@ async def get_seminar_matches(
     if not scorable:
         return SeminarMatchesOut(results=[], message=_NO_SEMINARS_MESSAGE)
 
-    rows = await _score_all(
-        db,
-        user_id=user.id,
-        client=client,
-        query_text=student_text,
-        scorable=scorable,
-        model=settings.match_model,
-    )
+    try:
+        rows = await _score_all(
+            db,
+            user=user,
+            client=client,
+            query_text=student_text,
+            scorable=scorable,
+            model=settings.match_model,
+        )
+    except UsageLimitReached:
+        return SeminarMatchesOut(results=[], message=_LIMIT_REACHED_MESSAGE)
     if rows is None:
         return SeminarMatchesOut(results=[], message=_ERROR_MESSAGE)
 
@@ -243,6 +261,7 @@ async def post_reason_matches(
     results: list[ReasonMatchResult] = []
     llm_failed = False
     had_reason = False
+    limit_reached = False
     for choice in payload.choices:
         reason = choice.reason.strip()
         if not reason:
@@ -251,14 +270,19 @@ async def post_reason_matches(
         # 研究概要は使わず、その志望の理由だけを問い合わせ文にする(#196)。
         # ゼミ移動時は研究内容も変わることが多いため、志望理由のみを根拠にする。
         query = f"志望理由: {reason}"
-        rows = await _score_all(
-            db,
-            user_id=user.id,
-            client=client,
-            query_text=query,
-            scorable=scorable,
-            model=settings.match_model,
-        )
+        try:
+            rows = await _score_all(
+                db,
+                user=user,
+                client=client,
+                query_text=query,
+                scorable=scorable,
+                model=settings.match_model,
+            )
+        except UsageLimitReached:
+            # 残りの志望も同じ枠を消費するため、ここで打ち切る(#201)。
+            limit_reached = True
+            break
         if rows is None:
             llm_failed = True
             continue
@@ -294,7 +318,10 @@ async def post_reason_matches(
         )
 
     message: str | None = None
-    if not results:
+    if limit_reached:
+        # 途中で打ち切った場合も、残りが未採点である理由を伝える。
+        message = _LIMIT_REACHED_MESSAGE
+    elif not results:
         if llm_failed:
             message = _ERROR_MESSAGE
         elif not had_reason:
@@ -341,6 +368,16 @@ async def get_seminar_match(
     )
     evaluation = cached.scalar_one_or_none()
     if evaluation is None:
+        # キャッシュが無い= OpenAIを呼ぶときだけ枠を消費する(#201)。
+        try:
+            await consume(db, user=user, feature=AiFeature.match)
+        except UsageLimitReached:
+            return MatchOut(
+                seminar_id=seminar_id,
+                score=None,
+                feedback=None,
+                message=_LIMIT_REACHED_MESSAGE,
+            )
         try:
             result = await client.evaluate(
                 student_text=student_text, seminar_text=seminar_text

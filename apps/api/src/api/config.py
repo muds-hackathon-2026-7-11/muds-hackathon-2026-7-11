@@ -63,5 +63,19 @@ class Settings(BaseSettings):
     match_weight_method: float = 0.20
     match_weight_style: float = 0.15
 
+    # --- AI機能の利用上限(#201) ---
+    # 募集期間(recruitment_terms)ごと・ユーザーごとに許すOpenAI呼び出し回数。
+    # 上限が無いと1人の連打で費用が青天井になるため、天井を確定させる。
+    # 0以下で無制限。教員・運営は対象外。
+    #
+    # ai_match_limit_per_term はマッチ度診断系の3エンドポイント
+    # (reason-matches / matches / {id}/match)で共有する。「マッチ度診断
+    # (まとめて)」ボタンは第1〜3志望で最大3回消費する点に注意。
+    #
+    # 期間中に足りないと分かったら .env を書き換えてapiコンテナを再起動すれば
+    # 緩められる(DBのカウンタは消えない)。
+    ai_match_limit_per_term: int = 10
+    ai_consult_limit_per_term: int = 50
+
 
 settings = Settings()
