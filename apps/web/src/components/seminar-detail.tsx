@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -160,6 +160,20 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
   );
   const [openTag, setOpenTag] = useState<string | null>(null);
   const openTagMembers = openTag ? (membersByTagMap.get(openTag) ?? []) : [];
+
+  // モーダル表示中は背後のページがスワイプ/スクロールできてしまうため、
+  // 開いている間だけbodyのスクロールを止める。
+  const isModalOpen = openMemberId !== null || openTag !== null;
+  useEffect(() => {
+    if (!isModalOpen) {
+      return;
+    }
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [isModalOpen]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -360,7 +374,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`${openMember.name}の研究概要`}
-            className="w-full max-w-2xl rounded-2xl border border-line bg-white p-8 shadow-lg shadow-[#add8e6]/30"
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-white p-8 shadow-lg shadow-[#add8e6]/30"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -433,7 +447,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`${openTag}の研究をしているゼミ生`}
-            className="w-full max-w-lg rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-white p-6 shadow-lg shadow-[#add8e6]/30"
           >
             <div className="flex items-start justify-between gap-4">
               <p className="text-xl font-bold text-zinc-900">{openTag}</p>

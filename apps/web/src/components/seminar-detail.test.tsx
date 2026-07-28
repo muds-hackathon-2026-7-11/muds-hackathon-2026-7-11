@@ -188,6 +188,18 @@ describe("SeminarDetailView", () => {
     expect(within(dialog).getAllByText("画像認識").length).toBeGreaterThan(0);
   });
 
+  it("locks and restores body scroll while the member dialog is open", () => {
+    render(<SeminarDetailView seminar={seminar} />);
+
+    expect(document.body.style.overflow).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: /学生A/ }));
+    expect(document.body.style.overflow).toBe("hidden");
+
+    fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+    expect(document.body.style.overflow).toBe("");
+  });
+
   it("always links to the seminar's question page", () => {
     render(<SeminarDetailView seminar={seminar} />);
 
