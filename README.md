@@ -59,6 +59,8 @@ make seed        # 開発用のゼミデータを投入(べき等・任意)
 > Googleログインを使う場合の追加設定(共有するOAuthクライアント・テストユーザー登録など)は [docs/authentication.md](docs/authentication.md) を参照。
 >
 > 学生・教員・ゼミの実データ(Slackエクスポート等)を投入する手順は [data/README.md](data/README.md) を参照。CLI(`make import-users`等)のほか、管理者画面(`/admin/users`)からも学生名簿CSVをアップロードできる。
+>
+> 志望理由データをGoogleスプレッドシートへ自動反映する仕組み(#223)は [docs/sheets-export.md](docs/sheets-export.md) を参照。
 
 ### 起動されるサービス
 

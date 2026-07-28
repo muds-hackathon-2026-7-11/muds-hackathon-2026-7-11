@@ -43,6 +43,12 @@ export default function AdminIndexPage() {
           >
             未提出者一覧
           </Link>
+          <Link
+            href="/admin/sheets-export"
+            className="rounded-2xl border border-line bg-white p-4 text-sm font-medium text-zinc-900 shadow-sm shadow-[#add8e6]/30 transition-colors hover:bg-[#add8e6]/10"
+          >
+            スプレッドシート連携
+          </Link>
         </div>
       </div>
     </main>
