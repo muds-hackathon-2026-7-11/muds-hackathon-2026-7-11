@@ -315,6 +315,12 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                   type="category"
                   dataKey="name"
                   width={140}
+                  // rechartsはデフォルトだと1本ずつの高さが十分でないと判断し
+                  // ラベルを間引いて表示する(タグ数が多いゼミで一部のタグ名が
+                  // 表示されなくなるバグの原因)。バーの高さはタグ数に応じて
+                  // 常に確保している(下のdivのheight計算)ので、間引かず必ず
+                  // 全件表示する。
+                  interval={0}
                   tick={<TruncatedYAxisTick />}
                   stroke="#e6e6e6"
                 />
