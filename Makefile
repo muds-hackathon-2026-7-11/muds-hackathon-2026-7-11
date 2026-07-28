@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build dev-slack-test down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -16,6 +16,9 @@ dev: ## start db/api/web via docker compose (build if needed)
 
 dev-build: ## force-rebuild images and start
 	docker compose up --build --force-recreate
+
+dev-slack-test: ## start slack-bot for real-Slack testing, alongside an already-running `make dev` (uses the same token as prod; stop it (Ctrl-C) once done testing)
+	docker compose --profile slack-test up --build slack-bot
 
 down: ## stop and remove containers
 	docker compose down

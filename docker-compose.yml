@@ -58,6 +58,13 @@ services:
       context: .
       dockerfile: services/slack-bot/Dockerfile
       target: dev
+    # .envのSLACK_BOT_TOKEN/SLACK_APP_TOKENは本番と同じ実トークンを使う
+    # (Slack実DMでの動作確認のため)。そのため`docker compose up`で常時
+    # 起動してしまうと、本番のslack-botと同じSlack Appに二重にSocket Mode
+    # 接続し、イベントの取りこぼし・競合が起きる。実際にSlack動作確認したい
+    # 時だけ明示的に`docker compose --profile slack-test up slack-bot`
+    # (または`make dev-slack-test`)で起動する。
+    profiles: ["slack-test"]
     # SLACK_BOT_TOKEN/SLACK_APP_TOKEN未設定だと起動できない(意図的にexit 1する)。
     # unless-stoppedだと無限リトライしてログが埋まるので、数回で諦めるようにする。
     restart: on-failure:3
