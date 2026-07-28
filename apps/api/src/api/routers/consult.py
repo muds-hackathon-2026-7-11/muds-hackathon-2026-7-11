@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from api.consult_client import ConsultClient, ConsultTurn, get_consult_client
 from api.db import get_db
+from api.llm_logging import log_consult
 from api.models import AiFeature, Seminar, User
 from api.schemas import ConsultIn, ConsultOut, ConsultRecommendation
 from api.usage import UsageLimitReached, consume
@@ -52,8 +53,11 @@ async def consult(
 ) -> ConsultOut:
     """学生の自由文相談に対し、ゼミ情報から適したゼミを理由付きで推薦する。
 
-    会話内容はサーバーに保存しない(プライバシー配慮)。継続会話はクライアントが
-    送る history で成立するため、サーバー側の保存は不要。
+    会話内容は chat_logs に保存する(#228)。今後の機能改善の根拠にするためで、
+    学生には保存する旨を画面に表示する前提。継続会話自体はクライアントが送る
+    history で成立しており、保存は分析のための副産物。
+
+    ゼミ情報が無くLLMを呼んでいない場合は記録しない(課金も発生していない)。
     """
     context = await _seminars_context(db)
     if not context:
@@ -70,11 +74,31 @@ async def consult(
         result = await client.consult(
             message=payload.message, history=history, seminars_context=context
         )
-    except Exception:
+    except Exception as exc:
         # OpenAI失敗(quota/timeout/不正JSON等)でもエンドポイントは落とさない。
         logger.exception("consult LLM call failed")
+        # 失敗も品質分析の材料になるので、理由を添えて残す。
+        await log_consult(
+            db,
+            user_id=user.id,
+            has_history=bool(history),
+            message=payload.message,
+            response=_ERROR_REPLY,
+            recommendations=None,
+            meta=None,
+            error=f"{type(exc).__name__}: {exc}",
+        )
         return ConsultOut(reply=_ERROR_REPLY, recommendations=[])
 
+    await log_consult(
+        db,
+        user_id=user.id,
+        has_history=bool(history),
+        message=payload.message,
+        response=result.reply,
+        recommendations=result.recommendations or None,
+        meta=result.meta,
+    )
     return ConsultOut(
         reply=result.reply,
         recommendations=[

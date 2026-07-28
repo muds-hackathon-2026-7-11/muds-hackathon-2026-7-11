@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from api.config import settings
 from api.db import get_db
+from api.llm_logging import log_match
 from api.match_client import (
     MATCHES_PROMPT_VERSION,
     BulkMatchItem,
@@ -20,6 +21,7 @@ from api.match_client import (
 from api.models import (
     AiFeature,
     MatchEvaluation,
+    MatchFeature,
     Seminar,
     User,
 )
@@ -134,11 +136,13 @@ async def _score_all(
     query_text: str,
     scorable: list[tuple[Seminar, str]],
     model: str,
+    feature: MatchFeature,
 ) -> dict[uuid.UUID, MatchEvaluation] | None:
     """query_text で scorable 全ゼミを1コール採点し、seminar_id -> 行 を返す。
 
     同一入力(bundle)のキャッシュがあれば再計算しない。LLM失敗時は None。
     募集期間あたりの利用上限に達している場合は UsageLimitReached(#201)。
+    feature は入出力ログ(#228)にどのエンドポイント由来かを残すために使う。
     """
     bundle = _bundle_hash(query_text, [(s.name, t) for (s, t) in scorable], model)
     cached = (
@@ -167,15 +171,36 @@ async def _score_all(
         SeminarInput(index=i, name=s.name, text=text)
         for i, (s, text) in enumerate(scorable)
     ]
-    items = None
+    result = None
+    last_error: Exception | None = None
     for attempt in range(2):  # 不正JSON/失敗時は1回だけリトライ
         try:
-            items = await client.evaluate_all(student_text=query_text, seminars=inputs)
+            result = await client.evaluate_all(student_text=query_text, seminars=inputs)
             break
-        except Exception:
+        except Exception as exc:  # noqa: PERF203
+            last_error = exc
             logger.exception("bulk match LLM call failed (attempt %d)", attempt + 1)
-    if items is None:
+
+    # 実際にOpenAIを呼んだのでログを残す(#228)。上のキャッシュヒット経路は
+    # 呼んでいないため記録しない。
+    await log_match(
+        db,
+        user_id=user.id,
+        feature=feature,
+        query_text=query_text,
+        bundle_hash=bundle,
+        prompt_version=MATCHES_PROMPT_VERSION,
+        meta=result.meta if result else None,
+        response_json=result.raw if result else None,
+        error=None
+        if result
+        else f"{type(last_error).__name__}: {last_error}"
+        if last_error
+        else "unknown error",
+    )
+    if result is None:
         return None
+    items = result.items
 
     rows = {}
     for i, (seminar, _text) in enumerate(scorable):
@@ -219,6 +244,7 @@ async def get_seminar_matches(
             query_text=student_text,
             scorable=scorable,
             model=settings.match_model,
+            feature=MatchFeature.matches,
         )
     except UsageLimitReached:
         return SeminarMatchesOut(results=[], message=_LIMIT_REACHED_MESSAGE)
@@ -278,6 +304,7 @@ async def post_reason_matches(
                 query_text=query,
                 scorable=scorable,
                 model=settings.match_model,
+                feature=MatchFeature.reason_match,
             )
         except UsageLimitReached:
             # 残りの志望も同じ枠を消費するため、ここで打ち切る(#201)。
@@ -382,12 +409,33 @@ async def get_seminar_match(
             result = await client.evaluate(
                 student_text=student_text, seminar_text=seminar_text
             )
-        except Exception:
+        except Exception as exc:
             # OpenAI失敗でも500にせず、算出不可のメッセージを返す。
             logger.exception("match LLM call failed")
+            await log_match(
+                db,
+                user_id=user.id,
+                feature=MatchFeature.single_match,
+                query_text=student_text,
+                bundle_hash=input_hash,
+                prompt_version=None,
+                meta=None,
+                response_json=None,
+                error=f"{type(exc).__name__}: {exc}",
+            )
             return MatchOut(
                 seminar_id=seminar_id, score=None, feedback=None, message=_ERROR_MESSAGE
             )
+        await log_match(
+            db,
+            user_id=user.id,
+            feature=MatchFeature.single_match,
+            query_text=student_text,
+            bundle_hash=input_hash,
+            prompt_version=None,
+            meta=result.meta,
+            response_json=result.raw,
+        )
         evaluation = MatchEvaluation(
             user_id=user.id,
             seminar_id=seminar_id,

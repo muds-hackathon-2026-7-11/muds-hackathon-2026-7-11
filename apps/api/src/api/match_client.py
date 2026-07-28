@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -7,6 +8,7 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
 from api.config import settings
+from api.consult_client import LlmCallMeta, call_meta
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,8 @@ MATCHES_PROMPT_VERSION = "matches-v2"
 class MatchResult:
     score: int  # 0〜100
     feedback: dict  # {"summary": str, "reasons": list[str]}
+    meta: LlmCallMeta | None = None  # ログ用の計測値(#228)
+    raw: dict | list | None = None  # LLMが返した生のJSON(#228)
 
 
 @dataclass
@@ -51,6 +55,19 @@ class BulkMatchItem:
     reasons: list[str]
 
 
+@dataclass
+class BulkMatchResult:
+    """一括採点の結果と、ログ用の計測値(#228)。
+
+    items だけ返していると採点は成立するが、モデル・トークン数・レイテンシ・
+    生の応答が残らず改善分析ができないため、まとめて返す。
+    """
+
+    items: dict[int, BulkMatchItem]
+    meta: LlmCallMeta | None = None
+    raw: dict | list | None = None
+
+
 class MatchClient(Protocol):
     async def evaluate(
         self, *, student_text: str, seminar_text: str
@@ -58,8 +75,8 @@ class MatchClient(Protocol):
 
     async def evaluate_all(
         self, *, student_text: str, seminars: list[SeminarInput]
-    ) -> dict[int, BulkMatchItem]:
-        """全ゼミを1コールで観点別採点する。返り値は index -> 採点結果。"""
+    ) -> BulkMatchResult:
+        """全ゼミを1コールで観点別採点する。items は index -> 採点結果。"""
         ...
 
 
@@ -128,23 +145,21 @@ def _bulk_user_message(student_text: str, seminars: list[SeminarInput]) -> str:
     )
 
 
-def _log_token_usage(response: Any) -> None:
+def _log_token_usage(meta: LlmCallMeta) -> None:
     """一括採点のトークン使用量とキャッシュヒット状況をログに出す(#200)。
 
     prompt cachingはプロンプトの並び順が崩れると黙って効かなくなり、影響が
     請求額にしか現れない。cached_tokens を継続的に観測できるようにしておく。
-    usage の構造はSDKのバージョンで変わりうるため、取れなくてもログを諦めるだけ
-    にして採点自体は続ける。
+
+    値の取り出しは call_meta() に任せる(#228)。DBログ(match_logs)と同じ計測値を
+    使うことで、レスポンスから二重に取り出す処理を持たない。
     """
-    usage = getattr(response, "usage", None)
-    if usage is None:
-        return
-    details = getattr(usage, "prompt_tokens_details", None)
     logger.info(
-        "bulk match usage: prompt=%s cached=%s completion=%s",
-        getattr(usage, "prompt_tokens", None),
-        getattr(details, "cached_tokens", None),
-        getattr(usage, "completion_tokens", None),
+        "bulk match usage: prompt=%s cached=%s completion=%s latency=%sms",
+        meta.prompt_tokens,
+        meta.cached_tokens,
+        meta.completion_tokens,
+        meta.latency_ms,
     )
 
 
@@ -200,12 +215,14 @@ class OpenAIMatchClient:
                 ),
             },
         ]
+        started = time.monotonic()
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
             temperature=0,
             response_format={"type": "json_object"},
         )
+        latency_ms = int((time.monotonic() - started) * 1000)
         content = response.choices[0].message.content or "{}"
         data = json.loads(content)
         score = max(0, min(100, int(data.get("score", 0))))
@@ -213,24 +230,41 @@ class OpenAIMatchClient:
             "summary": str(data.get("summary", "")),
             "reasons": list(data.get("reasons", [])),
         }
-        return MatchResult(score=score, feedback=feedback)
+        return MatchResult(
+            score=score,
+            feedback=feedback,
+            meta=call_meta(response, model=self._model, latency_ms=latency_ms),
+            raw=data,
+        )
 
     async def evaluate_all(
         self, *, student_text: str, seminars: list[SeminarInput]
-    ) -> dict[int, BulkMatchItem]:
+    ) -> BulkMatchResult:
         messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": _BULK_SYSTEM_PROMPT},
             {"role": "user", "content": _bulk_user_message(student_text, seminars)},
         ]
+        started = time.monotonic()
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
             temperature=0,
             response_format={"type": "json_object"},
         )
-        _log_token_usage(response)
+        latency_ms = int((time.monotonic() - started) * 1000)
+        meta = call_meta(response, model=self._model, latency_ms=latency_ms)
+        _log_token_usage(meta)
         content = response.choices[0].message.content or "{}"
-        return _parse_bulk(content)
+        items = _parse_bulk(content)
+        try:
+            raw = json.loads(content)
+        except json.JSONDecodeError:  # _parse_bulk が通った以上ここには来ない
+            raw = None
+        return BulkMatchResult(
+            items=items,
+            meta=meta,
+            raw=raw,
+        )
 
 
 @dataclass
@@ -250,21 +284,31 @@ class FakeMatchClient:
 
     async def evaluate_all(
         self, *, student_text: str, seminars: list[SeminarInput]
-    ) -> dict[int, BulkMatchItem]:
+    ) -> BulkMatchResult:
         self.bulk_calls.append((student_text, [s.name for s in seminars]))
-        return {
-            s.index: BulkMatchItem(
-                rubric=RubricScores(
-                    field=self.score,
-                    method=self.score,
-                    interest=self.score,
-                    style=self.score,
-                ),
-                summary=str(self.feedback["summary"]),
-                reasons=list(self.feedback["reasons"]),
-            )
-            for s in seminars
-        }
+        return BulkMatchResult(
+            items={
+                s.index: BulkMatchItem(
+                    rubric=RubricScores(
+                        field=self.score,
+                        method=self.score,
+                        interest=self.score,
+                        style=self.score,
+                    ),
+                    summary=str(self.feedback["summary"]),
+                    reasons=list(self.feedback["reasons"]),
+                )
+                for s in seminars
+            },
+            meta=LlmCallMeta(
+                model="fake-model",
+                prompt_tokens=100,
+                completion_tokens=50,
+                cached_tokens=0,
+                latency_ms=1,
+            ),
+            raw={"results": []},
+        )
 
 
 def get_match_client() -> MatchClient:

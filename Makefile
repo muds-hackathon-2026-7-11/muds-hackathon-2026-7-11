@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build dev-slack-test down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build dev-slack-test down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data export-llm-logs backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -79,6 +79,10 @@ import-seminar-knowledge: ## load seminar summary docs into seminars.knowledge (
 	cd apps/api && uv run python -m api.import_seminar_knowledge "../../$(or $(dir),docs/seminars/knowledge)"
 
 import-data: import-seminars import-users import-seminar-members import-seminar-knowledge ## run import-seminars, import-users, import-seminar-members, then import-seminar-knowledge with default paths
+
+export-llm-logs: ## export chat_logs/match_logs as JSONL (default dir .private/llm-logs; from=/to=YYYY-MM-DD; anonymize=true recommended for analysis)
+	cd apps/api && uv run python -m api.export_llm_logs "../../$(or $(dir),.private/llm-logs)" \
+		$(if $(from),--from $(from),) $(if $(to),--to $(to),) $(if $(anonymize),--anonymize,)
 
 backup: ## take an on-demand DB backup into ./backups (pg_dump, custom format)
 	mkdir -p backups
