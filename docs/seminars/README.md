@@ -25,4 +25,5 @@ make import-seminar-knowledge   # docs/seminars/knowledge/*.md を seminars.know
 投入するまでマッチ度診断・相談チャットの回答は古い内容のままになる。また投入するとゼミ内容のハッシュが変わるため、`match_evaluations` の既存キャッシュが無効化され、学生の初回アクセス時にLLMで再計算される。
 
 ## 資料が未提供のゼミ・教員（要約に未反映）
-- **Virachゼミ（合同）**：神崎 享子・小林 周・Titipakorn Prakayaphun の3教員の資料が未提供で未反映。
+- **神崎 享子・小林 周・Titipakorn Prakayaphun**：もとはVirach・Thatsanee・佐々木の3名と合わせた6教員合同ゼミ「Virachゼミ（合同）」だったが、資料が提供された3名（Virach・Thatsanee・佐々木）がそれぞれ独立したゼミ(joint_groupで合同)として運用されている。神崎・小林・Titipakornの3名は資料未提供のため、対応するゼミ・要約が無い。
+  旧・合同ゼミ時代のドキュメントは `Virachゼミ（合同）_old.md` / `knowledge/_archive/Virachゼミ（合同）_old.md` として残してある(`knowledge/teachers/` 配下にあった教員別要約は、分割後の `knowledge/{Virach,Thatsanee,佐々木}ゼミ.md` と内容が重複するため削除した)。

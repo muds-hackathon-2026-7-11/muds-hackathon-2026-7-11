@@ -25,12 +25,10 @@ from api.db import async_session
 from api.models import Seminar
 
 # ドキュメントのファイル名(stem) → DB上のゼミ名 の別名。
-# 合同ゼミはファイル名を短くしているため、正式名へ対応付ける。
-_NAME_ALIASES: dict[str, str] = {
-    "Virachゼミ（合同）": (
-        "Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・Titi合同）"
-    ),
-}
+# ファイル名がDB上のゼミ名と異なる場合にここへ追加する
+# (例: 旧Virachゼミ（合同）は3ゼミに分割され、各ファイル名がゼミ名と
+# 一致するようになったため別名エントリは不要になった)。
+_NAME_ALIASES: dict[str, str] = {}
 
 # 投入対象外のファイル名(stem)。
 _IGNORE_STEMS: frozenset[str] = frozenset({"README"})

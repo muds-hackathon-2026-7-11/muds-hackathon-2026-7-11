@@ -23,11 +23,9 @@ def _write(directory: Path, filename: str, content: str) -> None:
     (directory / filename).write_text(content, encoding="utf-8")
 
 
-def test_resolve_name_applies_alias_and_passthrough() -> None:
-    assert (
-        _resolve_name("Virachゼミ（合同）")
-        == "Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・Titi合同）"
-    )
+def test_resolve_name_applies_alias_and_passthrough(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "_NAME_ALIASES", {"略称ゼミ": "正式名称ゼミ"})
+    assert _resolve_name("略称ゼミ") == "正式名称ゼミ"
     assert _resolve_name("福原ゼミ") == "福原ゼミ"
 
 
