@@ -154,7 +154,7 @@ STUDENTS: list[StudentSeed] = [
         "name": "加藤翔太",
         "research_theme": "Webアプリケーションの脆弱性診断",
         "academic_year": CURRENT_ACADEMIC_YEAR,
-        "interest_tags": ["認証", "Web開発"],
+        "interest_tags": ["暗号・認証", "Web開発"],
     },
     {
         "seminar": "高橋・浦木ゼミ",
@@ -341,7 +341,7 @@ APPLICATIONS: list[ApplicationSeed] = [
         "name": "応募二菜",
         "grade": "B2",
         "research_theme": "",
-        "interest_tags": ["暗号", "認証"],
+        "interest_tags": ["暗号・認証"],
         "choices": [
             {
                 "seminar": "高橋・浦木ゼミ",
@@ -480,7 +480,7 @@ APPLICATIONS: list[ApplicationSeed] = [
         "name": "応募舞",
         "grade": "B4",
         "research_theme": "",
-        "interest_tags": ["認証", "Web開発"],
+        "interest_tags": ["暗号・認証", "Web開発"],
         "choices": [
             {
                 "seminar": "高橋・浦木ゼミ",
