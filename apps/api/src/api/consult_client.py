@@ -1,6 +1,7 @@
 import json
+import time
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -9,9 +10,41 @@ from api.config import settings
 
 
 @dataclass
+class LlmCallMeta:
+    """LLM 1コール分の計測値(#228)。取得できない項目は None のまま。
+
+    ログの分析用であり、取れなくても本来の処理は続行する。
+    """
+
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cached_tokens: int | None = None
+    latency_ms: int | None = None
+
+
+def call_meta(response: Any, *, model: str, latency_ms: int) -> LlmCallMeta:
+    """OpenAIのレスポンスから計測値を取り出す。
+
+    usage の構造はSDKのバージョンで変わりうるため、取れない項目は None にして
+    採点・相談そのものは止めない。
+    """
+    usage = getattr(response, "usage", None)
+    details = getattr(usage, "prompt_tokens_details", None)
+    return LlmCallMeta(
+        model=model,
+        prompt_tokens=getattr(usage, "prompt_tokens", None),
+        completion_tokens=getattr(usage, "completion_tokens", None),
+        cached_tokens=getattr(details, "cached_tokens", None),
+        latency_ms=latency_ms,
+    )
+
+
+@dataclass
 class ConsultResult:
     reply: str  # 学生に見せる会話文
     recommendations: list[dict]  # [{"seminar_name": str, "reason": str}]
+    meta: LlmCallMeta | None = None  # ログ用の計測値(#228)
 
 
 @dataclass
@@ -75,12 +108,14 @@ class OpenAIConsultClient:
         history: list[ConsultTurn],
         seminars_context: str,
     ) -> ConsultResult:
+        started = time.monotonic()
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=_messages(message, history, seminars_context),
             temperature=0.3,
             response_format={"type": "json_object"},
         )
+        latency_ms = int((time.monotonic() - started) * 1000)
         content = response.choices[0].message.content or "{}"
         data = json.loads(content)
         recommendations = [
@@ -92,7 +127,9 @@ class OpenAIConsultClient:
             if isinstance(r, dict)
         ]
         return ConsultResult(
-            reply=str(data.get("reply", "")), recommendations=recommendations
+            reply=str(data.get("reply", "")),
+            recommendations=recommendations,
+            meta=call_meta(response, model=self._model, latency_ms=latency_ms),
         )
 
 

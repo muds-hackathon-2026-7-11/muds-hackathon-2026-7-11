@@ -46,7 +46,7 @@ async def _chat_log_count(db_session, user_id) -> int:
     return count
 
 
-async def test_consult_returns_reply_and_does_not_persist(
+async def test_consult_returns_reply_and_persists(
     client, db_session, fake_consult_client
 ) -> None:
     user = await _make_student(db_session)
@@ -61,8 +61,8 @@ async def test_consult_returns_reply_and_does_not_persist(
     assert body["recommendations"] == [
         {"seminar_name": "テストゼミ", "reason": "理由A"}
     ]
-    # 会話は保存しない(プライバシー配慮でログを取らない)
-    assert await _chat_log_count(db_session, user.id) == 0
+    # 会話は改善分析のため保存する(#228)
+    assert await _chat_log_count(db_session, user.id) == 1
 
 
 async def test_consult_passes_message_history_and_context(
@@ -109,7 +109,7 @@ async def test_consult_without_seminars_returns_guidance(
     body = resp.json()
     assert body["recommendations"] == []
     assert "ゼミ情報" in body["reply"]
-    # ゼミが無いときはLLMを呼ばず、ログも残さない
+    # ゼミが無いときはLLMを呼ばないので、ログも残さない(#228)
     assert fake_consult_client.calls == []
     assert await _chat_log_count(db_session, user.id) == 0
 
@@ -131,8 +131,8 @@ async def test_consult_graceful_when_llm_fails(
     # LLM失敗でも500にせず、フォールバック文言を返す
     assert resp.status_code == 200
     assert resp.json()["recommendations"] == []
-    # 失敗時はログを残さない
-    assert await _chat_log_count(db_session, user.id) == 0
+    # 失敗も品質分析の材料なので、理由を添えて残す(#228)
+    assert await _chat_log_count(db_session, user.id) == 1
 
 
 async def test_consult_requires_authentication(client, monkeypatch) -> None:
