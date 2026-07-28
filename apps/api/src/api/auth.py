@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
 from api.db import get_db
-from api.models import User, UserRole
+from api.models import SheetsExportKey, User, UserRole
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -214,6 +214,24 @@ async def require_internal_secret(request: Request) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このエンドポイントは内部からのみ呼び出せます。",
+        )
+
+
+async def require_sheets_export_key(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> None:
+    """スプレッドシート自動連携(#223)用の専用キーを要求する依存。
+
+    呼び出し元はGoogle Apps Script(JWT/OAuthを組ませるのは煩雑なため、
+    専用の固定キーで認証する)。キーは環境変数ではなくDBに持つ(管理者が
+    開発者に頼らずadmin画面から発行・再発行できるようにするため)。
+    """
+    provided = request.headers.get("X-Sheets-Export-Key")
+    record = (await db.execute(select(SheetsExportKey))).scalar_one_or_none()
+    if not provided or record is None or provided != record.key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="このエンドポイントは専用キーが無いと呼び出せません。",
         )
 
 

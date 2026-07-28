@@ -1,7 +1,8 @@
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import require_role
@@ -11,6 +12,7 @@ from api.models import (
     SeminarJointGroup,
     SeminarMaterial,
     SeminarTeacher,
+    SheetsExportKey,
     User,
     UserRole,
 )
@@ -29,6 +31,7 @@ from api.schemas import (
     AdminUserOut,
     SeminarMaterialCreate,
     SeminarMaterialOut,
+    SheetsExportKeyOut,
 )
 
 # 運営(admin)専用。新規の一括投入はCSV(#40/#45)が担うため、ここでは
@@ -590,3 +593,30 @@ async def remove_admin(
     admin_user.role = UserRole.student
     await db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- 志望理由データのスプレッドシート自動連携 (#223) ---
+
+
+@router.get("/sheets-export-key", response_model=SheetsExportKeyOut)
+async def get_sheets_export_key(
+    db: AsyncSession = Depends(get_db),
+) -> SheetsExportKeyOut:
+    """発行済みのスプレッドシート連携キーを返す(未発行ならkey=null)。"""
+    record = (await db.execute(select(SheetsExportKey))).scalar_one_or_none()
+    return SheetsExportKeyOut(key=record.key if record is not None else None)
+
+
+@router.post("/sheets-export-key/regenerate", response_model=SheetsExportKeyOut)
+async def regenerate_sheets_export_key(
+    db: AsyncSession = Depends(get_db),
+) -> SheetsExportKeyOut:
+    """スプレッドシート連携キーを新規発行する(既存のキーは失効する)。
+
+    常に高々1行しか持たない設計なので、既存行を消してから作り直す。
+    """
+    await db.execute(delete(SheetsExportKey))
+    new_key = secrets.token_hex(32)
+    db.add(SheetsExportKey(key=new_key))
+    await db.flush()
+    return SheetsExportKeyOut(key=new_key)

@@ -19,6 +19,7 @@ from api.models import (
     SeminarMember,
     SeminarRecruitment,
     SeminarTeacher,
+    SheetsExportKey,
     User,
     UserRole,
 )
@@ -383,6 +384,76 @@ async def test_all_applicants_csv_includes_other_teachers_seminars(
 async def test_all_applicants_csv_requires_teacher_role(client, db_session) -> None:
     _authenticate_as(await _make_user(db_session, UserRole.student))
     resp = await client.get("/teacher/applicants/all.csv")
+    assert resp.status_code == 403
+
+
+# --- スプレッドシート自動連携 (#223) ---
+
+_SHEETS_EXPORT_KEY = "test-sheets-export-key"
+
+
+async def _issue_sheets_export_key(db_session, key: str = _SHEETS_EXPORT_KEY) -> None:
+    db_session.add(SheetsExportKey(key=key))
+    await db_session.flush()
+
+
+async def test_export_applicants_for_sheets(client, db_session) -> None:
+    await _issue_sheets_export_key(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    student = await _make_user(
+        db_session, UserRole.student, grade="B3", student_id="s2311003"
+    )
+    await _apply(
+        db_session,
+        term=term,
+        student=student,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1, "エクスポート確認用の志望理由")],
+    )
+
+    # このエンドポイントはJWTではなく専用キーで認証するため、ログイン
+    # ユーザーの認証は一切していない状態でリクエストする。
+    resp = await client.get(
+        "/teacher/applicants/export",
+        headers={"X-Sheets-Export-Key": _SHEETS_EXPORT_KEY},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert any(
+        seminar_out["seminar_id"] == str(seminar.id)
+        and any(a["name"] == student.name for a in seminar_out["applicants"])
+        for seminar_out in data
+    )
+
+
+async def test_export_applicants_for_sheets_rejects_missing_key(
+    client, db_session
+) -> None:
+    await _issue_sheets_export_key(db_session)
+    resp = await client.get("/teacher/applicants/export")
+    assert resp.status_code == 403
+
+
+async def test_export_applicants_for_sheets_rejects_when_not_issued(
+    client, db_session
+) -> None:
+    resp = await client.get(
+        "/teacher/applicants/export",
+        headers={"X-Sheets-Export-Key": _SHEETS_EXPORT_KEY},
+    )
+    assert resp.status_code == 403
+
+
+async def test_export_applicants_for_sheets_rejects_wrong_key(
+    client, db_session
+) -> None:
+    await _issue_sheets_export_key(db_session)
+    resp = await client.get(
+        "/teacher/applicants/export",
+        headers={"X-Sheets-Export-Key": "wrong-key"},
+    )
     assert resp.status_code == 403
 
 

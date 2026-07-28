@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import require_role
+from api.auth import require_role, require_sheets_export_key
 from api.db import get_db
 from api.models import (
     ApplicationChoice,
@@ -374,6 +374,24 @@ async def download_all_applicants_csv(
     seminars = await _all_seminars(db)
     data = await _gather_applicants_for_seminars(db, seminars)
     return _applicants_csv_response(data, filename="applicants_all.csv")
+
+
+@router.get(
+    "/applicants/export",
+    response_model=list[SeminarApplicantsOut],
+    dependencies=[Depends(require_sheets_export_key)],
+)
+async def export_applicants_for_sheets(
+    db: AsyncSession = Depends(get_db),
+) -> list[SeminarApplicantsOut]:
+    """全ゼミの応募者をJSONで返す(スプレッドシート自動連携#223向け)。
+
+    /applicants/all.csv と同じデータだが、呼び出し元はGoogle Apps Script
+    (JWTではなくrequire_sheets_export_keyの専用キーで認証する)ため、
+    パースしやすいJSONで返す。
+    """
+    seminars = await _all_seminars(db)
+    return await _gather_applicants_for_seminars(db, seminars)
 
 
 @router.get("/unsubmitted-applicants", response_model=list[UnsubmittedApplicantOut])

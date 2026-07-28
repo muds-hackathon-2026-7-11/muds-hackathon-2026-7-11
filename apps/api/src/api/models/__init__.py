@@ -24,6 +24,7 @@ from api.models.seminar import (
     SeminarMember,
     SeminarTeacher,
 )
+from api.models.sheets_export import SheetsExportKey
 from api.models.user import User, UserRole
 
 __all__ = [
@@ -50,6 +51,7 @@ __all__ = [
     "SeminarMember",
     "SeminarRecruitment",
     "SeminarTeacher",
+    "SheetsExportKey",
     "User",
     "UserInterestTag",
     "UserRole",
