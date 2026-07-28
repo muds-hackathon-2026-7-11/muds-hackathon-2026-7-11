@@ -23,13 +23,15 @@ make import-data   # ゼミ・教員・学生＋ゼミ知識をまとめて投�
 1. `data/seminar_teacher.csv`という名前のcsvを置く
    (列: `ゼミ名, ゼミ紹介文, 教員写真URL, 教員氏名, 教員メールアドレス`)
 
-   > ⚠️ Virach・Thatsanee・佐々木の3ゼミは、本番では合同グループ(joint_group)の
-   > 3つの独立したゼミ(`Virachゼミ`/`Thatsaneeゼミ`/`佐々木ゼミ`、サフィックス無し)
-   > として運用されている。手元の`seminar_teacher.csv`がまだ旧来の6教員合同の
-   > 単一ゼミ名(`Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・Titi合同）`)の
-   > ままだと、`docs/seminars/knowledge/`側のファイル名(ゼミ名と完全一致が前提)と
-   > 食い違い、`import-seminar-knowledge`がこの3ゼミ分だけ静かにスキップされる。
-   > 再投入前に、CSV側のゼミ名を上記3つに合わせて更新すること。
+   > ⚠️ Virach・Thatsanee・佐々木の3名は、本番では合同グループ(joint_group)の
+   > 3つの独立したゼミ「Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・
+   > Titipakorn合同）」「Thatsaneeゼミ（同）」「佐々木ゼミ（同）」として運用
+   > されている。手元の`seminar_teacher.csv`がまだ6教員(神崎・小林・Titipakorn
+   > 含む)を1つの合同ゼミにまとめた旧来の構成のままだと、本番の実際のゼミ構成
+   > (3つの独立したゼミ)とは一致しない。ローカルで本番相当のゼミ構成を再現したい
+   > 場合は、CSV側を3行に分けて上記の正式名に合わせること。
+   > (`docs/seminars/knowledge/`側のファイル名自体は短い`Virachゼミ`等のままで
+   > よい。`import_seminar_knowledge.py`の`_NAME_ALIASES`が正式名へ変換する。)
 
 2. DBに投入する:
 

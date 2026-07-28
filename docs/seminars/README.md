@@ -27,3 +27,7 @@ make import-seminar-knowledge   # docs/seminars/knowledge/*.md を seminars.know
 ## 資料が未提供のゼミ・教員（要約に未反映）
 - **神崎 享子・小林 周・Titipakorn Prakayaphun**：もとはVirach・Thatsanee・佐々木の3名と合わせた6教員合同ゼミ「Virachゼミ（合同）」だったが、資料が提供された3名（Virach・Thatsanee・佐々木）がそれぞれ独立したゼミ(joint_groupで合同)として運用されている。神崎・小林・Titipakornの3名は資料未提供のため、対応するゼミ・要約が無い。
   旧・合同ゼミ時代のドキュメントは `Virachゼミ（合同）_old.md` / `knowledge/_archive/Virachゼミ（合同）_old.md` として残してある(`knowledge/teachers/` 配下にあった教員別要約は、分割後の `knowledge/{Virach,Thatsanee,佐々木}ゼミ.md` と内容が重複するため削除した)。
+  なお、DB上のこの3ゼミの正式名は今も6教員分の合同グループ名を引きずった長い名前
+  （例:「Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・Titipakorn合同）」）の
+  ため、`knowledge/{Virach,Thatsanee,佐々木}ゼミ.md` という短いファイル名との対応は
+  `apps/api/src/api/import_seminar_knowledge.py` の `_NAME_ALIASES` で解決している。
