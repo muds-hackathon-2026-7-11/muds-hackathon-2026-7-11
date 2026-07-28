@@ -299,7 +299,7 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={100}
+                  width={140}
                   tick={<TruncatedYAxisTick />}
                   stroke="#e6e6e6"
                 />
