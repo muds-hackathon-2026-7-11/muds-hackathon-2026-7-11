@@ -1,7 +1,7 @@
 """add llm logs
 
 Revision ID: a1c4f7d29e30
-Revises: 307e06bb4aac
+Revises: ee8ff8ae57d1
 Create Date: 2026-07-28
 
 chat_logs にセッション情報と計測値を追加し、マッチ度診断用の match_logs を
@@ -21,7 +21,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1c4f7d29e30"
-down_revision: Union[str, Sequence[str], None] = "307e06bb4aac"
+down_revision: Union[str, Sequence[str], None] = "ee8ff8ae57d1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
