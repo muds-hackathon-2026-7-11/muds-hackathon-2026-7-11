@@ -612,3 +612,12 @@ class ConsultRecommendation(BaseModel):
 class ConsultOut(BaseModel):
     reply: str
     recommendations: list[ConsultRecommendation]
+
+
+# --- 志望理由データのスプレッドシート自動連携 (#223) ---
+
+
+class SheetsExportKeyOut(BaseModel):
+    # 未発行ならNone。管理者本人がadmin画面から見るものなので、発行後も
+    # 何度でも同じ値を返してよい(見せて困る相手がいない)。
+    key: str | None

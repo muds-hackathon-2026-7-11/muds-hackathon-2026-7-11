@@ -12,6 +12,7 @@ from api.models import (
     SeminarJointGroup,
     SeminarMaterial,
     SeminarTeacher,
+    SheetsExportKey,
     User,
     UserRole,
 )
@@ -740,6 +741,45 @@ async def test_remove_admin_on_non_admin_returns_404(client, db_session) -> None
     teacher = await _make_user(db_session, UserRole.teacher)
     resp = await client.delete(f"/admin/admins/{teacher.id}")
     assert resp.status_code == 404
+
+
+# --- スプレッドシート自動連携 (#223) ---
+
+
+async def test_get_sheets_export_key_returns_null_when_unissued(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+    resp = await client.get("/admin/sheets-export-key")
+    assert resp.status_code == 200
+    assert resp.json() == {"key": None}
+
+
+async def test_regenerate_sheets_export_key_issues_and_returns_a_key(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+
+    resp = await client.post("/admin/sheets-export-key/regenerate")
+    assert resp.status_code == 200
+    issued_key = resp.json()["key"]
+    assert issued_key
+
+    get_resp = await client.get("/admin/sheets-export-key")
+    assert get_resp.json() == {"key": issued_key}
+
+
+async def test_regenerate_sheets_export_key_invalidates_the_previous_key(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_admin(db_session))
+
+    first = (await client.post("/admin/sheets-export-key/regenerate")).json()["key"]
+    second = (await client.post("/admin/sheets-export-key/regenerate")).json()["key"]
+
+    assert first != second
+    result = await db_session.execute(select(SheetsExportKey))
+    assert [row.key for row in result.scalars().all()] == [second]
 
 
 # --- 認可 ---
