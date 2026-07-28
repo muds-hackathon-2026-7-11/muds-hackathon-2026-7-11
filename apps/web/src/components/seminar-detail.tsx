@@ -139,6 +139,17 @@ function membersByTag(members: Member[]): Map<string, string[]> {
   return map;
 }
 
+// 学年ごとのゼミ生数。APIが学年昇順(nullは末尾)で返す前提で、Mapの
+// 挿入順=出現順をそのまま表示順として使う(ここで並べ替えはしない)。
+function gradeCounts(members: Member[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const key = member.grade ?? "学年不明";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries());
+}
+
 type SeminarDetailViewProps = {
   seminar: SeminarDetail;
 };
@@ -146,6 +157,10 @@ type SeminarDetailViewProps = {
 export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
   const chartData = useMemo(
     () => tagChartData(seminar.current_members),
+    [seminar.current_members],
+  );
+  const memberGradeCounts = useMemo(
+    () => gradeCounts(seminar.current_members),
     [seminar.current_members],
   );
   // クリックで研究概要モーダルを開いているゼミ生のid。
@@ -331,7 +346,17 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
       </section>
 
       <section className="rounded-2xl border border-line bg-white p-6 shadow-sm shadow-[#add8e6]/30">
-        <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="text-lg font-bold text-zinc-900">現在のゼミ生</h2>
+          {seminar.current_members.length > 0 && (
+            <p className="text-sm text-zinc-500">
+              全{seminar.current_members.length}名
+              {memberGradeCounts.map(([grade, count]) => (
+                <span key={grade}>{` ・ ${grade} ${count}名`}</span>
+              ))}
+            </p>
+          )}
+        </div>
         {seminar.current_members.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
         ) : (
