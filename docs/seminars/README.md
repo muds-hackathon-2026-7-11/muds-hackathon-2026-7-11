@@ -25,5 +25,4 @@ make import-seminar-knowledge   # docs/seminars/knowledge/*.md を seminars.know
 投入するまでマッチ度診断・相談チャットの回答は古い内容のままになる。また投入するとゼミ内容のハッシュが変わるため、`match_evaluations` の既存キャッシュが無効化され、学生の初回アクセス時にLLMで再計算される。
 
 ## 資料が未提供のゼミ・教員（要約に未反映）
-- **石橋・槌屋ゼミ**：槌屋 洋亮 教員の資料が配布資料に含まれず未反映。
 - **Virachゼミ（合同）**：神崎 享子・小林 周・Titipakorn Prakayaphun の3教員の資料が未提供で未反映。
