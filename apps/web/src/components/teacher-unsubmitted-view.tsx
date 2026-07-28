@@ -54,8 +54,11 @@ export function TeacherUnsubmittedView({
             </button>
           ))}
         </div>
+        {/* applicantsは元々「未提出者」だけの一覧なので、全学生数は含んで
+            いない。「X名 / 全Y名」のような分数にすると全学生に対する
+            割合であるかのように誤読されるため、単純な件数のみ表示する。 */}
         <span className="text-sm text-zinc-500">
-          {filtered.length}名 / 全{applicants.length}名 未提出
+          {filtered.length}名 未提出
         </span>
       </div>
 

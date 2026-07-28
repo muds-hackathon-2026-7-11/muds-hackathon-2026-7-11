@@ -47,7 +47,7 @@ describe("TeacherUnsubmittedView", () => {
     expect(screen.getByText("s2322087")).toBeInTheDocument();
     expect(screen.getByText("学年不明太郎")).toBeInTheDocument();
     expect(screen.getByText("学年不明")).toBeInTheDocument();
-    expect(screen.getByText("4名 / 全4名 未提出")).toBeInTheDocument();
+    expect(screen.getByText("4名 未提出")).toBeInTheDocument();
   });
 
   it("shows a message when there are no unsubmitted applicants", () => {
@@ -67,6 +67,6 @@ describe("TeacherUnsubmittedView", () => {
     expect(screen.getByText("MIDS学生")).toBeInTheDocument();
     expect(screen.queryByText("橘 由翔")).not.toBeInTheDocument();
     expect(screen.queryByText("学年不明太郎")).not.toBeInTheDocument();
-    expect(screen.getByText("2名 / 全4名 未提出")).toBeInTheDocument();
+    expect(screen.getByText("2名 未提出")).toBeInTheDocument();
   });
 });
