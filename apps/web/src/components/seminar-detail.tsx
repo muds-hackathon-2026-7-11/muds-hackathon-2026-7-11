@@ -336,25 +336,39 @@ export function SeminarDetailView({ seminar }: SeminarDetailViewProps) {
           <p className="mt-2 text-sm text-zinc-900">未設定です。</p>
         ) : (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {seminar.current_members.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => setOpenMemberId(member.id)}
-                className="rounded-xl border border-line px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
-              >
-                <span className="block truncate font-semibold text-zinc-900">
-                  {member.grade
-                    ? `${member.grade} ${member.name}`
-                    : member.name}
-                </span>
-                {/* 研究タイトルは研究概要(research_theme)とは別項目。
-                    詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
-                <span className="mt-0.5 block truncate text-xs text-zinc-900">
-                  {member.research_title ?? "研究タイトル未設定"}
-                </span>
-              </button>
-            ))}
+            {seminar.current_members.map((member) => {
+              // 研究概要(research_theme)を未設定のまま放置しているゼミ生が
+              // 一覧上でわかりにくいという指摘があったため、文字色を薄くして
+              // 目立たせる(名前クリックのモーダルで詳しい研究概要を見せる)。
+              const hasResearchTheme = member.research_theme !== null;
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => setOpenMemberId(member.id)}
+                  className="rounded-xl border border-line px-3 py-2 text-left transition-colors hover:bg-[#add8e6]/10"
+                >
+                  <span
+                    className={`block truncate font-semibold ${
+                      hasResearchTheme ? "text-zinc-900" : "text-zinc-400"
+                    }`}
+                  >
+                    {member.grade
+                      ? `${member.grade} ${member.name}`
+                      : member.name}
+                  </span>
+                  {/* 研究タイトルは研究概要(research_theme)とは別項目。
+                      詳しい研究概要・タグは名前クリックのモーダルで見せる。 */}
+                  <span
+                    className={`mt-0.5 block truncate text-xs ${
+                      hasResearchTheme ? "text-zinc-900" : "text-zinc-400"
+                    }`}
+                  >
+                    {member.research_title ?? "研究タイトル未設定"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>

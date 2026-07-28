@@ -90,6 +90,20 @@ describe("SeminarDetailView", () => {
     expect(screen.getByText("研究タイトル未設定")).toBeInTheDocument();
   });
 
+  it("dims a member's card when their research theme is not set", () => {
+    const withUnsetTheme: SeminarDetail = {
+      ...seminar,
+      current_members: [
+        { ...seminar.current_members[0], research_theme: null },
+        seminar.current_members[1],
+      ],
+    };
+    render(<SeminarDetailView seminar={withUnsetTheme} />);
+
+    expect(screen.getByText("B3 学生A")).toHaveClass("text-zinc-400");
+    expect(screen.getByText("B4 学生B")).toHaveClass("text-zinc-900");
+  });
+
   it("shows the teacher's initial when neither teacher nor seminar photo is set", () => {
     render(<SeminarDetailView seminar={seminar} />);
 
