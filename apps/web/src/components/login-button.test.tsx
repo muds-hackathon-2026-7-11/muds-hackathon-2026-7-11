@@ -21,4 +21,12 @@ describe("LoginButton", () => {
 
     expect(signIn).toHaveBeenCalledExactlyOnceWith("google");
   });
+
+  it("shows a notice that collected data is not shared outside the university", () => {
+    render(<LoginButton />);
+
+    expect(
+      screen.getByText(/学外へ提供することはありません/),
+    ).toBeInTheDocument();
+  });
 });
