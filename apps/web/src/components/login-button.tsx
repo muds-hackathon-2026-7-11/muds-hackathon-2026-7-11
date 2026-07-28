@@ -26,6 +26,10 @@ export function LoginButton() {
       >
         Googleでログイン
       </button>
+
+      <p className="text-center text-xs text-zinc-400">
+        入力された情報は、ゼミ選択支援・学内の運営改善の目的にのみ利用し、学外へ提供することはありません。
+      </p>
     </section>
   );
 }

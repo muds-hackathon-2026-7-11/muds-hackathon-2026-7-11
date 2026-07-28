@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -9,8 +10,14 @@ from openai.types.chat import ChatCompletionMessageParam
 from api.config import settings
 from api.consult_client import LlmCallMeta, call_meta
 
+logger = logging.getLogger(__name__)
+
 # 一括採点(evaluate_all)のプロンプト/ルーブリックのバージョン。プロンプトや
 # 観点を変えたらこれを上げると、キャッシュキー(#118)が変わり再計算される。
+#
+# 並び順だけを変えた #200 では敢えて上げていない。観点・ルーブリックは同じで
+# 採点結果の意味が変わらないのに対し、上げると match_evaluations の既存キャッシュ
+# が全件無効化され、学生全員分を採点し直す無駄なコストが発生するため。
 MATCHES_PROMPT_VERSION = "matches-v2"
 
 
@@ -116,6 +123,15 @@ def _clamp_score(value: Any) -> int:
 
 
 def _bulk_user_message(student_text: str, seminars: list[SeminarInput]) -> str:
+    """一括採点のユーザーメッセージを組み立てる。
+
+    OpenAIのprompt cachingはプロンプト先頭からの完全一致プレフィックスにのみ
+    効くため、全リクエストで同一の部分(指示・ゼミ一覧)を先に置き、リクエストごと
+    に変わる学生プロフィールを末尾に置く(#200)。逆順にすると共通プレフィックスが
+    成立せず、6,000トークン超のゼミ一覧が毎回フル単価で課金される。
+
+    ゼミ一覧を動かす場合は、それより前に可変の値を挟まないこと。
+    """
     blocks = "\n\n".join(f"[{s.index}] {s.name}\n{s.text}" for s in seminars)
     return (
         "各ゼミについて4観点(field/method/interest/style)を0〜100で採点し、"
@@ -124,8 +140,26 @@ def _bulk_user_message(student_text: str, seminars: list[SeminarInput]) -> str:
         '"method": <0-100>, "interest": <0-100>, "style": <0-100>, '
         '"summary": "<1〜2文>", "reasons": ["<根拠1>", "<根拠2>"]}]}\n'
         "全てのゼミについて results に1件ずつ返してください。\n\n"
-        f"# 学生プロフィール\n{student_text}\n\n"
-        f"# ゼミ一覧(番号で識別)\n{blocks}"
+        f"# ゼミ一覧(番号で識別)\n{blocks}\n\n"
+        f"# 学生プロフィール\n{student_text}"
+    )
+
+
+def _log_token_usage(meta: LlmCallMeta) -> None:
+    """一括採点のトークン使用量とキャッシュヒット状況をログに出す(#200)。
+
+    prompt cachingはプロンプトの並び順が崩れると黙って効かなくなり、影響が
+    請求額にしか現れない。cached_tokens を継続的に観測できるようにしておく。
+
+    値の取り出しは call_meta() に任せる(#228)。DBログ(match_logs)と同じ計測値を
+    使うことで、レスポンスから二重に取り出す処理を持たない。
+    """
+    logger.info(
+        "bulk match usage: prompt=%s cached=%s completion=%s latency=%sms",
+        meta.prompt_tokens,
+        meta.cached_tokens,
+        meta.completion_tokens,
+        meta.latency_ms,
     )
 
 
@@ -218,6 +252,8 @@ class OpenAIMatchClient:
             response_format={"type": "json_object"},
         )
         latency_ms = int((time.monotonic() - started) * 1000)
+        meta = call_meta(response, model=self._model, latency_ms=latency_ms)
+        _log_token_usage(meta)
         content = response.choices[0].message.content or "{}"
         items = _parse_bulk(content)
         try:
@@ -226,7 +262,7 @@ class OpenAIMatchClient:
             raw = None
         return BulkMatchResult(
             items=items,
-            meta=call_meta(response, model=self._model, latency_ms=latency_ms),
+            meta=meta,
             raw=raw,
         )
 
