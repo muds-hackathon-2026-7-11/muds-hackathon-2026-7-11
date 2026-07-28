@@ -22,6 +22,15 @@ make import-data   # ゼミ・教員・学生＋ゼミ知識をまとめて投�
 
 1. `data/seminar_teacher.csv`という名前のcsvを置く
    (列: `ゼミ名, ゼミ紹介文, 教員写真URL, 教員氏名, 教員メールアドレス`)
+
+   > ⚠️ Virach・Thatsanee・佐々木の3ゼミは、本番では合同グループ(joint_group)の
+   > 3つの独立したゼミ(`Virachゼミ`/`Thatsaneeゼミ`/`佐々木ゼミ`、サフィックス無し)
+   > として運用されている。手元の`seminar_teacher.csv`がまだ旧来の6教員合同の
+   > 単一ゼミ名(`Virachゼミ（Virach・Thatsanee・佐々木・神崎・小林・Titi合同）`)の
+   > ままだと、`docs/seminars/knowledge/`側のファイル名(ゼミ名と完全一致が前提)と
+   > 食い違い、`import-seminar-knowledge`がこの3ゼミ分だけ静かにスキップされる。
+   > 再投入前に、CSV側のゼミ名を上記3つに合わせて更新すること。
+
 2. DBに投入する:
 
    ```sh

@@ -1,4 +1,4 @@
-# Virach Sornlertlamvanich（データサイエンス学部・AAII）
+# Virachゼミ（データサイエンス学部・Virach Sornlertlamvanich）
 
 「未来創造プロジェクト P2-[Human_Behavior] Human Behavior Recognition and Social Innovation（人間行動認識と社会イノベーション）」。人間の知的活動・会話を分析してメディアの内容／意思／感情を把握し、その予測支援を通じて社会イノベーションにつなげる。自然言語処理・AI・データ分析を軸に、学際的な協力によるオープンイノベーションの構築を目指す。（本ファイルはVirach.pdf単体の内容に基づく。）
 
