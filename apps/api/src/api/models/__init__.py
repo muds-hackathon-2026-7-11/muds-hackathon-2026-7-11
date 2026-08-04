@@ -13,6 +13,9 @@ from api.models.question import (
     QuestionStatus,
 )
 from api.models.recruitment import (
+    DEFAULT_DAY_BEFORE_MESSAGE,
+    DEFAULT_DEADLINE_DAY_MESSAGE,
+    DEFAULT_TWO_DAYS_BEFORE_MESSAGE,
     RecruitmentTerm,
     RecruitmentTermStatus,
     SeminarRecruitment,
@@ -40,6 +43,9 @@ __all__ = [
     "ApplicationForm",
     "ApplicationStatus",
     "ChatLog",
+    "DEFAULT_DAY_BEFORE_MESSAGE",
+    "DEFAULT_DEADLINE_DAY_MESSAGE",
+    "DEFAULT_TWO_DAYS_BEFORE_MESSAGE",
     "MaterialType",
     "MatchEvaluation",
     "MatchFeature",

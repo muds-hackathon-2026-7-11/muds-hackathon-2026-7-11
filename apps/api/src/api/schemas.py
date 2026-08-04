@@ -234,6 +234,15 @@ class RecruitmentTermUpdate(BaseModel):
     starts_at: date | None = None
     ends_at: date | None = None
     status: RecruitmentTermStatus | None = None
+    # 締切リマインダー(#153)の文言(#237)。未指定なら据え置き(作成時に
+    # 付与された既定値、またはこれまでの設定のまま)。
+    deadline_day_message: str | None = Field(
+        default=None, min_length=1, max_length=2000
+    )
+    day_before_message: str | None = Field(default=None, min_length=1, max_length=2000)
+    two_days_before_message: str | None = Field(
+        default=None, min_length=1, max_length=2000
+    )
 
 
 class RecruitmentTermOut(BaseModel):
@@ -244,6 +253,9 @@ class RecruitmentTermOut(BaseModel):
     starts_at: date
     ends_at: date
     status: RecruitmentTermStatus
+    deadline_day_message: str
+    day_before_message: str
+    two_days_before_message: str
 
 
 class SeminarRecruitmentUpsert(BaseModel):

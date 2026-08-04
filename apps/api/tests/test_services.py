@@ -5,6 +5,7 @@ import pytest
 from conftest import jst_today
 from sqlalchemy import update
 
+from api.config import settings
 from api.models import (
     ApplicationForm,
     ApplicationStatus,
@@ -16,6 +17,8 @@ from api.models import (
     UserRole,
 )
 from api.services import (
+    _deadline_reminder_blocks,
+    _deadline_reminder_text,
     find_students_without_submission,
     get_current_term,
     normalize_grade,
@@ -57,6 +60,9 @@ async def _make_term(
     *,
     ends_at: date,
     status: RecruitmentTermStatus = RecruitmentTermStatus.open,
+    deadline_day_message: str | None = None,
+    day_before_message: str | None = None,
+    two_days_before_message: str | None = None,
 ) -> RecruitmentTerm:
     term = RecruitmentTerm(
         academic_year=3000 + int(uuid.uuid4().int % 1000),
@@ -64,6 +70,12 @@ async def _make_term(
         ends_at=ends_at,
         status=status,
     )
+    if deadline_day_message is not None:
+        term.deadline_day_message = deadline_day_message
+    if day_before_message is not None:
+        term.day_before_message = day_before_message
+    if two_days_before_message is not None:
+        term.two_days_before_message = two_days_before_message
     db_session.add(term)
     await db_session.flush()
     return term
@@ -283,11 +295,29 @@ async def test_send_deadline_reminders_sends_the_day_before_deadline(
 
 
 @pytest.mark.asyncio
-async def test_send_deadline_reminders_ignores_terms_two_days_out(
+async def test_send_deadline_reminders_sends_two_days_before_deadline(
     db_session, fake_slack_client
 ) -> None:
+    # 締切2日前も送るようになった(#241)。
     await _close_all_open_terms(db_session)
     term = await _make_term(db_session, ends_at=jst_today() + timedelta(days=2))
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    assert student.slack_user_id in sent_by_id
+    assert "締切まで2日です" in sent_by_id[student.slack_user_id].text
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_ignores_terms_three_days_out(
+    db_session, fake_slack_client
+) -> None:
+    # 2日前・前日・当日の3回のみ送る(#241)。3日以上前はまだ対象外。
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=jst_today() + timedelta(days=3))
     await _make_recruitment(db_session, term=term, target_grades=["B3"])
     student = await _make_student(db_session)
 
@@ -372,6 +402,142 @@ async def test_send_deadline_reminders_continues_after_individual_failure(
     sent_ids = {s.slack_user_id for s in fake_slack_client.sent}
     assert failing_student.slack_user_id not in sent_ids
     assert other_student.slack_user_id in sent_ids
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_uses_term_configured_message(
+    db_session, fake_slack_client
+) -> None:
+    # 管理者が募集ラウンドの編集フォームから設定した文言(#237)が使われる。
+    # {ends_at_label}は締切日に置換される。
+    await _close_all_open_terms(db_session)
+    term = await _make_term(
+        db_session,
+        ends_at=jst_today(),
+        deadline_day_message="【カスタム】{ends_at_label}までに提出してね",
+    )
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    ends_at_label = term.ends_at.strftime("%Y年%m月%d日")
+    assert sent_by_id[student.slack_user_id].text == (
+        f"【カスタム】{ends_at_label}までに提出してね"
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_includes_site_link_button(
+    db_session, fake_slack_client
+) -> None:
+    # 送信メッセージにサイトへのリンクボタン(#237)が付くことを確認する。
+    await _close_all_open_terms(db_session)
+    term = await _make_term(db_session, ends_at=jst_today())
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    blocks = sent_by_id[student.slack_user_id].blocks
+    assert blocks is not None
+    button = blocks[-1]["elements"][0]
+    assert button["type"] == "button"
+    assert button["url"] == f"{settings.web_app_url}/apply"
+
+
+# --- _deadline_reminder_text / _deadline_reminder_blocks ---
+
+
+def _term_with_messages(
+    *,
+    deadline_day_message: str,
+    day_before_message: str,
+    two_days_before_message: str = "unused",
+) -> RecruitmentTerm:
+    return RecruitmentTerm(
+        deadline_day_message=deadline_day_message,
+        day_before_message=day_before_message,
+        two_days_before_message=two_days_before_message,
+    )
+
+
+def test_deadline_reminder_text_substitutes_placeholder_from_term() -> None:
+    term = _term_with_messages(
+        deadline_day_message="今日は{ends_at_label}が締切!",
+        day_before_message="明日({ends_at_label})が締切!",
+        two_days_before_message="あと2日({ends_at_label})!",
+    )
+
+    assert (
+        _deadline_reminder_text(
+            days_before=0, ends_at_label="2026年08月07日", term=term
+        )
+        == "今日は2026年08月07日が締切!"
+    )
+    assert (
+        _deadline_reminder_text(
+            days_before=1, ends_at_label="2026年08月07日", term=term
+        )
+        == "明日(2026年08月07日)が締切!"
+    )
+    assert (
+        _deadline_reminder_text(
+            days_before=2, ends_at_label="2026年08月07日", term=term
+        )
+        == "あと2日(2026年08月07日)!"
+    )
+
+
+def test_deadline_reminder_blocks_link_to_apply_page() -> None:
+    blocks = _deadline_reminder_blocks(text="テスト文言")
+
+    assert blocks[0] == {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": "テスト文言"},
+    }
+    button = blocks[1]["elements"][0]
+    assert button["url"] == f"{settings.web_app_url}/apply"
+
+
+def test_deadline_reminder_blocks_escapes_mrkdwn_special_characters() -> None:
+    # 管理者の自由入力がそのままmrkdwnとして解釈されると、"<!channel>"や
+    # "<@U0123456>"のような文字列が実際のメンション・pingとして発火して
+    # しまう(#237)。エスケープされていることを確認する。
+    blocks = _deadline_reminder_blocks(
+        text="<!channel> 締切です & <@U0123456> さんへ 5<10 です"
+    )
+
+    assert blocks[0]["text"]["text"] == (
+        "&lt;!channel&gt; 締切です &amp; &lt;@U0123456&gt; さんへ 5&lt;10 です"
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_deadline_reminders_escapes_mrkdwn_in_blocks_but_not_in_text_arg(
+    db_session, fake_slack_client
+) -> None:
+    # blocksの中(mrkdwnとして解釈される)はエスケープするが、
+    # chat_postMessageのtext引数(通知プレビュー用、mrkdwnとして解釈されない)
+    # は生の文言のままでよい(#237)。両者が食い違うことを確認する。
+    await _close_all_open_terms(db_session)
+    term = await _make_term(
+        db_session,
+        ends_at=jst_today(),
+        deadline_day_message="<!channel> 締切です",
+    )
+    await _make_recruitment(db_session, term=term, target_grades=["B3"])
+    student = await _make_student(db_session)
+
+    await send_deadline_reminders(db_session, fake_slack_client)
+
+    sent_by_id = {s.slack_user_id: s for s in fake_slack_client.sent}
+    sent = sent_by_id[student.slack_user_id]
+    assert sent.text == "<!channel> 締切です"
+    assert sent.blocks is not None
+    assert sent.blocks[0]["text"]["text"] == "&lt;!channel&gt; 締切です"
 
 
 @pytest.mark.asyncio

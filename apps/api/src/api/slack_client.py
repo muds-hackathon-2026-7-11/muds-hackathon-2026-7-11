@@ -12,6 +12,7 @@ class SentDM:
     text: str
     channel_id: str
     message_ts: str
+    blocks: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -65,6 +66,7 @@ class RealSlackClient:
             text=text,
             channel_id=channel_id,
             message_ts=post_result["ts"],
+            blocks=blocks,
         )
 
     async def reply_in_thread(
@@ -111,6 +113,7 @@ class FakeSlackClient:
             text=text,
             channel_id=f"fake-dm-{slack_user_id}",
             message_ts=f"fake-ts-{len(self.sent)}",
+            blocks=blocks,
         )
         self.sent.append(sent_dm)
         return sent_dm

@@ -19,6 +19,11 @@ export type AdminRecruitmentTerm = {
   // ラウンドのカード上に直接出す(「ゼミ別設定」を開かなくても確認できる
   // ように)。
   target_grades_summary: string;
+  // 締切リマインダー(#153)の文言(#237)。2日前・前日・当日の3回送る
+  // (#241)。ラウンドごとに設定する。
+  deadline_day_message: string;
+  day_before_message: string;
+  two_days_before_message: string;
 };
 
 export type AdminSeminarRecruitment = {
@@ -181,6 +186,9 @@ export function AdminRecruitmentTermsView({
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editStatus, setEditStatus] =
     useState<AdminRecruitmentTerm["status"]>("preparing");
+  const [editDeadlineDayMessage, setEditDeadlineDayMessage] = useState("");
+  const [editDayBeforeMessage, setEditDayBeforeMessage] = useState("");
+  const [editTwoDaysBeforeMessage, setEditTwoDaysBeforeMessage] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
@@ -329,6 +337,9 @@ export function AdminRecruitmentTermsView({
     setEditStartsAt(term.starts_at);
     setEditEndsAt(term.ends_at);
     setEditStatus(term.status);
+    setEditDeadlineDayMessage(term.deadline_day_message);
+    setEditDayBeforeMessage(term.day_before_message);
+    setEditTwoDaysBeforeMessage(term.two_days_before_message);
     setErrorMessage(null);
   }
 
@@ -354,6 +365,9 @@ export function AdminRecruitmentTermsView({
             starts_at: editStartsAt,
             ends_at: editEndsAt,
             status: editStatus,
+            deadline_day_message: editDeadlineDayMessage,
+            day_before_message: editDayBeforeMessage,
+            two_days_before_message: editTwoDaysBeforeMessage,
           }),
         },
       );
@@ -731,6 +745,53 @@ export function AdminRecruitmentTermsView({
                         確認: {formatPeriod(editStartsAt, editEndsAt)}
                       </p>
                     )}
+                    <div className="mt-2 flex flex-col gap-2 border-t border-line pt-2">
+                      <p className="text-sm text-zinc-500">
+                        締切リマインダー(未提出の学生へSlack
+                        DMで自動送信。締切2日前・前日・当日の3回)
+                      </p>
+                      <label className="flex flex-col gap-1 text-sm text-zinc-800">
+                        締切2日前に送る文言
+                        <textarea
+                          value={editTwoDaysBeforeMessage}
+                          onChange={(e) =>
+                            setEditTwoDaysBeforeMessage(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded-lg border border-line bg-white p-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm text-zinc-800">
+                        締切前日に送る文言
+                        <textarea
+                          value={editDayBeforeMessage}
+                          onChange={(e) =>
+                            setEditDayBeforeMessage(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded-lg border border-line bg-white p-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm text-zinc-800">
+                        締切当日に送る文言
+                        <textarea
+                          value={editDeadlineDayMessage}
+                          onChange={(e) =>
+                            setEditDeadlineDayMessage(e.target.value)
+                          }
+                          rows={2}
+                          className="rounded-lg border border-line bg-white p-2 text-sm text-zinc-800 focus:border-[#add8e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#add8e6]/50"
+                        />
+                      </label>
+                      <p className="text-xs text-zinc-400">
+                        文中の{" "}
+                        <code className="rounded bg-zinc-100 px-1">
+                          {"{ends_at_label}"}
+                        </code>{" "}
+                        は締切日(例: 2026年08月07日)に置き換わる。DMにはサイトを
+                        開くボタンが自動で付く。
+                      </p>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
