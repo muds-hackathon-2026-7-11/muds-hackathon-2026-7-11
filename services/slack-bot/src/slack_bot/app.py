@@ -30,7 +30,10 @@ def _home_view() -> dict:
             },
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "ゼミ選択をサポートします"},
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "学内メールアドレスでログインしてください",
+                },
             },
             {"type": "divider"},
             {
