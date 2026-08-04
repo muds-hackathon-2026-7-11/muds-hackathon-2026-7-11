@@ -239,9 +239,7 @@ class RecruitmentTermUpdate(BaseModel):
     deadline_day_message: str | None = Field(
         default=None, min_length=1, max_length=2000
     )
-    day_before_message: str | None = Field(
-        default=None, min_length=1, max_length=2000
-    )
+    day_before_message: str | None = Field(default=None, min_length=1, max_length=2000)
     two_days_before_message: str | None = Field(
         default=None, min_length=1, max_length=2000
     )

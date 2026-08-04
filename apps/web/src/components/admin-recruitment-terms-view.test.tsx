@@ -262,12 +262,14 @@ describe("AdminRecruitmentTermsView", () => {
   it("edits the reminder message text (#237)", async () => {
     const user = userEvent.setup();
     const term = makeTerm();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ...term, deadline_day_message: "新しい本日文言" }),
-        { status: 200 },
-      ),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...term, deadline_day_message: "新しい本日文言" }),
+          { status: 200 },
+        ),
+      );
 
     renderView({ terms: [term] });
 
