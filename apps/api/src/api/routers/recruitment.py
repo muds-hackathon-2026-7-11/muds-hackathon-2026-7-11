@@ -81,6 +81,12 @@ async def update_recruitment_term(
         term.ends_at = payload.ends_at
     if payload.status is not None:
         term.status = payload.status
+    if payload.deadline_day_message is not None:
+        term.deadline_day_message = payload.deadline_day_message
+    if payload.day_before_message is not None:
+        term.day_before_message = payload.day_before_message
+    if payload.two_days_before_message is not None:
+        term.two_days_before_message = payload.two_days_before_message
     await db.flush()
     return term
 

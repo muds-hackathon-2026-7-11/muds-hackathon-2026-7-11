@@ -140,6 +140,82 @@ async def test_update_recruitment_term(client, db_session) -> None:
     assert resp.json()["ends_at"] == "4103-12-01"
 
 
+# --- 締切リマインダーの文言 (#237) ---
+
+
+async def test_create_recruitment_term_gets_default_reminder_messages(
+    client, db_session
+) -> None:
+    # 未指定でも、締切リマインダーの文言に既定値が入る
+    # (「未編集」を表すNULLは持たない設計)。
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    resp = await client.post(
+        "/admin/recruitment-terms",
+        json={
+            "academic_year": 4109,
+            "starts_at": "4109-04-01",
+            "ends_at": "4109-05-31",
+            "status": "preparing",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert "{ends_at_label}" in body["deadline_day_message"]
+    assert "{ends_at_label}" in body["day_before_message"]
+    assert "{ends_at_label}" in body["two_days_before_message"]
+
+
+async def test_update_recruitment_term_reminder_messages(client, db_session) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4110)
+
+    resp = await client.patch(
+        f"/admin/recruitment-terms/{term.id}",
+        json={
+            "deadline_day_message": "本日締切!{ends_at_label}までに提出を",
+            "day_before_message": "明日締切!{ends_at_label}までに提出を",
+            "two_days_before_message": "あと2日!{ends_at_label}までに提出を",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["deadline_day_message"] == "本日締切!{ends_at_label}までに提出を"
+    assert body["day_before_message"] == "明日締切!{ends_at_label}までに提出を"
+    assert body["two_days_before_message"] == "あと2日!{ends_at_label}までに提出を"
+
+
+async def test_update_recruitment_term_rejects_empty_reminder_message(
+    client, db_session
+) -> None:
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4111)
+
+    resp = await client.patch(
+        f"/admin/recruitment-terms/{term.id}",
+        json={"deadline_day_message": ""},
+    )
+    assert resp.status_code == 422
+
+
+async def test_update_recruitment_term_leaves_reminder_messages_untouched_when_omitted(
+    client, db_session
+) -> None:
+    # starts_at/ends_at/statusと同じく、送っていないフィールドは据え置き。
+    _authenticate_as(await _make_user(db_session, UserRole.admin))
+    term = await _make_term(db_session, academic_year=4112)
+    await client.patch(
+        f"/admin/recruitment-terms/{term.id}",
+        json={"deadline_day_message": "カスタム文言"},
+    )
+
+    resp = await client.patch(
+        f"/admin/recruitment-terms/{term.id}",
+        json={"status": "open"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["deadline_day_message"] == "カスタム文言"
+
+
 # --- ゼミ別 定員・対象学年 ---
 
 

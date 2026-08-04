@@ -1,11 +1,12 @@
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.models import (
     Answer,
     AnswerRequest,
@@ -577,22 +578,75 @@ async def find_students_without_submission(
     ]
 
 
-def _deadline_reminder_text(*, is_deadline_day: bool, ends_at_label: str) -> str:
-    suffix = "まだ提出していない場合はお早めにご提出ください。"
-    if is_deadline_day:
-        return f":alarm_clock: 本日{ends_at_label}が志望提出の締切です。{suffix}"
-    return (
-        f":alarm_clock: 締切まで1日です。志望提出の締切は{ends_at_label}です。{suffix}"
-    )
+def _deadline_reminder_text(
+    *, days_before: int, ends_at_label: str, term: RecruitmentTerm
+) -> str:
+    """管理者がadmin画面で募集ラウンドごとに編集した文言(#237)を使う。
+
+    days_beforeは締切の何日前か(0=当日、1=前日、2=2日前、#241)。
+    テンプレート中の{ends_at_label}を締切日に置換する。str.formatではなく
+    replaceを使うのは、管理者が入力した自由記述文に他の{...}が含まれていても
+    KeyError/IndexErrorで落ちないようにするため。
+    """
+    templates = {
+        0: term.deadline_day_message,
+        1: term.day_before_message,
+        2: term.two_days_before_message,
+    }
+    return templates[days_before].replace("{ends_at_label}", ends_at_label)
+
+
+def _escape_slack_mrkdwn(text: str) -> str:
+    """mrkdwnとして解釈されると困る文字をエスケープする(#237)。
+
+    このtextは管理者がadmin画面に自由入力した文言なので、無エスケープだと
+    "<!channel>"や"<@U0123456>"のような文字列をSlackがそのままメンション・
+    pingとして解釈してしまう(全未提出学生への一斉DMなので影響が大きい)。
+    Slack公式のエスケープ順序(&を最初に処理しないと&lt;等を二重エスケープ
+    する)に従う: https://api.slack.com/reference/surfaces/formatting#escaping
+    """
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _deadline_reminder_blocks(*, text: str) -> list[dict]:
+    """リマインダー文言 + サイトへのリンクボタン(#237)。
+
+    志望提出の入口である/applyへ直接飛べるようにする(トップページ経由だと
+    ワンクッション増える)。textはmrkdwnとして解釈されるため、ブロック側では
+    エスケープ済みの文字列を使う(chat_postMessageのtext引数=通知プレビュー
+    用のプレーンテキストの方はmrkdwnとして解釈されないため、そちらは
+    呼び出し元の生のtextのままでよい)。
+    """
+    apply_url = f"{settings.web_app_url}/apply"
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": _escape_slack_mrkdwn(text)},
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "🌐 サイトを開く"},
+                    "url": apply_url,
+                },
+            ],
+        },
+    ]
+
+
+_DEADLINE_REMINDER_DAYS_BEFORE = (0, 1, 2)
 
 
 async def send_deadline_reminders(db: AsyncSession, slack_client: SlackClient) -> None:
-    """締切前日・当日の昼12時に、まだ志望を提出していない学生へリマインダーDMを送る(#153)。
+    """締切2日前・前日・当日の昼12時に、まだ志望を提出していない学生へ
+    リマインダーDMを送る(#153、2日前追加は#241)。
 
-    1日1回、締切の前日と当日それぞれの日付にだけ一致する募集期間を対象に
-    するため、この関数自体は1日1回の定期実行(main.pyのスケジューラ)を
-    前提とする(同じ学生・期間に何度も送らないための重複排除テーブルは
-    持たない)。
+    1日1回、_DEADLINE_REMINDER_DAYS_BEFORE(0/1/2日前)のいずれかの日付に
+    だけ一致する募集期間を対象にするため、この関数自体は1日1回の定期実行
+    (main.pyのスケジューラ)を前提とする(同じ学生・期間に何度も送らない
+    ための重複排除テーブルは持たない)。
     """
     today = datetime.now(JST).date()
     result = await db.execute(
@@ -603,22 +657,22 @@ async def send_deadline_reminders(db: AsyncSession, slack_client: SlackClient) -
     terms = list(result.scalars().all())
 
     for term in terms:
-        is_deadline_day = term.ends_at == today
-        is_day_before = term.ends_at - timedelta(days=1) == today
-        if not is_deadline_day and not is_day_before:
+        days_before = (term.ends_at - today).days
+        if days_before not in _DEADLINE_REMINDER_DAYS_BEFORE:
             continue
 
         students = await find_students_without_submission(db, term_id=term.id)
         ends_at_label = term.ends_at.strftime("%Y年%m月%d日")
         text = _deadline_reminder_text(
-            is_deadline_day=is_deadline_day, ends_at_label=ends_at_label
+            days_before=days_before, ends_at_label=ends_at_label, term=term
         )
+        blocks = _deadline_reminder_blocks(text=text)
         for student in students:
             if student.slack_user_id is None:
                 continue
             try:
                 await slack_client.send_dm(
-                    slack_user_id=student.slack_user_id, text=text
+                    slack_user_id=student.slack_user_id, text=text, blocks=blocks
                 )
             except Exception:
                 logger.warning(

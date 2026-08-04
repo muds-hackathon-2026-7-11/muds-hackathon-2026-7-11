@@ -29,6 +29,9 @@ function makeTerm(
     ends_at: "2027-04-03",
     status: "open",
     target_grades_summary: "未設定",
+    deadline_day_message: "本日{ends_at_label}が締切です",
+    day_before_message: "明日{ends_at_label}が締切です",
+    two_days_before_message: "あと2日で{ends_at_label}が締切です",
     ...overrides,
   };
 }
@@ -246,11 +249,52 @@ describe("AdminRecruitmentTermsView", () => {
             starts_at: term.starts_at,
             ends_at: term.ends_at,
             status: "open",
+            deadline_day_message: term.deadline_day_message,
+            day_before_message: term.day_before_message,
+            two_days_before_message: term.two_days_before_message,
           }),
         }),
       );
     });
     expect(await screen.findByText("募集中")).toBeInTheDocument();
+  });
+
+  it("edits the reminder message text (#237)", async () => {
+    const user = userEvent.setup();
+    const term = makeTerm();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ ...term, deadline_day_message: "新しい本日文言" }),
+        { status: 200 },
+      ),
+    );
+
+    renderView({ terms: [term] });
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    const deadlineTextarea = screen.getByDisplayValue(
+      "本日{ends_at_label}が締切です",
+    );
+    await user.clear(deadlineTextarea);
+    await user.type(deadlineTextarea, "新しい本日文言");
+    await user.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`/admin/recruitment-terms/${term.id}`),
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            starts_at: term.starts_at,
+            ends_at: term.ends_at,
+            status: term.status,
+            deadline_day_message: "新しい本日文言",
+            day_before_message: term.day_before_message,
+            two_days_before_message: term.two_days_before_message,
+          }),
+        }),
+      );
+    });
   });
 
   it("does not have a delete button (deletion is a non-goal)", () => {

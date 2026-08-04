@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -16,6 +16,24 @@ class RecruitmentTermStatus(str, enum.Enum):
     preparing = "preparing"
     open = "open"
     closed = "closed"
+
+
+# 締切リマインダー(#153)の既定文言。管理者がadmin画面(#237)でラウンドごとに
+# 編集しなかった場合の初期値としてそのまま各行に入る(「未編集」を表す
+# NULLは持たず、常に値が入っている設計)。{ends_at_label}はends_at
+# ("2026年08月07日"のような形式)に置換される。
+DEFAULT_DEADLINE_DAY_MESSAGE = (
+    ":alarm_clock: 本日{ends_at_label}が志望提出の締切です。"
+    "まだ提出していない場合はお早めにご提出ください。"
+)
+DEFAULT_DAY_BEFORE_MESSAGE = (
+    ":alarm_clock: 締切まで1日です。志望提出の締切は{ends_at_label}です。"
+    "まだ提出していない場合はお早めにご提出ください。"
+)
+DEFAULT_TWO_DAYS_BEFORE_MESSAGE = (
+    ":alarm_clock: 締切まで2日です。志望提出の締切は{ends_at_label}です。"
+    "まだ提出していない場合はお早めにご提出ください。"
+)
 
 
 class RecruitmentTerm(IDMixin, TimestampMixin, Base):
@@ -35,6 +53,18 @@ class RecruitmentTerm(IDMixin, TimestampMixin, Base):
         SAEnum(
             RecruitmentTermStatus, native_enum=False, length=20, create_constraint=True
         )
+    )
+    # 締切リマインダー(#153)の文言(#237でadmin画面から編集可能にした)。
+    # 締切2日前・前日・当日の3回送る(#241)。ラウンドごとに上書き可能
+    # (募集ラウンド編集フォームから)。
+    deadline_day_message: Mapped[str] = mapped_column(
+        Text, default=DEFAULT_DEADLINE_DAY_MESSAGE
+    )
+    day_before_message: Mapped[str] = mapped_column(
+        Text, default=DEFAULT_DAY_BEFORE_MESSAGE
+    )
+    two_days_before_message: Mapped[str] = mapped_column(
+        Text, default=DEFAULT_TWO_DAYS_BEFORE_MESSAGE
     )
 
 
