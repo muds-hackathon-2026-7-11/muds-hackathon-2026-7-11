@@ -68,6 +68,13 @@ if settings.enable_deadline_reminder_scheduler:
         _run_deadline_reminders,
         CronTrigger(hour=12, minute=0, timezone=JST),
         id="deadline_reminders",
+        # APSchedulerの既定misfire_grace_time(1秒)だと、サーバーが混雑して
+        # 12:00のチェックがほんの数秒遅れただけでmisfire(取りこぼし)扱いに
+        # なり、ジョブ自体が実行されずスキップされる(#153で実際に発生)。
+        # send_deadline_remindersは日付単位でしか判定しないため、多少遅れて
+        # 実行されても結果は変わらない。1時間まで許容しておけば、通常の
+        # 負荷スパイクでの取りこぼしは実質無くなる。
+        misfire_grace_time=3600,
     )
 
 
