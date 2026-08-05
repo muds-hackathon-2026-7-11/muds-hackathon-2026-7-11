@@ -1,4 +1,4 @@
-.PHONY: help install setup-auth dev dev-build dev-slack-test down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data export-llm-logs backup backup-list restore backup-restore-test db-shell clean
+.PHONY: help install setup-auth dev dev-build dev-slack-test down logs ps lint typecheck test format migrate migration seed ensure-recruitment-term import-seminars import-users import-seminar-members import-seminar-docs import-seminar-knowledge import-data export-llm-logs send-deadline-reminders-now backup backup-list restore backup-restore-test db-shell clean
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -83,6 +83,9 @@ import-data: import-seminars import-users import-seminar-members import-seminar-
 export-llm-logs: ## export chat_logs/match_logs as JSONL (default dir .private/llm-logs; from=/to=YYYY-MM-DD; anonymize=true recommended for analysis)
 	cd apps/api && uv run python -m api.export_llm_logs "../../$(or $(dir),.private/llm-logs)" \
 		$(if $(from),--from $(from),) $(if $(to),--to $(to),) $(if $(anonymize),--anonymize,)
+
+send-deadline-reminders-now: ## manually run the deadline reminder job once (e.g. after a scheduler misfire; prompts before real Slack sends when SLACK_BOT_TOKEN is set; pass yes=1 to skip the prompt)
+	cd apps/api && uv run python -m api.send_deadline_reminders_now $(if $(yes),--yes,)
 
 backup: ## take an on-demand DB backup into ./backups (pg_dump, custom format)
 	mkdir -p backups
