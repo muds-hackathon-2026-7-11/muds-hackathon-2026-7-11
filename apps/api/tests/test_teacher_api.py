@@ -530,6 +530,36 @@ async def test_unsubmitted_applicants_lists_targeted_students_without_submission
     assert not_submitted_entry["normalized_grade"] == "B3"
 
 
+async def test_unsubmitted_applicants_stays_visible_after_the_term_closes(
+    client, db_session
+) -> None:
+    # 締切を過ぎてラウンドがclosedになっても、次のラウンドが始まるまでは
+    # 同じラウンド基準で未提出者一覧を表示し続ける(#248。seminar_statsと
+    # 同じ理由)。
+    year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=year,
+        starts_at=date.today() - timedelta(days=10),
+        ends_at=date.today() - timedelta(days=1),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(
+        db_session, term=closed_term, seminar=seminar, target_grades=["B3"]
+    )
+    teacher = await _make_user(db_session, UserRole.teacher)
+    not_submitted = await _make_user(db_session, UserRole.student, grade="B3")
+
+    _authenticate_as(teacher)
+    resp = await client.get("/teacher/unsubmitted-applicants")
+
+    assert resp.status_code == 200
+    assert not_submitted.name in [a["name"] for a in resp.json()]
+
+
 async def test_unsubmitted_applicants_returns_empty_when_term_has_no_recruitments(
     client, db_session
 ) -> None:
