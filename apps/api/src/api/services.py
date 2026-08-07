@@ -135,6 +135,38 @@ async def get_current_term(db: AsyncSession) -> RecruitmentTerm | None:
     return result.scalar_one_or_none()
 
 
+async def get_display_term(db: AsyncSession) -> RecruitmentTerm | None:
+    """応募状況の表示(seminar_stats)用に、直近に開始済みの募集ラウンドを返す。
+
+    get_current_termと違い、status=openやends_atは問わない
+    (current_academic_yearと同じ考え方)。締切を過ぎてラウンドがclosedに
+    なった途端、応募状況グラフが全ゼミ0件表示に切り替わってしまうのは
+    運営にとって不便(#246。締切後こそ最終集計を見たい)なので、次の
+    ラウンドが始まるまでは同じラウンドの集計を出し続ける。
+
+    提出可否のゲート(_require_current_term等)には使わないこと —
+    get_current_termと違い締切を過ぎても「現在」として扱われるため、
+    これに依存すると締切後も提出できてしまう。
+
+    todayはJST基準で計算する(理由はget_current_termと同じ)。
+    """
+    today = datetime.now(JST).date()
+    result = await db.execute(
+        select(RecruitmentTerm)
+        .where(
+            RecruitmentTerm.status != RecruitmentTermStatus.preparing,
+            RecruitmentTerm.starts_at <= today,
+        )
+        .order_by(
+            RecruitmentTerm.academic_year.desc(),
+            RecruitmentTerm.created_at.desc(),
+            RecruitmentTerm.id.desc(),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def current_academic_year(db: AsyncSession) -> int | None:
     """「現在の年度」を返す(該当する募集期間が無ければNone)。
 

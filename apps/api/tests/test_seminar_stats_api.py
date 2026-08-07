@@ -205,6 +205,47 @@ async def test_seminar_stats_aggregates_counts_ratio_grade(client, db_session) -
     assert b["continuing_first_choice_count"] == 0
 
 
+async def test_seminar_stats_normalizes_mids_grade_into_matching_bucket(
+    client, db_session
+) -> None:
+    # 生のgrade("MIDS/B3"等)をそのままキーにすると、priority_counts.first
+    # (合計)とpriority_grade_counts["1"]の内訳合計(B1〜B4のみ表示)が
+    # ズレる(#245)。MIDS学生もB3と同じバケットに正規化されることを確認する。
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, term, seminar, 10)
+
+    regular = await _make_student(db_session, grade="B3")
+    mids = await _make_student(db_session, grade="MIDS/B3")
+    await _make_application(
+        db_session,
+        term=term,
+        student=regular,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1)],
+    )
+    await _make_application(
+        db_session,
+        term=term,
+        student=mids,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1)],
+    )
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["priority_counts"]["first"] == 2
+    assert stats["grade_counts"] == {"B3": 2}
+    assert stats["priority_grade_counts"]["1"] == {"B3": 2}
+    # ズレの直接的な検証: 合計人数とグラフ内訳(B1〜B4)の合計が一致する。
+    assert stats["priority_counts"]["first"] == sum(
+        stats["priority_grade_counts"]["1"].values()
+    )
+
+
 async def test_seminar_stats_excludes_draft_and_inactive(client, db_session) -> None:
     term = await _make_open_term(db_session)
     seminar = await _make_seminar(db_session)
@@ -280,6 +321,44 @@ async def test_seminar_stats_includes_target_grades(client, db_session) -> None:
     assert resp.status_code == 200
     stats = _find(resp.json(), seminar.id)
     assert stats["target_grades"] == ["B1", "B2"]
+
+
+async def test_seminar_stats_stays_visible_after_the_term_closes(
+    client, db_session
+) -> None:
+    # 締切を過ぎてラウンドがclosedになっても、次のラウンドが始まるまでは
+    # 同じラウンドの応募状況を表示し続ける(#246)。get_current_termだと
+    # closed/期限切れの瞬間に全ゼミ0件表示へ切り替わってしまっていた。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    closed_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=10),
+        ends_at=date.today() - timedelta(days=1),
+        status=RecruitmentTermStatus.closed,
+    )
+    db_session.add(closed_term)
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, closed_term, seminar, 10)
+    student = await _make_student(db_session, grade="B3")
+    await _make_application(
+        db_session,
+        term=closed_term,
+        student=student,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1)],
+    )
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    assert stats["capacity"] == 10
+    assert stats["applicant_count"] == 1
+    assert stats["priority_counts"]["first"] == 1
+    assert stats["target_grades"] == ["B1", "B2", "B3", "B4"]
 
 
 async def test_seminar_stats_target_grades_null_without_an_active_term(
