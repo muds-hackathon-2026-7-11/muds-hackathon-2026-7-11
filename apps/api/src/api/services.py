@@ -148,6 +148,12 @@ async def get_display_term(db: AsyncSession) -> RecruitmentTerm | None:
     get_current_termと違い締切を過ぎても「現在」として扱われるため、
     これに依存すると締切後も提出できてしまう。
 
+    タイブレークはstarts_at desc(開始日が新しい方を優先)を使う。
+    created_at(DBへの登録日時)は使わないこと — 前期分のラウンドを
+    後期分より後から登録するようなデータ投入順序があり得るため、
+    created_atだと「実際には古い期間の方が新しく見える」逆転が起きる
+    (#248で実際に発生し、応募状況グラフが古い空の期間を指してしまった)。
+
     todayはJST基準で計算する(理由はget_current_termと同じ)。
     """
     today = datetime.now(JST).date()
@@ -159,6 +165,7 @@ async def get_display_term(db: AsyncSession) -> RecruitmentTerm | None:
         )
         .order_by(
             RecruitmentTerm.academic_year.desc(),
+            RecruitmentTerm.starts_at.desc(),
             RecruitmentTerm.created_at.desc(),
             RecruitmentTerm.id.desc(),
         )

@@ -361,6 +361,60 @@ async def test_seminar_stats_stays_visible_after_the_term_closes(
     assert stats["target_grades"] == ["B1", "B2", "B3", "B4"]
 
 
+async def test_seminar_stats_prefers_latest_starts_at_over_created_at(
+    client, db_session
+) -> None:
+    # 同じacademic_yearで2つのラウンドがある場合、DBへの登録順(created_at)
+    # ではなく実際の開始日(starts_at)が新しい方を選ぶ(#248)。前期分を
+    # 後期分より後からDBに登録するような投入順序があり得るため、
+    # created_atでタイブレークすると古い期間の方が「最新」に見えてしまい、
+    # 応募状況グラフが古い(空の)期間のデータを表示してしまっていた
+    # (本番で実際に発生)。
+    academic_year = 3000 + int(uuid.uuid4().int % 1000)
+    now = datetime.now(timezone.utc)
+
+    # 前期(古い期間)を「後から」DBに登録する(created_atが新しい)。
+    old_period_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=120),
+        ends_at=date.today() - timedelta(days=90),
+        status=RecruitmentTermStatus.closed,
+        created_at=now,
+    )
+    # 後期(新しい期間・今表示すべきラウンド)を「先に」DBに登録する
+    # (created_atが古い)。
+    current_term = RecruitmentTerm(
+        academic_year=academic_year,
+        starts_at=date.today() - timedelta(days=10),
+        ends_at=date.today() + timedelta(days=10),
+        status=RecruitmentTermStatus.open,
+        created_at=now - timedelta(days=1),
+    )
+    db_session.add_all([old_period_term, current_term])
+    await db_session.flush()
+
+    seminar = await _make_seminar(db_session)
+    await _set_capacity(db_session, current_term, seminar, 10)
+    student = await _make_student(db_session, grade="B3")
+    await _make_application(
+        db_session,
+        term=current_term,
+        student=student,
+        status=ApplicationStatus.submitted,
+        choices=[(seminar, 1)],
+    )
+
+    _authenticate_as(await _make_student(db_session))
+    resp = await client.get("/seminars/stats")
+
+    assert resp.status_code == 200
+    stats = _find(resp.json(), seminar.id)
+    # old_period_termのcreated_atの方が新しいが、starts_atはcurrent_termの
+    # 方が新しいので、こちらのデータが返らなければならない。
+    assert stats["applicant_count"] == 1
+    assert stats["capacity"] == 10
+
+
 async def test_seminar_stats_target_grades_null_without_an_active_term(
     client, db_session
 ) -> None:
