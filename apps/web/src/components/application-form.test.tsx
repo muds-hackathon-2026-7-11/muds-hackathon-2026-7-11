@@ -78,6 +78,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -105,6 +106,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -131,6 +133,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -167,6 +170,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -222,6 +226,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -302,6 +307,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "1件目の理由",
           match_score: null,
@@ -405,6 +411,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -526,6 +533,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -610,6 +618,7 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: "sem-1",
+          seminar_name: "福原ゼミ",
           priority: 1,
           reason: "興味があるため",
           match_score: null,
@@ -657,6 +666,8 @@ describe("ApplicationForm", () => {
       choices: [
         {
           seminar_id: seminarId,
+          seminar_name:
+            seminars.find((s) => s.id === seminarId)?.name ?? seminarId,
           priority: 1,
           reason,
           match_score: null,

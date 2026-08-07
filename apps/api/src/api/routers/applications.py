@@ -24,6 +24,7 @@ from api.models import (
     ApplicationForm,
     ApplicationStatus,
     RecruitmentTerm,
+    Seminar,
     SeminarRecruitment,
     User,
     UserRole,
@@ -114,14 +115,46 @@ async def _get_choices(
     return list(result.scalars().all())
 
 
-def _form_out(
-    form: ApplicationForm, choices: list[ApplicationChoice], *, is_editable: bool
+async def _seminar_names(
+    db: AsyncSession, *, seminar_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """ゼミ名の一覧表示用。学年別募集(#99)で対象学年から外れて一覧に
+    出てこなくなったゼミでも、既に選んだ志望のゼミ名は表示できるように
+    (学年フィルタなしで)引く。
+    """
+    if not seminar_ids:
+        return {}
+    result = await db.execute(
+        select(Seminar.id, Seminar.name).where(Seminar.id.in_(seminar_ids))
+    )
+    return {row.id: row.name for row in result.all()}
+
+
+async def _form_out(
+    db: AsyncSession,
+    form: ApplicationForm,
+    choices: list[ApplicationChoice],
+    *,
+    is_editable: bool,
 ) -> ApplicationFormOut:
+    names = await _seminar_names(db, seminar_ids=[c.seminar_id for c in choices])
     return ApplicationFormOut(
         id=form.id,
         status=form.status,
         submitted_at=form.submitted_at,
-        choices=[ApplicationChoiceOut.model_validate(c) for c in choices],
+        choices=[
+            ApplicationChoiceOut(
+                seminar_id=c.seminar_id,
+                # CASCADE削除のためseminar_idの参照先ゼミが本当に消えることは
+                # ないはずだが、念のためのフォールバック。
+                seminar_name=names.get(c.seminar_id, "(削除されたゼミ)"),
+                priority=c.priority,
+                reason=c.reason,
+                match_score=c.match_score,
+                match_feedback=c.match_feedback,
+            )
+            for c in choices
+        ],
         is_editable=is_editable,
     )
 
@@ -210,7 +243,7 @@ async def get_my_application(
         if form is None:
             return _empty_form_out(is_editable=True)
         choices = await _get_choices(db, form_id=form.id)
-        return _form_out(form, choices, is_editable=True)
+        return await _form_out(db, form, choices, is_editable=True)
 
     # 提出期間外、または自分の学年を対象とするゼミが無い(#99): 編集はできないが、
     # 直近の提出内容は閲覧できるようにする(次の募集期間が始まれば、そちらの
@@ -219,7 +252,7 @@ async def get_my_application(
     if latest_form is None:
         return _empty_form_out(is_editable=False)
     choices = await _get_choices(db, form_id=latest_form.id)
-    return _form_out(latest_form, choices, is_editable=False)
+    return await _form_out(db, latest_form, choices, is_editable=False)
 
 
 @router.put("/me", response_model=ApplicationFormOut)
@@ -286,7 +319,7 @@ async def upsert_my_application(
     await db.flush()
 
     new_choices.sort(key=lambda c: c.priority)
-    return _form_out(form, new_choices, is_editable=True)
+    return await _form_out(db, form, new_choices, is_editable=True)
 
 
 @router.post("/me/submit", response_model=ApplicationFormOut)
@@ -343,4 +376,4 @@ async def submit_my_application(
 
     await notify_submission(db, slack_client, user=user, choices=choices)
 
-    return _form_out(form, choices, is_editable=True)
+    return await _form_out(db, form, choices, is_editable=True)
