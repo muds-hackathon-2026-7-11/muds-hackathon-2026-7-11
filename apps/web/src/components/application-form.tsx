@@ -84,6 +84,7 @@ export type Seminar = {
 
 export type ApplicationChoice = {
   seminar_id: string;
+  seminar_name: string;
   priority: number;
   reason: string;
   match_score: number | null;
@@ -121,6 +122,11 @@ type ReasonMatchesResponse = {
 
 type Slot = {
   seminarId: string;
+  // ロック画面(閲覧のみ)でのゼミ名表示専用。学年別募集(#99)で対象学年から
+  // 外れて `seminars` 一覧に出てこなくなったゼミでも名前を出せるように
+  // サーバーから受け取った名前をそのまま保持する(選択肢の切り替え等では
+  // 使わない)。
+  seminarName: string;
   reason: string;
 };
 
@@ -128,14 +134,18 @@ const PRIORITY_LABELS = ["第1志望", "第2志望", "第3志望"] as const;
 
 function toSlots(choices: ApplicationChoice[]): [Slot, Slot, Slot] {
   const slots: [Slot, Slot, Slot] = [
-    { seminarId: "", reason: "" },
-    { seminarId: "", reason: "" },
-    { seminarId: "", reason: "" },
+    { seminarId: "", seminarName: "", reason: "" },
+    { seminarId: "", seminarName: "", reason: "" },
+    { seminarId: "", seminarName: "", reason: "" },
   ];
   for (const choice of choices) {
     const index = choice.priority - 1;
     if (index >= 0 && index < 3) {
-      slots[index] = { seminarId: choice.seminar_id, reason: choice.reason };
+      slots[index] = {
+        seminarId: choice.seminar_id,
+        seminarName: choice.seminar_name,
+        reason: choice.reason,
+      };
     }
   }
   return slots;
@@ -570,9 +580,19 @@ export function ApplicationForm({
               .map((slot, index) => ({ slot, index }))
               .filter(({ slot }) => slot.seminarId !== "")
               .map(({ slot, index }) => {
-                const seminarName =
-                  seminars.find((s) => s.id === slot.seminarId)?.name ??
-                  "(削除されたゼミ)";
+                // 現在の一覧(学年別募集で対象外になったゼミは含まれない)に
+                // あればそのまま、無ければサーバーから受け取った名前に
+                // 「(募集終了)」を添えて表示する。どちらにも無ければ
+                // (通常は起こらないが)フォールバック表示にする。
+                const currentName = seminars.find(
+                  (s) => s.id === slot.seminarId,
+                )?.name;
+                const isClosed = currentName === undefined;
+                const seminarName = isClosed
+                  ? slot.seminarName
+                    ? `${slot.seminarName}(募集終了)`
+                    : "(削除されたゼミ)"
+                  : currentName;
                 return (
                   <section
                     key={PRIORITY_LABELS[index]}
@@ -587,6 +607,11 @@ export function ApplicationForm({
                     <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
                       {slot.reason}
                     </p>
+                    {isClosed && (
+                      <p className="mt-2 text-sm text-red-600">
+                        ※募集を終了したゼミのため、この志望理由を編集・再提出することはできません。
+                      </p>
+                    )}
                   </section>
                 );
               })}

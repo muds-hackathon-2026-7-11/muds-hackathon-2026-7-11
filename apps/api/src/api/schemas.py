@@ -204,6 +204,7 @@ class ApplicationChoiceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     seminar_id: uuid.UUID
+    seminar_name: str
     priority: int
     reason: str
     match_score: int | None
