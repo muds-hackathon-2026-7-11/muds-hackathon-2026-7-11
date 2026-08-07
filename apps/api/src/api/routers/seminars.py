@@ -31,7 +31,12 @@ from api.schemas import (
     SeminarStatsOut,
     TeacherOut,
 )
-from api.services import current_academic_year, get_current_term, normalize_grade
+from api.services import (
+    current_academic_year,
+    get_current_term,
+    get_display_term,
+    normalize_grade,
+)
 
 router = APIRouter(prefix="/seminars", tags=["seminars"])
 
@@ -166,7 +171,10 @@ async def seminar_stats(
     seminars = (
         (await db.execute(select(Seminar).order_by(Seminar.name))).scalars().all()
     )
-    term = await get_current_term(db)
+    # get_current_termではなくget_display_term: 締切を過ぎてラウンドが
+    # closedになっても、次のラウンドが始まるまでは同じラウンドの応募状況を
+    # 表示し続ける(#246)。
+    term = await get_display_term(db)
 
     # アイコン表示用(#139)。担当教員が1人だけのゼミに限り、その教員の
     # 写真をゼミアイコンのフォールバックに使えるようにする。
@@ -268,7 +276,13 @@ async def seminar_stats(
         applicant_count[seminar_id] = applicant_count.get(seminar_id, 0) + 1
         priorities = priority_by_seminar.setdefault(seminar_id, {1: 0, 2: 0, 3: 0})
         priorities[priority] = priorities.get(priority, 0) + 1
-        grade_key = grade or "不明"
+        # 生のgradeをそのままキーにすると、"MIDS/B3"のような表記のMIDS学生が
+        # フロントの学年別グラフ(B1〜B4の4分類のみ表示)に一切現れず、
+        # 上部の合計人数(priority_counts)とグラフ内訳の合計がズレる。
+        # 提出時点でnormalize_grade(user.grade)が対象学年に含まれることを
+        # 既に要求している(applications.py)ため、ここも同じ正規化を通せば
+        # 必ずB1〜B4のいずれかに一致し、ズレは起きない。
+        grade_key = normalize_grade(grade) or "不明"
         grades = grade_by_seminar.setdefault(seminar_id, {})
         grades[grade_key] = grades.get(grade_key, 0) + 1
         by_priority = priority_grade_by_seminar.setdefault(seminar_id, {})
