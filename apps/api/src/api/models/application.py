@@ -53,6 +53,12 @@ class ApplicationForm(IDMixin, TimestampMixin, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # 初回提出時刻。submitted_atと違い、再提出のたびに上書きしない
+    # (#249。submitted_atは編集・再提出のたびに更新される「最終更新日時」
+    # なので、提出タイミングの分析にはこちらを使う)。
+    first_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ApplicationChoice(IDMixin, Base):
