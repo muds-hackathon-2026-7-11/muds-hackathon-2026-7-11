@@ -342,10 +342,10 @@ async def submit_my_application(
         )
 
     choices = await _get_choices(db, form_id=form.id)
-    if not choices:
+    if len(choices) < 3:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="志望が1件も登録されていません。",
+            detail="第1志望から第3志望まで全て入力してください。",
         )
     # 下書き保存後に募集状況が変わっている可能性があるため、提出時にも
     # 募集中のゼミのみであることを再検証する。研究概要チェックより先に行い、
