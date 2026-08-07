@@ -518,6 +518,49 @@ async def test_put_keeps_submitted_status_and_refreshes_submitted_at(
     assert body["submitted_at"] != first_submitted_at
 
 
+async def test_resubmit_updates_submitted_at_but_keeps_first_submitted_at(
+    client, db_session
+) -> None:
+    # submitted_atは再提出のたびに更新される「最終更新日時」だが、
+    # first_submitted_atは初回提出時刻のまま変わらない(#249。締切後の
+    # 提出タイミング分析にはこちらを使う)。
+    student = await _make_student(db_session)
+    term = await _make_open_term(db_session)
+    seminar = await _make_seminar(db_session)
+    await _make_recruitment(db_session, term=term, seminar=seminar)
+
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
+        },
+    )
+    await client.post("/applications/me/submit", headers=_auth_headers(student.email))
+    form_after_first_submit = await _get_form(
+        db_session, term_id=term.id, student_id=student.id
+    )
+    assert form_after_first_submit is not None
+    first_submitted_at = form_after_first_submit.first_submitted_at
+    assert first_submitted_at is not None
+
+    # 編集して再提出(PUT→POSTの両方が起きる、実際の「編集する」フローと同じ)。
+    await client.put(
+        "/applications/me",
+        headers=_auth_headers(student.email),
+        json={
+            "choices": [
+                {"seminar_id": str(seminar.id), "priority": 1, "reason": "改稿"}
+            ]
+        },
+    )
+    await client.post("/applications/me/submit", headers=_auth_headers(student.email))
+
+    await db_session.refresh(form_after_first_submit)
+    assert form_after_first_submit.first_submitted_at == first_submitted_at
+    assert form_after_first_submit.submitted_at != first_submitted_at
+
+
 async def test_put_keeps_draft_status_as_draft(client, db_session) -> None:
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)

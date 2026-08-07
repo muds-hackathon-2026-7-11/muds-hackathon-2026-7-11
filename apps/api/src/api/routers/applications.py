@@ -337,6 +337,8 @@ async def submit_my_application(
 
     form.status = ApplicationStatus.submitted
     form.submitted_at = datetime.now(timezone.utc)
+    if form.first_submitted_at is None:
+        form.first_submitted_at = form.submitted_at
     await db.flush()
 
     await notify_submission(db, slack_client, user=user, choices=choices)
