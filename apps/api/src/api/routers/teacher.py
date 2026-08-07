@@ -34,7 +34,12 @@ from api.schemas import (
     TeacherSeminarUpdate,
     UnsubmittedApplicantOut,
 )
-from api.services import GRADE_OPTIONS, get_current_term, normalize_grade
+from api.services import (
+    GRADE_OPTIONS,
+    get_current_term,
+    get_display_term,
+    normalize_grade,
+)
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
@@ -133,7 +138,13 @@ async def _to_seminar_out(
 async def _gather_applicants_for_seminars(
     db: AsyncSession, seminars: list[Seminar]
 ) -> list[SeminarApplicantsOut]:
-    """指定したゼミの応募者(現ラウンド・提出済み・在籍)をゼミ別・志望順にまとめる。"""
+    """指定したゼミの応募者(直近のラウンド・提出済み・在籍)をゼミ別・志望順にまとめる。
+
+    get_current_termではなくget_display_term: 締切後・ラウンドclosed後こそ
+    教員が最終的な応募者一覧を確認したい場面なので、次のラウンドが始まる
+    までは同じラウンドの応募者を表示し続ける(#248、seminar_statsと同じ
+    理由)。CSV/Sheets連携exportもこの関数を経由するため同様に適用される。
+    """
     if not seminars:
         return []
     seminar_ids = [s.id for s in seminars]
@@ -141,7 +152,7 @@ async def _gather_applicants_for_seminars(
     # 応募ゼロのゼミも出せるよう、担当ゼミ全てを初期化しておく。
     by_seminar: dict[uuid.UUID, list[ApplicantOut]] = {sid: [] for sid in seminar_ids}
 
-    term = await get_current_term(db)
+    term = await get_display_term(db)
     if term is not None:
         rows = (
             await db.execute(
@@ -286,13 +297,18 @@ def _grade_sort_key(normalized_grade: str | None, name: str) -> tuple[int, str]:
 
 
 async def _unsubmitted_applicants(db: AsyncSession) -> list[UnsubmittedApplicantOut]:
-    """今回の募集ラウンドの対象学年なのに、まだ志望理由を提出していない学生の一覧(#182)。
+    """直近の募集ラウンドの対象学年なのに、まだ志望理由を提出していない学生の一覧(#182)。
 
     未提出者はどのゼミにも紐付かない(ApplicationChoiceが無い)ため、担当ゼミ単位では
     絞り込めない。教員・管理者は全員が同じ全学生分の一覧を見る想定(/teacher/applicants/
     all.csv が既に教員に全ゼミ横断のCSVを出している前例に合わせる)。
+
+    get_current_termではなくget_display_term: 締切後・ラウンドclosed後こそ
+    「結局誰が出さなかったか」を確認したい場面なので、次のラウンドが
+    始まるまでは同じラウンド基準で表示し続ける(#248、seminar_statsや
+    _gather_applicants_for_seminarsと同じ理由)。
     """
-    term = await get_current_term(db)
+    term = await get_display_term(db)
     if term is None:
         return []
 
