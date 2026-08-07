@@ -232,6 +232,22 @@ describe("ApplicationForm", () => {
           match_score: null,
           match_feedback: null,
         },
+        {
+          seminar_id: "sem-2",
+          seminar_name: "中村ゼミ",
+          priority: 2,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+        {
+          seminar_id: "sem-3",
+          seminar_name: "岡ゼミ",
+          priority: 3,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
       ],
       is_editable: true,
     };
@@ -255,13 +271,16 @@ describe("ApplicationForm", () => {
       <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
     );
 
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
-    await user.type(
-      screen.getAllByPlaceholderText(
-        "このゼミを志望する理由を入力してください",
-      )[0],
-      "興味があるため",
+    const selects = screen.getAllByRole("combobox");
+    const reasons = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
     );
+    await user.selectOptions(selects[0], "sem-1");
+    await user.selectOptions(selects[1], "sem-2");
+    await user.selectOptions(selects[2], "sem-3");
+    await user.type(reasons[0], "興味があるため");
+    await user.type(reasons[1], "興味があるため");
+    await user.type(reasons[2], "興味があるため");
 
     // 自動保存のPUTが発火する(まだ解決していないin-flight状態)まで待つ。
     await waitFor(
@@ -417,12 +436,32 @@ describe("ApplicationForm", () => {
           match_score: null,
           match_feedback: null,
         },
+        {
+          seminar_id: "sem-2",
+          seminar_name: "中村ゼミ",
+          priority: 2,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+        {
+          seminar_id: "sem-3",
+          seminar_name: "岡ゼミ",
+          priority: 3,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
       ],
       is_editable: true,
     };
     const putAfterEdit: ApplicationFormData = {
       ...original,
-      choices: [{ ...original.choices[0], reason: "書き換え中" }],
+      choices: [
+        { ...original.choices[0], reason: "書き換え中" },
+        original.choices[1],
+        original.choices[2],
+      ],
     };
     const revertPutResponse: ApplicationFormData = original;
 
@@ -441,7 +480,7 @@ describe("ApplicationForm", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "編集する" }));
-    const textarea = screen.getByDisplayValue("興味があるため");
+    const textarea = screen.getAllByDisplayValue("興味があるため")[0];
     await user.clear(textarea);
     await user.type(textarea, "書き換え中");
     await user.click(screen.getByRole("button", { name: "提出する" }));
@@ -453,7 +492,7 @@ describe("ApplicationForm", () => {
     await user.click(screen.getByRole("button", { name: "戻る" }));
 
     await waitFor(() => {
-      expect(screen.getByText("興味があるため")).toBeInTheDocument();
+      expect(screen.getAllByText("興味があるため").length).toBeGreaterThan(0);
     });
     expect(
       screen.getByRole("button", { name: "編集する" }),
@@ -466,6 +505,8 @@ describe("ApplicationForm", () => {
     const body = JSON.parse(init.body as string);
     expect(body.choices).toEqual([
       { seminar_id: "sem-1", priority: 1, reason: "興味があるため" },
+      { seminar_id: "sem-2", priority: 2, reason: "興味があるため" },
+      { seminar_id: "sem-3", priority: 3, reason: "興味があるため" },
     ]);
   });
 
@@ -479,7 +520,29 @@ describe("ApplicationForm", () => {
     await user.click(screen.getByRole("button", { name: "提出する" }));
 
     expect(
-      await screen.findByText("志望を1件以上入力してください。"),
+      await screen.findByText("第1志望から第3志望まで全て入力してください。"),
+    ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows an error and does not call the API when only some choices are selected", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(
+      <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
+    );
+
+    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    await user.type(
+      screen.getAllByPlaceholderText(
+        "このゼミを志望する理由を入力してください",
+      )[0],
+      "興味があるため",
+    );
+    await user.click(screen.getByRole("button", { name: "提出する" }));
+
+    expect(
+      await screen.findByText("第1志望から第3志望まで全て入力してください。"),
     ).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -496,13 +559,16 @@ describe("ApplicationForm", () => {
       <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
     );
 
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
-    await user.type(
-      screen.getAllByPlaceholderText(
-        "このゼミを志望する理由を入力してください",
-      )[0],
-      "興味があるため",
+    const selects = screen.getAllByRole("combobox");
+    const reasons = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
     );
+    await user.selectOptions(selects[0], "sem-1");
+    await user.selectOptions(selects[1], "sem-2");
+    await user.selectOptions(selects[2], "sem-3");
+    await user.type(reasons[0], "興味があるため");
+    await user.type(reasons[1], "興味があるため");
+    await user.type(reasons[2], "興味があるため");
     await user.click(screen.getByRole("button", { name: "提出する" }));
 
     expect(
@@ -516,7 +582,17 @@ describe("ApplicationForm", () => {
       <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
     );
 
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
+    const selects = screen.getAllByRole("combobox");
+    const reasons = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
+    );
+    // 第1志望だけ理由を空のままにし、第2・第3志望は理由も埋めることで
+    // 「3件とも選択済み」という前提を満たした上で理由未入力を検証する。
+    await user.selectOptions(selects[0], "sem-1");
+    await user.selectOptions(selects[1], "sem-2");
+    await user.selectOptions(selects[2], "sem-3");
+    await user.type(reasons[1], "興味があるため");
+    await user.type(reasons[2], "興味があるため");
     await user.click(screen.getByRole("button", { name: "提出する" }));
 
     expect(
@@ -535,6 +611,22 @@ describe("ApplicationForm", () => {
           seminar_id: "sem-1",
           seminar_name: "福原ゼミ",
           priority: 1,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+        {
+          seminar_id: "sem-2",
+          seminar_name: "中村ゼミ",
+          priority: 2,
+          reason: "興味があるため",
+          match_score: null,
+          match_feedback: null,
+        },
+        {
+          seminar_id: "sem-3",
+          seminar_name: "岡ゼミ",
+          priority: 3,
           reason: "興味があるため",
           match_score: null,
           match_feedback: null,
@@ -561,13 +653,16 @@ describe("ApplicationForm", () => {
       <ApplicationForm seminars={seminars} initialApplication={emptyDraft()} />,
     );
 
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "sem-1");
-    await user.type(
-      screen.getAllByPlaceholderText(
-        "このゼミを志望する理由を入力してください",
-      )[0],
-      "興味があるため",
+    const selects = screen.getAllByRole("combobox");
+    const reasons = screen.getAllByPlaceholderText(
+      "このゼミを志望する理由を入力してください",
     );
+    await user.selectOptions(selects[0], "sem-1");
+    await user.selectOptions(selects[1], "sem-2");
+    await user.selectOptions(selects[2], "sem-3");
+    await user.type(reasons[0], "興味があるため");
+    await user.type(reasons[1], "興味があるため");
+    await user.type(reasons[2], "興味があるため");
     await user.click(screen.getByRole("button", { name: "提出する" }));
 
     await screen.findByText("提出が完了しました。");

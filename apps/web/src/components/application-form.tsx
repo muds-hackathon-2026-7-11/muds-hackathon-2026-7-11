@@ -437,8 +437,8 @@ export function ApplicationForm({
     setErrorMessage(null);
     setSubmittedMessage(null);
 
-    if (buildPayloadChoices().length === 0) {
-      setErrorMessage("志望を1件以上入力してください。");
+    if (buildPayloadChoices().length < 3) {
+      setErrorMessage("第1志望から第3志望まで全て入力してください。");
       scrollToTop();
       return;
     }

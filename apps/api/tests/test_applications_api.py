@@ -56,6 +56,25 @@ async def _make_seminar(db_session) -> Seminar:
     return seminar
 
 
+async def _make_three_recruiting_seminars(
+    db_session, *, term: RecruitmentTerm
+) -> list[Seminar]:
+    """第1〜第3志望まで全て必須(#三志望必須)を満たすため、募集中のゼミを
+    3件作る。同じゼミを複数の志望に登録することはできない(重複禁止)ため。
+    """
+    seminars = [await _make_seminar(db_session) for _ in range(3)]
+    for seminar in seminars:
+        await _make_recruitment(db_session, term=term, seminar=seminar)
+    return seminars
+
+
+def _three_choices(seminars: list[Seminar], *, reason: str = "理由") -> list[dict]:
+    return [
+        {"seminar_id": str(seminar.id), "priority": index + 1, "reason": reason}
+        for index, seminar in enumerate(seminars)
+    ]
+
+
 async def _make_open_term(
     db_session, *, academic_year: int | None = None
 ) -> RecruitmentTerm:
@@ -485,15 +504,12 @@ async def test_put_keeps_submitted_status_and_refreshes_submitted_at(
     # (取り下げ扱いにはしない)、submitted_atだけ更新される。
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
 
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars, reason="A")},
     )
     submit_resp = await client.post(
         "/applications/me/submit", headers=_auth_headers(student.email)
@@ -503,11 +519,7 @@ async def test_put_keeps_submitted_status_and_refreshes_submitted_at(
     resp = await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [
-                {"seminar_id": str(seminar.id), "priority": 1, "reason": "改稿"}
-            ]
-        },
+        json={"choices": _three_choices(seminars, reason="改稿")},
     )
 
     assert resp.status_code == 200
@@ -526,15 +538,12 @@ async def test_resubmit_updates_submitted_at_but_keeps_first_submitted_at(
     # 提出タイミング分析にはこちらを使う)。
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
 
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars, reason="A")},
     )
     await client.post("/applications/me/submit", headers=_auth_headers(student.email))
     form_after_first_submit = await _get_form(
@@ -548,11 +557,7 @@ async def test_resubmit_updates_submitted_at_but_keeps_first_submitted_at(
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [
-                {"seminar_id": str(seminar.id), "priority": 1, "reason": "改稿"}
-            ]
-        },
+        json={"choices": _three_choices(seminars, reason="改稿")},
     )
     await client.post("/applications/me/submit", headers=_auth_headers(student.email))
 
@@ -840,14 +845,11 @@ async def test_put_requires_active_term(client, db_session) -> None:
 async def test_submit_moves_draft_to_submitted(client, db_session) -> None:
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -865,14 +867,11 @@ async def test_submit_sends_slack_confirmation(
 ) -> None:
     student = await _make_student(db_session, slack_user_id=_unique("U"))
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -883,7 +882,7 @@ async def test_submit_sends_slack_confirmation(
     assert len(fake_slack_client.sent) == 1
     sent = fake_slack_client.sent[0]
     assert sent.slack_user_id == student.slack_user_id
-    assert seminar.name in sent.text
+    assert seminars[0].name in sent.text
 
 
 async def test_submit_skips_slack_notification_without_slack_link(
@@ -891,14 +890,11 @@ async def test_submit_skips_slack_notification_without_slack_link(
 ) -> None:
     student = await _make_student(db_session, slack_user_id=None)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -914,14 +910,11 @@ async def test_submit_succeeds_even_if_slack_notification_fails(
 ) -> None:
     student = await _make_student(db_session, slack_user_id=_unique("U"))
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     async def _boom(*, slack_user_id: str, text: str, blocks=None):
@@ -971,15 +964,14 @@ async def test_submit_requires_research_theme_when_enrolled_in_seminar(
     # 空のままだと提出できない(#188)。
     student = await _make_student(db_session, research_theme=None)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
-    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
+    await _make_seminar_member(
+        db_session, term=term, seminar=seminars[0], student=student
+    )
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -995,15 +987,14 @@ async def test_submit_requires_research_theme_treats_whitespace_as_empty(
 ) -> None:
     student = await _make_student(db_session, research_theme="   ")
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
-    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
+    await _make_seminar_member(
+        db_session, term=term, seminar=seminars[0], student=student
+    )
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -1011,6 +1002,7 @@ async def test_submit_requires_research_theme_treats_whitespace_as_empty(
     )
 
     assert resp.status_code == 400
+    assert "研究概要" in resp.json()["detail"]
 
 
 async def test_submit_succeeds_when_enrolled_and_research_theme_filled(
@@ -1020,15 +1012,14 @@ async def test_submit_succeeds_when_enrolled_and_research_theme_filled(
         db_session, research_theme="機械学習の研究をしています。"
     )
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
-    await _make_seminar_member(db_session, term=term, seminar=seminar, student=student)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
+    await _make_seminar_member(
+        db_session, term=term, seminar=seminars[0], student=student
+    )
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -1044,14 +1035,11 @@ async def test_submit_allows_empty_research_theme_when_not_enrolled(
     # 配属前(ゼミ未所属)の学生はまだ研究概要が無くて当然なので対象外。
     student = await _make_student(db_session, research_theme=None)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     resp = await client.post(
@@ -1079,14 +1067,11 @@ async def test_submit_locks_form_row(client, db_session) -> None:
     Slack通知・レスポンスに使ってしまう恐れがあった。"""
     student = await _make_student(db_session)
     term = await _make_open_term(db_session)
-    seminar = await _make_seminar(db_session)
-    await _make_recruitment(db_session, term=term, seminar=seminar)
+    seminars = await _make_three_recruiting_seminars(db_session, term=term)
     await client.put(
         "/applications/me",
         headers=_auth_headers(student.email),
-        json={
-            "choices": [{"seminar_id": str(seminar.id), "priority": 1, "reason": "A"}]
-        },
+        json={"choices": _three_choices(seminars)},
     )
 
     captured_queries = []
